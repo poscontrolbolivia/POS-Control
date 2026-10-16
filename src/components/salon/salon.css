@@ -1,0 +1,219 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Estilos del salón (mapa de mesas + franja de salones). Única hoja del carril.
+   No se toca styles.css (compartido): aquí solo se amplía.
+
+   ⚠ Orden de carga: main.jsx importa App (que importa este archivo) ANTES de
+   './styles.css', así que en el bundle final styles.css va DESPUÉS y gana los empates
+   de especificidad. Por eso todas las reglas que interfieren con las de styles.css
+   (.salon, .barra, .tab, .lienzo, .mesa, .leyenda, button) van prefijadas
+   (.salon .lienzo, .salon .mesa, .barra.mesa-edit, .salon.salon…) para que manden
+   sin importar el orden.
+
+   Breakpoints (sin Tailwind, media-queries normales):
+     · ≤768px  → móvil: franja de salones con scroll horizontal, controles solo icono
+                 (el texto vive en title/aria-label), objetivos táctiles ≥44px, lienzo
+                 al ancho del viewport conservando la proporción 1000:600 y el arrastre.
+     · ≤480px  → móvil angosto: leyenda en rejilla de 2, importe fuera de la tarjeta.
+     · ≥769px  → escritorio: mapa a su tamaño normalizado y controles con texto.
+     · ≥769px + puntero grueso (tableta) → mismos objetivos táctiles ≥44px.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── franja de salones (tabs de filtro + administración inline) ── */
+.zona-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+}
+.zonas-scroll {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.ztab {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  overflow: hidden; /* recorta las herramientas redondeadas del lado derecho */
+}
+.ztab.on { border-color: var(--ac); }
+.ztab .tab { border: 0; border-radius: 0; background: transparent; padding: 6px 12px; min-height: 34px; }
+.ztab.on .tab { background: var(--ac); color: #fff; }
+.ztab .n { font-style: normal; color: var(--mut); font-size: .75rem; margin-left: 5px; }
+.ztab.on .n { color: #eaf5ef; }
+.ztools { display: inline-flex; align-items: center; gap: 1px; padding: 0 4px 0 2px; border-left: 1px solid var(--line); }
+.zona-strip > button { flex: none; }
+.salon .tab.mas { color: var(--ac); border-style: dashed; }
+
+/* botones de icono (subir / bajar / renombrar / borrar / ✓ / ✕) */
+button.ico {
+  min-height: 30px;
+  min-width: 30px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  line-height: 1;
+  background: transparent;
+  border-color: transparent;
+  font-size: .8rem;
+}
+button.ico:hover:not(:disabled) { background: var(--libre); border-color: var(--line); }
+button.ico.danger { color: #c0392b; }
+button.ico.ok { color: var(--ac); }
+button.ico:disabled { opacity: .35; cursor: not-allowed; }
+
+/* renombrado inline + confirmación de borrado inline (nunca window.confirm / prompt) */
+.zren { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--ac); border-radius: 999px; background: var(--card); }
+.zinput { min-width: 9rem; padding: 4px 8px; min-height: 30px; border-radius: 8px; }
+.zconf { display: inline-flex; align-items: center; gap: 2px; padding-left: 4px; }
+.zconf-txt { font-size: .72rem; color: #c0392b; font-weight: 600; white-space: nowrap; }
+.barra.zona-alta { align-items: flex-end; }
+.barra.zona-alta .zinput { min-width: 14rem; }
+
+/* ── barras de herramientas del editor ── */
+.pista { color: var(--mut); font-size: .8rem; margin: 0 0 0 4px; align-self: center; }
+.campo { display: inline-flex; flex-direction: column; gap: 2px; font-size: .75rem; color: var(--mut); }
+.campo input, .campo select { min-width: 8rem; }
+.grupo { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: var(--mut); border: 1px solid var(--line); border-radius: 10px; padding: 3px 6px; background: var(--card); }
+.grupo b { font-size: .85rem; color: var(--ink); min-width: 1.6rem; text-align: center; }
+.barra.mesa-edit { gap: 10px; padding: 8px 10px; border: 1px dashed var(--ac); border-radius: 12px; background: var(--card); }
+
+/* ── lienzo: arrastrar una mesa no debe pelear con el scroll de la página ── */
+.salon .lienzo { touch-action: pan-y; }
+.salon .lienzo .mesa { touch-action: pan-y; -webkit-touch-callout: none; }
+.salon .lienzo.edit, .salon .lienzo.edit .mesa { touch-action: none; } /* en edición el dedo manda */
+.salon .lienzo.edit .mesa { cursor: grab; }
+.salon .lienzo .mesa.arrastrando { cursor: grabbing; z-index: 3; box-shadow: 0 6px 18px rgba(0, 0, 0, .22); opacity: .95; }
+.lienzo-vacio {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 20px;
+  text-align: center;
+  color: var(--mut);
+  font-size: .9rem;
+  pointer-events: none;
+}
+
+/* ── tarjeta de mesa: nombre, comensales/capacidad, importe, salón, mesas unidas ── */
+.salon .mesa { overflow: hidden; padding: 2px 4px; gap: 1px; -webkit-user-select: none; user-select: none; }
+.salon .mesa .nombre { font-weight: 700; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.salon .mesa .pax { font-size: .9em; line-height: 1.15; color: var(--mut); white-space: nowrap; }
+.salon .mesa .pax.alerta { color: #b3402f; font-weight: 700; }
+.salon .mesa .importe { font-size: .9em; line-height: 1.15; }
+.salon .mesa .etiqueta-zona {
+  font-size: .8em;
+  line-height: 1.1;
+  color: var(--mut);
+  background: rgba(255, 255, 255, .55);
+  border-radius: 999px;
+  padding: 0 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.salon .mesa .badge-unida {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: .65rem;
+  font-weight: 700;
+  background: var(--ac);
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+  pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .salon .mesa .etiqueta-zona { background: rgba(0, 0, 0, .28); }
+}
+
+/* leyenda: los dos chips nuevos (comensales y mesas unidas) */
+.salon .leyenda .pt.pax { background: var(--ac); }
+.salon .leyenda .pt.unida { background: var(--ac); border-radius: 4px; }
+
+/* ─────────────────────────────  ESCRITORIO (≥769px)  ─────────────────────── */
+@media (min-width: 769px) {
+  .zonas-scroll { flex-wrap: wrap; }
+  .salon .lienzo { max-width: 100%; }
+  .salon .mesa { font-size: clamp(.68rem, 1.5vw, .95rem); }
+}
+
+/* ────────────────────────────────  MÓVIL (≤768px)  ───────────────────────── */
+@media (max-width: 768px) {
+  .salon.salon { padding: 8px; gap: 8px; }
+  .zona-strip { flex-wrap: wrap; }
+
+  /* Franja de salones: una sola fila con scroll horizontal (no envuelve). */
+  .zonas-scroll {
+    order: 1;
+    flex: 1 1 100%;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 4px;
+  }
+  .zonas-scroll > * { flex: none; }
+  .zona-strip > button { order: 2; } /* el botón de edición va fuera del scroll */
+
+  /* Objetivos táctiles ≥44px y barra colapsada a iconos. Todo bajo .salon para no
+     contaminar el Topbar ni los otros módulos (styles.css es compartido). */
+  .salon button { min-height: 44px; }
+  .salon .ztab .tab { min-height: 44px; padding: 8px 14px; font-size: .95rem; }
+  .salon button.ico { min-height: 44px; min-width: 44px; font-size: 1rem; }
+  .salon .tab.mas { min-height: 44px; padding: 8px 14px; }
+  .salon .campo input, .salon .campo select, .salon .zinput, .salon .barra select, .salon .barra input { min-height: 44px; font-size: 1rem; }
+  .salon .grupo { padding: 4px 6px; }
+  .salon .grupo .ico { min-width: 44px; }
+  .salon .txt { display: none; } /* solo icono: el texto vive en title/aria-label */
+
+  /* Editor de mesa en una columna, campos al ancho disponible. */
+  .barra.mesa-edit { flex-direction: column; align-items: stretch; }
+  .mesa-edit .campo { width: 100%; }
+  .mesa-edit .campo input, .mesa-edit .campo select { width: 100%; min-width: 0; }
+  .mesa-edit .grupo { justify-content: space-between; width: 100%; }
+  .mesa-edit > button { width: 100%; }
+
+  /* El lienzo ocupa todo el ancho útil; la proporción 1000:600 (aspectRatio inline)
+     y las posiciones en % escalan el mapa y el arrastre juntos, sin JS de layout. */
+  .salon .lienzo { width: 100%; border-radius: 12px; }
+  .salon .mesa { font-size: clamp(.58rem, 2.6vw, .85rem); border-width: 2px; }
+  .salon .mesa .badge-unida { font-size: .6rem; padding: 1px 5px; top: 2px; right: 3px; }
+  .pista { flex: 1 1 100%; }
+  .salon .leyenda { gap: 8px 14px; font-size: .78rem; }
+  .zconf-txt { font-size: .7rem; }
+}
+
+/* Móvil angosto: leyenda en rejilla y tarjeta más limpia. */
+@media (max-width: 480px) {
+  .salon .leyenda { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .salon .mesa .importe { display: none; } /* el importe se ve al abrir la mesa en el panel */
+  .zconf-txt { display: none; }
+}
+
+/* Tableta / móvil apaisado con puntero grueso: objetivos táctiles sin achicar tipos. */
+@media (min-width: 769px) and (pointer: coarse) {
+  .salon .ztab .tab { min-height: 44px; }
+  .salon button.ico { min-height: 44px; min-width: 44px; }
+  .salon .barra button { min-height: 44px; }
+}
+
+/* Accesibilidad: foco visible en los controles del mapa. */
+.zona-strip :focus-visible,
+.mesa-edit :focus-visible,
+.salon .mesa:focus-visible { outline: 3px solid var(--ac); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .salon .lienzo .mesa { transition: none; }
+  .salon .mesa.arrastrando { box-shadow: none; opacity: 1; }
+}

@@ -1,0 +1,62 @@
+/* Estilos del área de autenticación (LoginPage + Topbar). Usa variables de styles.css. */
+
+.auth-pantalla{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:var(--bg);padding:16px;
+}
+.auth-tarjeta{
+  width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);
+  border-radius:18px;padding:28px 26px;box-shadow:0 10px 30px rgba(0,0,0,.08);
+  display:flex;flex-direction:column;gap:14px;
+}
+.auth-marca{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:4px}
+.auth-marca h1{margin:0;font-size:1.4rem;color:var(--ac);letter-spacing:.3px}
+.auth-logo{font-size:1.8rem}
+.auth-tarjeta h2{margin:0;text-align:center;font-size:1.25rem}
+.auth-sub{margin:0;text-align:center;color:var(--mut);font-size:.92rem}
+.auth-campo{display:flex;flex-direction:column;gap:6px}
+.auth-campo span{font-size:.85rem;color:var(--mut);font-weight:600}
+.auth-campo input{min-height:48px;font-size:1rem;padding:10px 12px}
+.auth-btn{min-height:52px;font-size:1.15rem;font-weight:700;border-radius:12px}
+.auth-aviso{
+  margin:0;text-align:center;font-size:.82rem;color:var(--mut);
+  background:var(--libre);border-radius:10px;padding:8px 10px;
+}
+.auth-error{
+  margin:0;text-align:center;color:#fff;background:#c0392b;
+  border-radius:10px;padding:10px;font-size:.9rem;
+}
+.auth-enlace{
+  border:none;background:none;color:var(--ac);text-decoration:underline;
+  min-height:0;padding:0;font-size:.85rem;cursor:pointer;
+}
+.auth-demo{
+  margin:0;text-align:center;color:var(--mut);font-size:.78rem;
+  display:flex;gap:6px;justify-content:center;flex-wrap:wrap;
+}
+.auth-demo code{background:var(--libre);border-radius:6px;padding:2px 6px}
+
+/* Topbar */
+.topbar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:8px 14px;background:var(--card);border-bottom:1px solid var(--line);
+}
+.topbar-izq{display:flex;align-items:center;gap:8px;min-width:0}
+.topbar-empresa{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.topbar-rol{
+  text-transform:lowercase;font-size:.75rem;font-weight:700;padding:3px 10px;
+  border-radius:999px;color:#fff;background:var(--mut);white-space:nowrap;
+}
+.topbar-rol-admin{background:#2f7d5b}
+.topbar-rol-cajero{background:#6fb3e0;color:#123}
+.topbar-rol-mesero{background:#f4a259;color:#3a2506}
+.topbar-user{color:var(--mut);font-size:.85rem;white-space:nowrap}
+.topbar-mods{display:flex;gap:6px;flex-wrap:wrap;flex:1;justify-content:center}
+.topbar-tab{border-radius:999px;min-height:38px;padding:6px 14px;font-size:.9rem}
+.topbar-tab.on{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+.topbar-salir{min-height:38px;color:#c0392b;border-color:var(--line)}
+@media (max-width:640px){
+  .topbar{gap:6px;padding:8px 10px}
+  .topbar-user{display:none}
+  .topbar-mods{order:3;width:100%;justify-content:flex-start}
+}

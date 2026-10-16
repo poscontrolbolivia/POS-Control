@@ -1,0 +1,108 @@
+/* Estilos del área de administración (MenuAdmin + ConfigAdmin). Usa variables de styles.css. */
+
+.adm-panel{max-width:860px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+.adm-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.adm-cab h2{margin:0;font-size:1.35rem}
+.adm-sub{margin:0 0 6px;color:var(--mut);font-size:.9rem}
+.adm-aviso{
+  background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:20px;text-align:center;color:var(--mut);font-size:1rem;
+}
+.adm-vacio{color:var(--mut);font-size:.9rem;padding:8px 0}
+
+.adm-card{
+  background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:16px;display:flex;flex-direction:column;gap:10px;
+  box-shadow:0 4px 14px rgba(0,0,0,.05);
+}
+.adm-card-cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.adm-card-cab h3{margin:0;font-size:1.1rem}
+.adm-chip{
+  background:var(--libre);color:var(--mut);font-size:.78rem;font-weight:600;
+  border-radius:999px;padding:3px 10px;white-space:nowrap;
+}
+.sp{flex:1}
+
+.adm-fila{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.adm-fila input{min-height:46px;flex:1;min-width:140px}
+.adm-fila2{display:flex;gap:12px;flex-wrap:wrap}
+.adm-fila2 .adm-campo{flex:1;min-width:150px}
+.adm-precio{max-width:120px;flex:0 0 110px !important}
+
+.adm-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.adm-prod{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 4px;border-bottom:1px solid var(--line);
+}
+.adm-prod:last-child{border-bottom:none}
+.adm-prod.inactivo .adm-prod-nombre{color:var(--mut);text-decoration:line-through}
+.adm-prod-nombre{flex:1;min-width:140px;font-weight:600}
+.adm-prod-precio{min-width:90px;text-align:right;color:var(--ac);font-weight:700}
+.adm-prod button{min-height:44px;padding:8px 14px}
+.adm-prod button.danger{color:#c0392b}
+
+.adm-agregar{
+  min-height:48px;border-style:dashed;color:var(--ac);font-weight:600;
+  background:transparent;width:100%;
+}
+.adm-nuevo{padding:10px;background:var(--libre);border-radius:12px}
+.adm-config{gap:14px}
+.adm-campo{display:flex;flex-direction:column;gap:6px}
+.adm-campo span{font-size:.85rem;color:var(--mut);font-weight:600}
+.adm-campo input{min-height:46px;font-size:1rem}
+.adm-msg{font-weight:700}
+.adm-msg.ok{color:var(--ac)}
+.adm-msg.warn{color:#c0392b}
+
+/* Miniato de artículo (45×45; el lado real lo fija LADO_VISUAL_PX vía style en línea) */
+.adm-thumb{
+  flex:0 0 auto;width:45px;height:45px;border-radius:10px;overflow:hidden;
+  background:var(--libre);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;
+}
+.adm-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.adm-thumb-ini{font-weight:700;color:var(--mut);font-size:1.05rem;line-height:1}
+
+/* Controles de foto por producto */
+.adm-prod-img{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:2px}
+.adm-btn-foto{
+  min-height:44px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;
+  background:var(--card);color:var(--ink);font-weight:600;cursor:pointer;
+  display:inline-flex;align-items:center;font-size:.9rem;
+}
+.adm-btn-foto:hover{border-color:var(--ac)}
+.adm-btn-foto input[type="file"]{
+  position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;
+}
+.adm-img-aviso{
+  width:100%;background:#fde3e0;border:1px solid #f3b7b0;color:#c0392b;border-radius:10px;
+  padding:6px 10px;font-size:.82rem;font-weight:600;
+}
+.adm-spinner{display:inline-flex;align-items:center;gap:8px;color:var(--mut);font-size:.85rem;font-weight:600}
+.adm-spinner-aro{
+  width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--ac);
+  border-radius:50%;animation:adm-gira .7s linear infinite;
+}
+@keyframes adm-gira{to{transform:rotate(360deg)}}
+
+
+/* ImpresorasAdmin (impresión silenciosa ESC/POS) */
+.adm-imp{gap:12px}
+.imp-bloque{display:flex;flex-direction:column;gap:6px}
+.imp-label{font-size:.85rem;color:var(--mut);font-weight:600}
+.imp-radio{display:inline-flex;align-items:center;gap:6px;font-size:.9rem;cursor:pointer;min-height:40px}
+.imp-radio input{width:18px;height:18px;accent-color:var(--ac)}
+.imp-chip{font-size:.78rem;font-weight:700;border-radius:999px;padding:3px 12px;white-space:nowrap}
+.imp-chip.ok{background:#e3f6e8;color:#1d7a35}
+.imp-chip.err{background:#fde3e0;color:#c0392b}
+.imp-chip.off{background:var(--libre);color:var(--mut)}
+.imp-err{background:#fde3e0;border:1px solid #f3b7b0;color:#c0392b;border-radius:10px;padding:8px 12px;font-size:.85rem;font-weight:600}
+.imp-noporte{background:#fff6e0;border:1px solid #ecd9a0;border-radius:12px;padding:12px;font-size:.88rem;line-height:1.45}
+.imp-dato{font-size:.8rem;color:var(--mut)}
+.imp-dato code{background:var(--libre);border-radius:6px;padding:1px 6px}
+
+@media (max-width:640px){
+  .adm-panel{padding:10px}
+  .adm-prod button{flex:1;min-width:90px}
+  .adm-card-cab .sp{display:none}
+}
