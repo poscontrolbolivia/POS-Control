@@ -10,9 +10,12 @@
    sin importar el orden.
 
    Breakpoints (sin Tailwind, media-queries normales):
-     · ≤768px  → móvil: franja de salones con scroll horizontal, controles solo icono
-                 (el texto vive en title/aria-label), objetivos táctiles ≥44px, lienzo
-                 al ancho del viewport conservando la proporción 1000:600 y el arrastre.
+     · ≤768px  → móvil: franja de salones que envuelve en filas (sin scroll
+                 horizontal), controles solo icono (el texto vive en title/aria-label),
+                 objetivos táctiles ≥44px, y las barras de acción (editor de mesa y
+                 comensales) quedan fijas al borde inferior como hoja de pulgar;
+                 el lienzo al ancho del viewport conservando la proporción 1000:600
+                 y el arrastre.
      · ≤480px  → móvil angosto: leyenda en rejilla de 2, importe fuera de la tarjeta.
      · ≥769px  → escritorio: mapa a su tamaño normalizado y controles con texto.
      · ≥769px + puntero grueso (tableta) → mismos objetivos táctiles ≥44px.
@@ -81,6 +84,29 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 .grupo b { font-size: .85rem; color: var(--ink); min-width: 1.6rem; text-align: center; }
 .barra.mesa-edit { gap: 10px; padding: 8px 10px; border: 1px dashed var(--ac); border-radius: 12px; background: var(--card); }
 
+/* ── barra de comensales de la cuenta (asignar/modificar 1..99 desde el salón) ── */
+.salon .barra.pax-bar { align-items: center; }
+.salon .pax-num { width: 4.5rem; min-width: 4.5rem; text-align: center; }
+/* Hidear las flechas nativas del number: en el stepper ya están los −/＋ táctiles. */
+.salon .pax-num::-webkit-outer-spin-button, .salon .pax-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.salon .pax-num { -moz-appearance: textfield; appearance: textfield; }
+
+/* aviso/toast del salón (nunca alert/confirm nativos): inline, mismo patrón que el
+   aviso del panel de pedido, con cierre manual y auto-ocultado tras 4,5 s. */
+.salon .salon-aviso {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 6px 0;
+  padding: 8px 12px;
+  background: var(--libre);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: .85rem;
+  font-weight: 600;
+}
+
 /* ── lienzo: arrastrar una mesa no debe pelear con el scroll de la página ── */
 .salon .lienzo { touch-action: pan-y; }
 .salon .lienzo .mesa { touch-action: pan-y; -webkit-touch-callout: none; }
@@ -148,19 +174,19 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 
 /* ────────────────────────────────  MÓVIL (≤768px)  ───────────────────────── */
 @media (max-width: 768px) {
-  .salon.salon { padding: 8px; gap: 8px; }
+  /* Colchón inferior: las barras fijas (mesa-edit / pax-bar) no deben tapar la
+     leyenda ni la última fila del mapa al llegar al final del scroll. */
+  .salon.salon { padding: 8px 8px 110px; gap: 8px; }
   .zona-strip { flex-wrap: wrap; }
 
-  /* Franja de salones: una sola fila con scroll horizontal (no envuelve). */
+  /* Franja de salones: envuelve en filas. Requisito del carril: en móvil nada con
+     scroll horizontal (con muchos salones la franja crece hacia abajo, no hacia el
+     lado). El toque del fondo del lienzo deselecciona y cierra la hoja inferior. */
   .zonas-scroll {
     order: 1;
     flex: 1 1 100%;
     width: 100%;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    flex-wrap: wrap;
     padding-bottom: 4px;
   }
   .zonas-scroll > * { flex: none; }
@@ -177,12 +203,42 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
   .salon .grupo .ico { min-width: 44px; }
   .salon .txt { display: none; } /* solo icono: el texto vive en title/aria-label */
 
-  /* Editor de mesa en una columna, campos al ancho disponible. */
-  .barra.mesa-edit { flex-direction: column; align-items: stretch; }
+  /* Editor de mesa en una columna, campos al ancho disponible, Y fijado al borde
+     inferior como hoja de pulgar (la mesa se selecciona tocándola; el fondo del
+     lienzo la deselecciona y cierra la hoja). */
+  .salon .barra.mesa-edit, .salon .barra.pax-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    margin: 0;
+    max-height: 55vh;
+    overflow-y: auto;
+    border: 0;
+    border-top: 1px solid var(--ac);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, .18);
+    background: var(--card);
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  }
+  /* Asa visual: pista de que es una hoja desplegable, no parte del mapa. */
+  .salon .barra.mesa-edit::before {
+    content: '';
+    align-self: center;
+    width: 44px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  .salon .barra.mesa-edit { flex-direction: column; align-items: stretch; }
   .mesa-edit .campo { width: 100%; }
   .mesa-edit .campo input, .mesa-edit .campo select { width: 100%; min-width: 0; }
   .mesa-edit .grupo { justify-content: space-between; width: 100%; }
   .mesa-edit > button { width: 100%; }
+  /* La barra de comensales es una tira fina: stepper a la izquierda, texto debajo. */
+  .salon .barra.pax-bar { border-top-color: var(--line); }
+  .pax-bar .grupo { justify-content: space-between; }
 
   /* El lienzo ocupa todo el ancho útil; la proporción 1000:600 (aspectRatio inline)
      y las posiciones en % escalan el mapa y el arrastre juntos, sin JS de layout. */

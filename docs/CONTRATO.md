@@ -1,6 +1,6 @@
 # CONTRATO · Supabase backend ↔ cliente POS
 
-**Estado:** v1.0 · IA-1 · Archivo de referencia: `supabase/schema.sql` (pegar completo en el SQL editor de Supabase; es idempotente).
+**Estado:** v1.1 · IA-1 + hilo principal · Archivos de referencia: `supabase/schema.sql` + `supabase/migraciones/001_super.sql` → `002_seguridad.sql` → `003_comensales.sql` (pegar en el SQL editor en ese orden; ver §8; idempotentes).
 **Destinatarios:** IA-2 (Salón/operación), IA-3 (login/layout/gestión), y cualquier contribuidor futuro.
 Este documento define el modelo de datos, las RPCs con firma exacta, las convenciones y el mapeo 1:1 desde las acciones locales de `src/services/store.jsx` (hoy localStorage) hacia Supabase.
 
@@ -14,6 +14,8 @@ Este documento define el modelo de datos, las RPCs con firma exacta, las convenc
 4. **Dinero = `numeric(10,2)`, moneda Bs.** Nunca float en la capa de datos. Redondeos/validaciones de importes: en la base.
 5. **Snapshot en items:** al agregar un producto se congelan `nombre_snapshot` y `precio_snapshot` en `cuenta_items`. El ticket/cobro SIEMPRE usa el snapshot, nunca `productos` actual.
 6. **Coordenadas del mapa de mesas: lienzo normalizado 1000 × 600** (x,w ∈ [0,1000]; y,h ∈ [0,600]), idéntico al canvas actual de `SalonPage.jsx` y `store.jsx`. La base lo valida con CHECKs.
+7. **Tablas de plataforma ocultas** (`limites`, `throttle`, `auditoria`, migración 002): `force row level security` SIN políticas + `revoke all` desde `public/anon/authenticated` — el tenant no las ve ni por REST (403); solo se escriben desde funciones `security definer` y se leen por RPC privativas del super. La cuota de artículos es invisible para el cliente: la UI nunca muestra "plan gratuito", solo recibe el mensaje de la base al exceder el límite.
+8. **Hardening obligatorio en toda función pública nueva**: `revoke all on function … from public, anon;` + `grant execute … to authenticated;` (a `anon` solo si es pre-login, como `empresa_por_codigo`) y `set search_path = ''`.
 
 ---
 
@@ -29,7 +31,17 @@ Este documento define el modelo de datos, las RPCs con firma exacta, las convenc
 | `zonas` | `id`, `empresa_id`, `nombre`, `orden` | |
 | `mesas` | `id`, `empresa_id`, `zona_id`, `nombre`, `x,y,w,h`, `forma ∈ {cuadrada,redonda,rect}`, `capacidad`, `activa` | x/y/w/h en escala 1000×600. `activa=false` en vez de borrar. |
 | `secciones_menu` | `id`, `empresa_id`, `nombre`, `orden` | ← `s.secciones` |
-| `productos` | `id`, `empresa_id`, `seccion_id`, `nombre`, `precio numeric(10,2)`, `activo` | ← `s.productos`. Borrar = `activo=false` (histórico intacto). |
+| `productos` | `id`, `empresa_id`, `seccion_id`, `nombre`, `precio numeric(10,2)`, `activo`, `imagen_path text NULL` | ← `s.productos`. Borrar = `activo=false` (histórico intacto). `imagen_path` (002): ruta de Storage con CHECK de forma `productos/{uuid-empresa}/{uuid}.{webp|jpg}`; el miniato se muestra a 45×45 px y se guarda a 90 px (2× retina) en el bucket público `pos-imagenes`. |
+
+### Tablas de plataforma (002_seguridad.sql) — OCULTAS para el tenant
+
+| Tabla | Columnas clave | Notas |
+|---|---|---|
+| `auditoria` | `id bigint`, `empresa_id`, `actor`, `accion`, `detalle jsonb`, `en` | Force RLS sin políticas + `revoke all`. Escrita solo por `private.auditar()` (security definer). Lectura solo por `super_listar_auditoria()`. |
+| `limites` | `empresa_id` (PK), `max_productos int` (NULL = ilimitado), `plan 'gratis'\|'pago'`, `notas`, `actualizado_en`, `actualizado_por` | Force RLS deny-all ⇒ por REST devuelve **403**; el comercio no puede leer ni cambiar su cuota. Escrita solo por RPCs del super y por el trigger `trg_nueva_cuota`. Ver §3.19. |
+| `throttle` | `clave text` (PK: prefijo+IP), `intentos`, `hasta` | Force RLS sin políticas + `revoke all`. Solo lo toca `private.throttle_ok()` desde `empresa_por_codigo`. Ver §3.18. |
+
+`public.productos` además lleva el trigger `trg_controlar_cuota` (002) que exige la cuota de `limites` en el INSERT/UPDATE ⇒ la cuota se cumple en el servidor aunque se edite la app (detalles en §3.19).
 
 ### Tablas de negocio (SELECT directo; MUTACIÓN solo por RPC)
 
@@ -103,6 +115,8 @@ Roles mínimos por RPC (validados en la base; el `permisos.js` del cliente es so
 | anular ítem **enviado** | admin (+motivo obligatorio) |
 | aplicar_extras / cobrar **con descuento** (rol ≠ admin) | + PIN correcto |
 | cobrar_cuenta, abrir_turno, registrar_movimiento_caja, cerrar_turno | admin, cajero |
+| actualizar_comensales (003) | admin, cajero, mesero |
+| super_* (cuota, auditoría, export/import) · fijar_empresa a empresa ajena | solo super (vía `public.supers`) |
 
 ### 3.1 `abrir_cuenta(p_empresa_id uuid, p_mesa_id uuid, p_comensales integer = 1) → uuid`
 Crea cuenta tipo `mesa` en `abierta` y su `cuenta_mesas`. Error si la mesa ya tiene cuenta activa o no existe/está inactiva. Devuelve el `cuenta_id`.
@@ -162,6 +176,28 @@ Roles caja. Un turno abierto por empresa (error si ya hay uno). Devuelve `turno_
 ### 3.16 `cerrar_turno(p_contado numeric, p_turno_id uuid = null, p_empresa_id uuid = null) → jsonb`
 Calcula esperado = `fondo + pagos efectivo (cuentas cerradas en la ventana del turno) + Σ ingresos − Σ egresos`; escribe `esperado/contado/cerrado_en/cerrado_por` y snapshot en `movimientos.cierre`. Devuelve `{ turno_id, fondo, venta_efectivo, ingresos, egresos, esperado, contado, diferencia }`.
 
+### 3.17 `actualizar_comensales(p_cuenta_id uuid, p_comensales integer, p_empresa_id uuid = null) → integer` (migración 003)
+Corregir el número de comensales **después** de abrir la cuenta (mesa o grupo). `security definer`, exige rol admin/cajero/mesero y valida contra la empresa activa. Rechaza fuera de 1..99 con «El número de comensales debe estar entre 1 y 99» (mismo rango que el CHECK de `cuentas.comensales`; se antepone para devolver mensaje en español y no un 23514). NO deja tocar una cuenta ya `cerrada` ni de otra empresa («No se pudo cambiar los comensales: la cuenta no está abierta en esta empresa»). Audita `comensales` en `public.auditoria` si 002 está aplicada. Devuelve el número fijado. Cliente: acción `comensales~` (`store.jsx` → `tiendaSupabase.js`, usado por `SalonPage.jsx`).
+
+### 3.18 `empresa_por_codigo(p_codigo text) → table(id uuid, nombre text, moneda text)` (redefinida en 002)
+Endpoint **pre-login** (ejecutable por `anon`): paso 1 del login. Con la migración 002 lleva throttle anti-fuerza-bruta: **30 consultas por IP en 10 minutos** (`private.throttle_ok('cod', 30)`); al agotar devuelve **0 filas** — indistinguible de un código inexistente, en vez de lanzar excepción (la excepción abortaría la transacción y el contador nunca se guardaría, además de delatar la existencia de empresas). Código con menos de 3 caracteres ⇒ también 0 filas sin ruido. El cliente muestra "código no encontrado" en ambos casos.
+
+### 3.19 RPCs de plataforma (super) — migraciones 001 + 002
+Todas empiezan con `if not public.es_super() then raise exception 'requiere super'` y siguen la regla 8 (§0). El comercio normal recibe 403/`requiere super`:
+
+| RPC | Qué hace |
+|---|---|
+| `super_listar_empresas() → jsonb` (001) | Todas las empresas con contadores. |
+| `super_ajustar_empresa(p_empresa uuid, p_max_productos integer, p_plan text, p_notas text) → jsonb` (002) | Fija la cuota (`NULL` = sin límite ⇒ plan pago implícito) y el plan `'gratis'|'pago'` en `limites`; audita `super_ajustar_cuota`. |
+| `super_ver_cuota(p_empresa uuid) → jsonb` (002) | Lee `{max_productos, plan, notas, productos_actuales}` solo para el panel del super. |
+| `super_listar_auditoria(p_empresa uuid = null, p_limite integer = 200) → table(en, actor, accion, detalle, empresa_id)` (002) | Única lectura posible de `auditoria` (tope duro 1000). |
+| `super_registrar_exporte(p_empresa uuid) → void` (002) | El panel la llama tras descargar el .json: deja prueba de qué empresa salió de la plataforma y cuándo. |
+| `super_exportar_empresa(p_empresa uuid) → jsonb` (001, **redefinida en 002**) | Snapshot con `version: 2`; el bloque `equipo` incluye ahora `user_id` (necesario para reasignar dueños del histórico). Exporta también `cuentas`, `cuenta_mesas`, `cuenta_items`, `pagos` y `turnos`. |
+| `super_importar_empresa(p_datos jsonb, p_codigo text, p_clave_inicial text = 'pos12345') → uuid` (001, **redefinida en 002**) | Además del catálogo, **restaura el HISTÓRICO** completo reasignando `abierta_por/cerrada_por/creada_por/abierto_por/cerrado_por` vía el mapa `user_id` de origen → usuario recreatedo (bcrypt coste 10 explícito; usuarios nuevos confirmados con clave temporal). El super está exento del trigger de cuota ⇒ un snapshot de 500 artículos se instala entero. Audita `super_importo`. |
+| `fijar_empresa(p_empresa uuid) → void` (001/002) | GUC de **sesión** (`set_config(..., false)`); requiere membresía o ser super; el super además audita `super_entro`. Requiere header `X-Session-Id` en el cliente (conexión pinzada, §2). Con 002 un super puede fijar CUALQUIER empresa y operar (`private.mi_rol()` le da rol `admin` efectivo). |
+
+Reglas de negocio de la cuota (trigger `private.controlar_cuota_productos` sobre `productos`): empresa nueva nace con 30 (trigger `trg_nueva_cuota` en `empresas`); dar de baja (`activo=false`) nunca se bloquea; editar precio/nombre/foto no consume; **reactivar un artículo inactivo sí consume**; `max_productos NULL` = ilimitado; los super están exentos.
+
 ---
 
 ## 4. Mapeo 1:1 · acción de `store.jsx` → llamada Supabase
@@ -177,6 +213,7 @@ Calcula esperado = `fondo + pagos efectivo (cuentas cerradas en la ventana del t
 | `d({t:'anular', cuentaId, itemId, motivo})` | `rpc('anular_item', {p_item_id, p_motivo})` | base exige admin+motivo si enviado |
 | `d({t:'precuenta'})` / `d({t:'reabrir'})` | `pre_cuenta` / `reabrir_cuenta` | |
 | `d({t:'extras', cuentaId, propina?, descuento?})` | `rpc('aplicar_extras', {p_cuenta_id, p_propina, p_descuento, p_pin?})` | PIN cuando rol ≠ admin |
+| `d({t:'comensales~', cuentaId, comensales})` | `rpc('actualizar_comensales', {p_cuenta_id, p_comensales})` | 003; corregir comensales tras la apertura (1..99, no en cuenta cerrada) |
 | `d({t:'cobrar', cuentaId, pagos, propina?, descuento?})` | `rpc('cobrar_cuenta', {p_cuenta_id, p_pagos:[{metodo,monto,detalle}], p_propina?, p_descuento?, p_pin?})` | respuesta = objeto ticket |
 | `d({t:'unir', cuentaId, mesaIds})` | `rpc('unir_mesas', {p_cuenta_id, p_mesa_ids})` | |
 | `d({t:'separar', cuentaId, mesaId})` | `rpc('separar_mesa', {p_cuenta_id, p_mesa_id})` | |
@@ -184,9 +221,10 @@ Calcula esperado = `fondo + pagos efectivo (cuentas cerradas en la ventana del t
 | `d({t:'turno+', usuario, fondo})` | `rpc('abrir_turno', {p_empresa_id, p_fondo})` | usuario = auth.uid() implícito |
 | `d({t:'turno-', usuario, contado})` | `rpc('cerrar_turno', {p_contado})` | |
 | `d({t:'caja-mov+', tipo, monto, motivo})` | `rpc('registrar_movimiento_caja', {p_tipo, p_monto, p_motivo})` | |
-| `d({t:'mesa+'|'mesa~'|'mesa-'})` | `insert/update/delete` directos en `mesas` (admin) | sin RPC: RLS exige admin |
-| `d({t:'zona+'|'zona~'|'zona-'})` | `insert/update/delete` en `zonas` (admin) | "borrar" ⇒ `activa=false` o delete si no tiene mesas |
-| `d({t:'seccion+'|'seccion~'})` / `d({t:'producto+'|'producto~'})` | insert/update en `secciones_menu` / `productos` (admin) | |
+| `d({t:'mesa+'|'mesa~'|'mesa-'})` | `insert/update/delete` directos en `mesas` (admin) | sin RPC: RLS exige admin. `mesa~` lleva además el **arrastre con posición persistida** (un solo dispatch al soltar el puntero: `{x,y}`) y el **cambio de salón** (`zona_id`); en `tiendaSupabase.js` mapea `cap→capacidad`, `zona→zona_id`. |
+| `d({t:'zona+'|'zona~'|'zona-'})` | `insert/update/delete` en `zonas` (admin) | CRUD de salones con `orden` (renumerar con ▲▼ vía `zona~`). El borrado es **hard delete** y las mesas de esa zona quedan `zona_id=null` (no existe columna `activa` en `zonas`). |
+| `d({t:'seccion+'|'seccion~'})` / `d({t:'producto+'|'producto~'})` | insert/update en `secciones_menu` / `productos` (admin) | `producto+`/reactivación pasan por el trigger de cuota (002): si excede el límite ⇒ error §5; el campo `imagen_path` se escribe directo tras subir el blob a Storage (ver fila siguiente) |
+| foto de artículo (`MenuAdmin`) | `sb.storage.from('pos-imagenes').upload('productos/{empresa}/{producto}.webp', blob)` + `update productos set imagen_path` | pipeline en `src/services/imagenProducto.js` (comprime a 90 px ⇒ se muestra a 45 px); políticas de Storage atan la carpeta `{empresa}` al miembro (002 §3) |
 | `d({t:'seccion-'})` | update `productos set activo=false where seccion_id=...` + delete sección | RLS admin |
 | `d({t:'producto-'})` | update `productos set activo=false` | no hard-delete (snapshots) |
 | `d({t:'cfg~', cambios})` | update `empresas set nombre/propina_pct/iva_pct/config` | admin |
@@ -201,7 +239,7 @@ Calcula esperado = `fondo + pagos efectivo (cuentas cerradas en la ventana del t
 
 ## 5. Errores
 
-`raise exception` en español legible por usuarios finales (mostrar `error.message` en toast). Códigos habituales: mesa ya ocupada, cuenta cerrada/estado incorrecto, rol insuficiente, PIN incorrecto, pago insuficiente (`'el pago (X Bs) no cubre el total (Y Bs)'`), turno ya abierto/no abierto. Regla: **toda mutación es todo-o-nada**; ante error, el cliente re-sincroniza desde la base (nunca aplica el cambio local "por las dudas").
+`raise exception` en español legible por usuarios finales (mostrar `error.message` en toast). Códigos habituales: mesa ya ocupada, cuenta cerrada/estado incorrecto, rol insuficiente, PIN incorrecto, pago insuficiente (`'el pago (X Bs) no cubre el total (Y Bs)'`), turno ya abierto/no abierto. Desde 002/003 se suman: cuota agotada (`'El plan gratuito permite N artículos como máximo. Para tener más artículos, solicite el plan de pagos.'` — mensaje de venta; la UI **no** muestra "plan gratuito" en ningún otro sitio, es decisión de negocio) y comensales fuera de rango (`'El número de comensales debe estar entre 1 y 99'`). El throttle de `empresa_por_codigo` **no** lanza error: devuelve 0 filas (§3.18). Regla: **toda mutación es todo-o-nada**; ante error, el cliente re-sincroniza desde la base (nunca aplica el cambio local "por las dudas").
 
 ## 6. Permisos por rol (la base manda; `src/services/permisos.js` es solo UX)
 
@@ -214,4 +252,17 @@ Calcula esperado = `fondo + pagos efectivo (cuentas cerradas en la ventana del t
 - Alta de empresas/miembros desde la app (hoy: dashboard/SQL; ver seed comentado al final de `schema.sql`). **Primer admin:** `update public.membresias set user_id = auth.uid() ...` funciona SOLO en sesión autenticada; en el SQL editor usar el insert por email (seed Opción A, comentado y listo).
 - `dividir_cuenta` (por ítems/partes/personas): se compone en el cliente con `separar_mesa` + `mover_items` + `cobrar_cuenta`; RPC dedicada queda para v2 si hace falta atomicidad extra.
 - Ticket impreso: IA-3 consume el jsonb de `cobrar_cuenta`; no toca la base.
-- Backups/migraciones versionadas: cuando el schema deje de editarse a mano, pasar a `supabase migrations`.
+- ~~Backups/migraciones versionadas~~ → ya se usan: SQL numerado e idempotente en `supabase/migraciones/` (pegar en el SQL Editor; el flujo con `supabase migration` de CLI queda para cuando haya proyecto local vinculado). Orden de deploy en §8.
+
+---
+
+## 8. Despliegue de migraciones — ORDEN EXACTO
+
+Idempotentes, cada una se pega completa en el SQL Editor del proyecto Supabase, SIEMPRE en este orden (las siguientes dependen de las anteriores):
+
+1. `supabase/schema.sql` — base: tablas, RLS multi-tenant, RPCs de negocio, `private.es_super_compat()`.
+2. `supabase/migraciones/001_super.sql` — `supers`, `es_super()`, `fijar_empresa`, export/import (v1).
+3. `supabase/migraciones/002_seguridad.sql` — cuota oculta (`limites`), auditoría, storage de miniaturas, throttle, hardening, super-entrar, export/import **v2 con histórico**. **Requiere 001** (usa `public.es_super()`/`supers`).
+4. `supabase/migraciones/003_comensales.sql` — RPC `actualizar_comensales`. Degrada sin 002 (simplemente no audita), pero el orden correcto es aplicarla después.
+
+**Estado en el proyecto Supabase real (`oeyrnenclklmczlfoxzy`):** 002_seguridad.sql y 003_comensales.sql **ya están aplicadas** (2026-10-16); schema y 001 lo estaban desde v0.3. Cada archivo termina con un `select` de verificación (en el SQL Editor `auth.uid()` es NULL ⇒ solo devuelve contados: filas de `limites`/`throttle`/`auditoria`, columna `imagen_path`, triggers, políticas de Storage, bucket).

@@ -8,17 +8,21 @@
  *    la vista indicada en data.url (#salon, #cocina, #caja).
  */
 
-const VERSION = 'v1'
+const VERSION = 'v3'
 const CACHE_SHELL = 'pos-control-shell-' + VERSION
 const CACHE_RECURSOS = 'pos-control-recursos-' + VERSION
 
 const SHELL = [
   '/',
   '/index.html',
-  '/manifest.webmanifest',
-  '/icon.svg',
+  '/manifest.json',
+  '/icons/favicon-32.png',
+  '/icons/favicon-48.png',
+  '/icons/apple-touch-icon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/icons/icon-maskable-192.png',
+  '/icons/icon-maskable-512.png',
 ]
 
 // Patrones que nunca deben pasar por caché (dev de Vite / módulos fuente).
@@ -41,7 +45,9 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     (async () => {
       const claves = await caches.keys()
-      await Promise.all(claves.filter((k) => !k.startsWith('pos-control-')).map((k) => caches.delete(k)))
+      // Se borran las cachés de versiones anteriores (si no, el icono viejo sobrevive a
+      // la actualización y la PWA instalada sigue mostrando la marca antigua).
+      await Promise.all(claves.filter((k) => k.startsWith('pos-control-') && k !== CACHE_SHELL && k !== CACHE_RECURSOS).map((k) => caches.delete(k)))
       await self.clients.claim()
     })()
   )

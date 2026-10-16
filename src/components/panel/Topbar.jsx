@@ -1,6 +1,7 @@
 import { useIdioma } from '../../i18n/index.jsx'
 import SelectorIdioma from '../../i18n/SelectorIdioma.jsx'
-import './auth.css'
+import BrandMark from '../login/BrandMark.jsx'
+import '../../styles/auth.css'
 
 // Barra superior: empresa, usuario/rol, selector de módulo, selector de idioma y salida.
 // Props: { sesion:{usuario,rol,nombre,empresa,es_super}, modulo, modulos, onModulo(id), onSalir, aviso }
@@ -17,7 +18,7 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
   return (
     <header className="topbar" style={{ position: 'relative' }}>
       <div className="topbar-izq">
-        <span className="topbar-empresa">🍽️ {sesion?.empresa || t('comun.miNegocio')}</span>
+        <span className="topbar-empresa"><BrandMark size={22} /> {sesion?.empresa || t('comun.miNegocio')}</span>
         <span className={`topbar-rol topbar-rol-${rol}`}>{rolVisto}</span>
         <span className="topbar-user" title={sesion?.usuario}>{sesion?.nombre || sesion?.usuario}</span>
         {sesion?.es_super && (

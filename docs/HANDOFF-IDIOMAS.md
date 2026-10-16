@@ -1,7 +1,7 @@
 # HANDOFF-IDIOMAS · carril de traducción (es / en / pt)
 
-**Estado:** v1 · 2026-10-16 · dueño del carril: IA de idiomas.
-`npm run build` en verde y `node scripts/check-i18n.mjs` en verde (460 claves × 3 idiomas).
+**Estado:** v1.1 · 2026-10-16 · dueño del carril: IA de idiomas (repasado contra disco en la fase v0.3).
+`npm run build` en verde y `node scripts/check-i18n.mjs` en verde (461 claves × 3 idiomas, 0 huérfanas).
 
 Este archivo documenta SOLO el carril de idiomas. El del panel de super está en
 `docs/HANDOFF-SUPER.md`; `HANDOFF.md` (raíz) lo mantiene el coordinador.
@@ -12,7 +12,7 @@ Este archivo documenta SOLO el carril de idiomas. El del panel de super está en
 
 | Ruta | Qué es |
 |---|---|
-| `src/i18n/es.js` | **Fuente de verdad.** Diccionario plano, claves con puntos. 460 claves. |
+| `src/i18n/es.js` | **Fuente de verdad.** Diccionario plano, claves con puntos. 461 claves. |
 | `src/i18n/en.js` | Espejo exacto de `es.js` (mismas claves, mismo orden, mismos `{params}`). |
 | `src/i18n/pt.js` | Espejo exacto de `es.js`. |
 | `src/i18n/index.jsx` | Provider + hook `useIdioma()` + traducción **fuera de React** (`tGlobal`). |
@@ -32,7 +32,7 @@ aunque sus archivos **no** los tocó este carril.
 
 ```
 app:7  caja:56  comun:10  config:16  estado:3  impresoras:33  login:29  menu:25
-metodo:4  pedido:62  pwa:10  rol:3  salon:42  super:99  ticket:20  topbar:9  venta:32
+metodo:4  pedido:62  pwa:10  rol:3  salon:42  super:100  ticket:20  topbar:9  venta:32
 ```
 
 ---
@@ -159,12 +159,11 @@ npm run build                 # que Vite no rompa nada
      snapshot, uuid). Salen como aviso rojo en el panel de super.
    Para traducirlos hace falta una línea de `tGlobal('…')` en archivos de OTROS carriles: las
    claves de apoyo (`pwa.permisoTexto` y el patrón `tGlobal`) ya existen; no se tocó nada ajeno.
-2. **`super.entrar.avisoAcceso`** (clave deliberadamente fuera del diccionario): `SuperPage.jsx`
-   construye ese aviso con una plantilla de JS que interpola dos números
-   (`${esperadas}` / `${leidas}`) y **no pasa params** a `tOr`. Si la clave existiera con
-   marcadores, se verían los corchetes literales. La corrección es de una línea en el carril
-   super: `tOr('super.entrar.avisoAcceso', fallback, { esperadas, leidas })` — y entonces se
-   agregan las tres versiones con `{esperadas}`/`{leidas}`.
+2. **`super.entrar.avisoAcceso`** — **RESUELTO (repaso 2026-10-16):** la clave ya está en los tres
+   diccionarios con marcadores `{esperadas}`/`{leidas}` y `SuperPage.jsx` pasa los params
+   (`tOr('super.entrar.avisoAcceso', fallback, { esperadas, leidas })`), tal como pedía esta nota.
+   El texto en español, además, ahora orienta al fix real: aplicar `supabase/migraciones/002_seguridad.sql`
+   (ya aplicada en el proyecto real). Solo quedan sin traducir los textos que lanzan los servicios en español (§6.1).
 3. **Notificaciones push del service worker**: `public/sw.js` fija `lang: 'es'` en su propia
    `opcionesNotif` y el título/cuerpo los manda el servidor (español). `notificaciones.js` ahora
    usa `lang: idiomaActivo()` y `PwaBridge.jsx` pasa título/cuerpo traducidos **en las
@@ -192,33 +191,31 @@ npm run build                 # que Vite no rompa nada
 | `src/main.jsx` | Orden de Providers: `IdiomaProvider` **por fuera** de `StoreProvider` (el store y los servicios leen `tGlobal`). Si alguien lo mete dentro, el ticket impreso y las notificaciones pierden el idioma. |
 | `src/components/ticket/Ticket.jsx` | Solo lee `tGlobal`; cualquier cambio de maquetación del ticket debe conservar `ancho = 32` y el `padEnd(cols)`. |
 | `src/services/notificaciones.js` | Importa `i18n/index.jsx`; si el carril PWA reescribe el archivo, mantener `lang: idiomaActivo()` y `textoPermiso()`. |
-| `src/i18n/{es,en,pt}.js` | **Los tres diccionarios son escritura de varios carriles.** El namespace `super.*` (99 claves) lo añadió este carril porque el panel de super ya pedía las claves con `tOr`. Cualquier carril que agregue UI nueva DEBE mantener la paridad (el verificador falla si no). |
+| `src/i18n/{es,en,pt}.js` | **Los tres diccionarios son escritura de varios carriles.** El namespace `super.*` (100 claves) lo añadió este carril porque el panel de super ya pedía las claves con `tOr`. Cualquier carril que agregue UI nueva DEBE mantener la paridad (el verificador falla si no). |
 
 Nota: no se añadió ningún script a `package.json` a propósito (menos superficie de merge);
 lanzar el verificador con `node scripts/check-i18n.mjs`.
 
 ---
 
-## 8. Verificación final de esta fase
+## 8. Verificación final de esta fase (repasada contra disco, 2026-10-16)
 
 ```
 $ node scripts/check-i18n.mjs
 ✓ check-i18n: diccionarios coherentes
-  es → 460 claves (fuente de verdad)
-  en → 460 claves
-  pt → 460 claves
+  es → 461 claves (fuente de verdad)
+  en → 461 claves
+  pt → 461 claves
   namespaces: app, caja, comun, config, estado, impresoras, login, menu, metodo, pedido, pwa, rol, salon, super, ticket, topbar, venta
-  claves por namespace: app:7 caja:56 comun:10 config:16 estado:3 impresoras:33 login:29 menu:25 metodo:4 pedido:62 pwa:10 rol:3 salon:42 super:99 ticket:20 topbar:9 venta:32
-
-⚠ 1 claves usadas en código y ausentes en es.js (se vería el nombre de la clave en pantalla):
-   · super.entrar.avisoAcceso (src\components\super\SuperPage.jsx)
+  claves por namespace: app:7 caja:56 comun:10 config:16 estado:3 impresoras:33 login:29 menu:25 metodo:4 pedido:62 pwa:10 rol:3 salon:42 super:100 ticket:20 topbar:9 venta:32
+  (sin claves huérfanas: super.entrar.avisoAcceso se agregó con sus {esperadas}/{leidas})
 
 $ npm run build
 vite v8.3.4 building client environment for production...
 transforming...
 ✓ 95 modules transformed.
 ...
-✓ built in 260ms          (0 errores; solo el aviso de chunk > 500 kB, preexistente)
+✓ built in 525ms          (0 errores; solo el aviso de chunk > 500 kB, preexistente)
 ```
 
 Prueba de humo del núcleo (compilada con `vite --ssr`, sin `localStorage`): defecto `'es'`,

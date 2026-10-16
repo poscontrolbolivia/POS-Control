@@ -4,7 +4,7 @@ import { puede } from '../../services/permisos'
 import { MONEDA } from '../../config'
 import { useIdioma } from '../../i18n/index.jsx'
 import PedidoPanel from '../pedido/PedidoPanel.jsx'
-import './salon.css'
+import './SalonPage.css'
 
 const W = 1000, H = 600 // coordenadas normalizadas del lienzo
 const TODAS = 'todas'   // valor del filtro "ver todos los salones" (no es un id de zona)
@@ -12,8 +12,9 @@ const TODAS = 'todas'   // valor del filtro "ver todos los salones" (no es un id
 // Longitudes que exige la base (supabase/schema.sql): zonas.nombre 1..80, mesas.nombre
 // 1..60 y capacidad 1..50. Validamos en la UI para no disparar un error de RLS/RPC en pantalla.
 const LARGO_ZONA = 80, LARGO_MESA = 60, CAP_MIN = 1, CAP_MAX = 50
+const COM_MIN = 1, COM_MAX = 99 // cuentas.comensales between 1 and 99 (supabase/schema.sql)
 const TAM_MIN = 60       // tamaño mínimo en el lienzo normalizado (mesas más chicas no se leen)
-const MAX_PX_MOVIL = 768 // mismo criterio que los media-query de salon.css
+const MAX_PX_MOVIL = 768 // mismo criterio que los media-query de SalonPage.css
 
 const estadoMesa = c => (!c ? 'libre' : c.estado === 'precuenta' ? 'porcobrar' : c.items.some(i => i.estado === 'enviado') ? 'enviada' : 'ocupada')
 
@@ -75,7 +76,7 @@ export const capacidadCuenta = (c, mesas) => {
 }
 
 export default function SalonPage({ rol }) {
-  const { s, d } = useStore()
+  const { s, d, modo } = useStore()
   const { t } = useIdioma()
   const admin = puede(rol, 'editar_mapa') // único permiso de salón en permisos.js (solo admin)
 
@@ -86,6 +87,15 @@ export default function SalonPage({ rol }) {
   const [nueva, setNueva] = useState(null)       // texto del alta de salón
   const [ren, setRen] = useState(null)           // { id, nombre } mientras se renombra
   const [conf, setConf] = useState(null)         // id del salón con la confirmación de borrado abierta
+  // Toast interno (mismo patrón inline que el aviso de PedidoPanel; alert/confirm
+  // nativos congelan el navegador de pruebas).
+  const [aviso, setAviso] = useState('')
+  const avisoTimer = useRef(null)
+  // Comensales escritos desde aquí que el store todavía no devolvió (cuentaId → número):
+  // el espejo pinta el valor nuevo de inmediato, sin esperar el refetch de la capa de
+  // datos (en Supabase 'comensales~' refresca el negocio completo).
+  const [pax, setPax] = useState({})
+  const [paxTxt, setPaxTxt] = useState(null)     // texto del campo numérico mientras se teclea
   // Arrastre: el estado local pinta la mesa en movimiento y SOLO se guarda (1 dispatch)
   // al soltar. Si despacháramos en cada pointermove, en modo Supabase iría un UPDATE por
   // frame a la cola de RPCs.
@@ -103,6 +113,14 @@ export default function SalonPage({ rol }) {
   const destinoAlta = activo === TODAS ? (zonas[0]?.id ?? null) : activo
   const mesasZona = s.mesas.filter(m => activo === TODAS || m.zona === activo)
   const mesaSel = s.mesas.find(m => m.id === sel)
+  const cuentaSel = sel ? cuentaActiva(s, sel) : null
+  const comDe = c => (c ? pax[c.id] ?? c.comensales ?? 0 : 0)
+  const comSel = comDe(cuentaSel)
+  const avisar = m => {
+    setAviso(m)
+    clearTimeout(avisoTimer.current) // reprograma: si llegan dos avisos, el segundo manda
+    avisoTimer.current = setTimeout(() => setAviso(''), 4500)
+  }
   const zonaNombre = id => zonas.find(z => z.id === id)?.nombre ?? t('salon.sinZona')
   const nMesasZona = id => mesasPorZona(s.mesas, id)
 
@@ -187,9 +205,19 @@ export default function SalonPage({ rol }) {
   }
   const renombrarMesa = v => d({ t: 'mesa~', id: sel, cambios: { nombre: v.slice(0, LARGO_MESA) } })
   const borrar = () => {
-    const c = cuentaActiva(s, sel)
-    if (c) return alert(c.mesaIds.length > 1 ? t('salon.alertUnida') : t('salon.alertAbierta'))
+    if (cuentaSel) return avisar(cuentaSel.mesaIds.length > 1 ? t('salon.alertUnida') : t('salon.alertAbierta'))
     d({ t: 'mesa-', id: sel }); setSel(null)
+  }
+
+  // ─────────── comensales de la cuenta abierta ───────────
+  // 'comensales~' existe en el reducer y en la capa Supabase (RPC
+  // actualizar_comensales, migración 003): demo y base real siguen el mismo camino.
+  const ponerComensales = val => {
+    if (!cuentaSel) return
+    const v = Math.max(COM_MIN, Math.min(COM_MAX, Math.round(Number(val)) || COM_MIN))
+    setPax(p => ({ ...p, [cuentaSel.id]: v }))
+    setPaxTxt(null)
+    d({ t: 'comensales~', cuentaId: cuentaSel.id, comensales: v })
   }
 
   return (
@@ -255,6 +283,13 @@ export default function SalonPage({ rol }) {
           )}
         </div>
 
+        {aviso && (
+          <div className="salon-aviso" role="status">
+            <span>{aviso}</span>
+            <button className="ico" title={t('comun.cancelar')} aria-label={t('comun.cancelar')} onClick={() => setAviso('')}>✕</button>
+          </div>
+        )}
+
         {edit && admin && nueva !== null && (
           <div className="barra zona-alta">
             <input autoFocus className="zinput" placeholder={t('salon.nuevaZonaPlace')} value={nueva} maxLength={LARGO_ZONA}
@@ -304,9 +339,33 @@ export default function SalonPage({ rol }) {
           </div>
         )}
 
+        {/* Comensales de la cuenta activa (1..99 en public.cuentas): asignables desde el
+            salón sin entrar al panel de pedido; en móvil esta barra queda fija abajo. */}
+        {!edit && cuentaSel && puede(rol, 'abrir_mesa') && (
+          <div className="barra pax-bar" role="group" aria-label={t('pedido.comensales')}>
+            <span className="grupo">{t('pedido.comensales')}
+              {/* Literales en español: el carril IDIOMAS aún no define claves propias para
+                  estos botones (t() de una clave inexistente muestra la clave en pantalla). */}
+              <button className="ico" title="Quitar un comensal" aria-label="Quitar un comensal"
+                disabled={comSel <= COM_MIN} onClick={() => ponerComensales(comSel - 1)}>−</button>
+              <input className="pax-num" type="number" min={COM_MIN} max={COM_MAX} inputMode="numeric"
+                aria-label={t('pedido.comensales')}
+                value={paxTxt === null ? comSel : paxTxt}
+                onChange={e => setPaxTxt(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') ponerComensales(paxTxt) }}
+                onBlur={() => { if (paxTxt !== null) ponerComensales(paxTxt) }} />
+              <button className="ico" title="Sumar un comensal" aria-label="Sumar un comensal"
+                disabled={comSel >= COM_MAX} onClick={() => ponerComensales(comSel + 1)}>＋</button>
+            </span>
+            <span className="pista">{mesaSel?.nombre} · {t('salon.comensalesTitle', {
+              comensales: comSel, cap: capacidadCuenta(cuentaSel, s.mesas) || (mesaSel?.cap ?? 0) })}</span>
+          </div>
+        )}
+
         {!admin && <p className="pista">{t('salon.soloLectura')}</p>}
 
         <div ref={lienzo} className={'lienzo' + (edit ? ' edit' : '')} style={{ aspectRatio: `${W} / ${H}` }}
+          onPointerDown={e => { if (e.target === e.currentTarget) setSel(null) }} // tocar el fondo cierra la hoja móvil
           onPointerMove={move} onPointerUp={up} onPointerCancel={suelta}>
           {mesasZona.length === 0 && (
             <p className="lienzo-vacio">{edit && admin ? t('salon.sinMesas') : t('salon.sinMesasZona')}</p>
@@ -317,7 +376,7 @@ export default function SalonPage({ rol }) {
             // Capacidad de la cuenta: suma de las mesas unidas (los comensales se comparan
             // contra esa suma, no contra la mesa suelta).
             const capT = capacidadCuenta(c, s.mesas) || (m.cap || 0)
-            const com = c ? (c.comensales ?? 0) : null
+            const com = c ? comDe(c) : null
             const p = mueve && mueve.id === m.id ? mueve : m
             return (
               <div key={m.id} className={`mesa ${m.forma} ${est}${sel === m.id ? ' sel' : ''}${mueve?.id === m.id ? ' arrastrando' : ''}`}
@@ -352,7 +411,7 @@ export default function SalonPage({ rol }) {
   )
 }
 
-// Escucha el ancho de ventana para el modo celular (los estilos viven en salon.css; esto
+// Escucha el ancho de ventana para el modo celular (los estilos viven en SalonPage.css; esto
 // solo decide qué textos/hints se muestran y el aviso de arrastre).
 function useViewport(setMovil) {
   useEffect(() => {

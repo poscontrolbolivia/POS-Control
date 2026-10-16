@@ -5,7 +5,7 @@ import { puede } from '../../services/permisos'
 import { MONEDA } from '../../config'
 import { useIdioma } from '../../i18n/index.jsx'
 import { imprimirTicket } from '../ticket/Ticket.jsx'
-import './caja.css'
+import './CajaPage.css'
 
 const round2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100
 

@@ -7,13 +7,13 @@ import { MONEDA } from '../../config'
 import { LADO_VISUAL_PX, urlImagenProducto } from '../../services/imagenProducto.js'
 import { useIdioma } from '../../i18n/index.jsx'
 import { imprimirCuenta, precalcularCambio } from '../ticket/Ticket.jsx'
-import './venta.css'
+import './VentaDirecta.css'
 
 const round2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100
 
 // Miniato 45×45 para los tiles de venta. El hueco siempre mide lo mismo (si no hay foto se
 // muestra la inicial), así que la cuadrícula no se desplaza cuando falta la imagen.
-// Sin CSS nuevo: venta.css/styles.css están fuera del alcance de este carril → estilos en línea.
+// Sin CSS nuevo: VentaDirecta.css/styles.css están fuera del alcance de este carril → estilos en línea.
 export function MiniaturaProducto({ producto }) {
   const url = urlImagenProducto(producto)
   const ini = ((producto.nombre || '').trim().charAt(0) || '?').toUpperCase()

@@ -37,6 +37,10 @@ export default function PedidoPanel({ rol, mesa, cuenta, onClose, bloqueado }) {
   const usuario = s.usuariosDemo?.find(u => u.rol === rol)?.usuario
   const secciones = [...(s.secciones || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0))
   const [sec, setSec] = useState(secciones[0]?.id)
+  // Con Supabase el panel se monta ANTES de que lleguen las secciones (estado aún vacío),
+  // así que `sec` queda undefined y la carta saldría "Sin artículos": se cae a la primera
+  // sección en cuanto existen.
+  const secActiva = secciones.some(x => x.id === sec) ? sec : secciones[0]?.id
   const [marcados, setMarcados] = useState([])
   const [destino, setDestino] = useState('')
   const [apertura, setApertura] = useState(null)   // {comensales} mientras se abre la cuenta
@@ -215,9 +219,9 @@ export default function PedidoPanel({ rol, mesa, cuenta, onClose, bloqueado }) {
       {/* menu por secciones */}
       {editable && (
         <>
-          <div className="barra">{secciones.map(x => <button key={x.id} className={x.id === sec ? 'tab on' : 'tab'} onClick={() => setSec(x.id)}>{x.nombre}</button>)}</div>
+          <div className="barra">{secciones.map(x => <button key={x.id} className={x.id === secActiva ? 'tab on' : 'tab'} onClick={() => setSec(x.id)}>{x.nombre}</button>)}</div>
           <div className="grid">
-            {s.productos.filter(p => p.activo && p.seccionId === sec).map(p => (
+            {s.productos.filter(p => p.activo && p.seccionId === secActiva).map(p => (
               <button key={p.id} className="prod" onClick={() => d({ t: 'item+', cuentaId: c.id, p })}>
                 <Thumb producto={p} />
                 {p.nombre}<small>{money(p.precio)}</small>

@@ -126,14 +126,18 @@ export async function cargarEstadoInicial(empresaId) {
   if (!sb) throw new Error('Supabase no está configurado')
   fijarEmpresa(empresaId)
   const nombres = await fetchNombres()
+  // `cajaP` se consulta una sola vez y se encadena: fetchCuentas necesita el turno ya
+  // mapeado, y nombrar `cajaT` dentro del mismo Promise.all que lo declara lanza
+  // "Cannot access 'cajaT' before initialization" (TDZ) y rompía toda la carga inicial.
+  const cajaP = fetchCaja(empresaId)
   const [empresas, zonas, mesas, secciones, productos, cajaT, dataCuentas, numeradas] = await Promise.all([
     selectAll(sb.from('empresas').select('*').eq('id', empresaId)),
     selectAll(sb.from('zonas').select('*').eq('empresa_id', empresaId).order('orden')),
     selectAll(sb.from('mesas').select('*').eq('empresa_id', empresaId).eq('activa', true).order('nombre')),
     selectAll(sb.from('secciones_menu').select('*').eq('empresa_id', empresaId).order('orden')),
     selectAll(sb.from('productos').select('*').eq('empresa_id', empresaId).order('nombre')),
-    fetchCaja(empresaId),
-    fetchCuentas(empresaId, { turno: cajaT.abierto ? mapTurno(cajaT.abierto, nombres) : null, historial: cajaT.historial.map(t => mapTurno(t, nombres)) }),
+    cajaP,
+    cajaP.then(t => fetchCuentas(empresaId, { turno: t.abierto ? mapTurno(t.abierto, nombres) : null, historial: t.historial.map(x => mapTurno(x, nombres)) })),
     // contador de venta directa: máximo numero del día en la empresa + 1 (misma fórmula que la RPC)
     selectAll(sb.from('cuentas').select('numero').eq('empresa_id', empresaId).eq('tipo', 'directa').gte('abierta_en', hoyISO()).order('numero', { ascending: false }).limit(1)),
   ])
@@ -256,6 +260,9 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       // El PIN que pide PedidoPanel es un flujo demo; en Supabase la base exige el
       // pin_descuento_hash de la membresía (sin pin → error legible si el rol no es admin).
       await rpc('aplicar_extras', { p_cuenta_id: rid(mapa, a.cuentaId), p_propina: a.propina ?? null, p_descuento: a.descuento ?? null })
+      return refrescarNegocio(E)
+    case 'comensales~':
+      await rpc('actualizar_comensales', { p_cuenta_id: rid(mapa, a.cuentaId), p_comensales: a.comensales })
       return refrescarNegocio(E)
     case 'cobrar': {
       const ticket = await rpc('cobrar_cuenta', {

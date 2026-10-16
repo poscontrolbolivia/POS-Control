@@ -1,4 +1,5 @@
-/* Estilos del área de autenticación (LoginPage + Topbar). Usa variables de styles.css. */
+/* Estilos del login y de la barra superior (pages/LoginPage + components/panel/Topbar).
+   Usa variables de styles.css. */
 
 .auth-pantalla{
   min-height:100vh;display:flex;align-items:center;justify-content:center;
@@ -12,6 +13,11 @@
 .auth-marca{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:4px}
 .auth-marca h1{margin:0;font-size:1.4rem;color:var(--ac);letter-spacing:.3px}
 .auth-logo{font-size:1.8rem}
+/* La marca es el ícono de la PWA (img): redondeado para que no parezca un parche cuadrado
+   sobre la tarjeta, y sin deformarse aunque el contenedor sea rectangular. */
+.brand-mark{display:inline-block;vertical-align:middle;border-radius:22%;object-fit:cover;flex:none}
+.auth-legal{margin:0;text-align:center;font-size:.76rem;color:var(--mut)}
+.auth-legal a{color:var(--mut);text-decoration:underline}
 .auth-tarjeta h2{margin:0;text-align:center;font-size:1.25rem}
 .auth-sub{margin:0;text-align:center;color:var(--mut);font-size:.92rem}
 .auth-campo{display:flex;flex-direction:column;gap:6px}

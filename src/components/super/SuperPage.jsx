@@ -79,7 +79,8 @@ export default function SuperPage({ sesion }) {
           const leidas = await sondearAcceso(e.id)
           if (leidas < esperadas) {
             setAvisoAcceso(tOr('super.entrar.avisoAcceso',
-              `Atención: el listado dice ${esperadas} mesas pero la app solo ve ${leidas}. Exportar e importar funcionan igual, pero para OPERAR esta empresa hace falta aplicar la migración supabase/migraciones/002_seguridad.sql (fijar_empresa para super).`))
+              `Atención: el listado dice ${esperadas} mesas pero la app solo ve ${leidas}. Exportar e importar funcionan igual, pero para OPERAR esta empresa hace falta aplicar la migración supabase/migraciones/002_seguridad.sql (fijar_empresa para super).`,
+              { esperadas, leidas }))
           }
         } catch { /* el sondeo es informativo: si falla no bloqueamos la entrada a la empresa */ }
       }

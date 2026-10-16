@@ -53,8 +53,8 @@ export default {
   'login.placeholderCodigo': 'demo',
   'login.placeholderEmpresa': 'Mi negocio',
   'login.placeholderCorreo': 'tu@correo.com',
-  'login.avisoSupaAntes': 'Conectado a Supabase · escribe',
-  'login.avisoSupaDespues': 'para el modo de prueba local',
+  'login.avisoSupa': 'Conectado a Supabase · para probarlo sin cuenta usa el botón de abajo',
+  'login.probarDemo': 'Probar el demo sin cuenta',
   'login.avisoDemo': 'Modo demo: se acepta cualquier empresa',
   'login.continuar': 'Continuar',
   'login.buscando': 'Buscando…',
@@ -400,10 +400,8 @@ export default {
   'pwa.permisoTexto': 'POS Control quiere enviarte avisos del sistema: «Nuevos platos enviados a cocina» para la tablet de cocina y «Mesa por cobrar» cuando una cuenta pasa a pre-cuenta. Así no necesitas mantener la app abierta. Puedes cambiarlo cuando quieras en Ajustes del navegador › Permisos › Notificaciones.',
 
   // ── Panel de super (src/components/super/*) + App.jsx / Topbar.jsx ──
-  // Las pide el carril SUPER con tOr('super.…', 'texto en español'): aquí solo se alimenta
-  // el diccionario, no se toca ningún archivo de ese carril.
-  // Excepción deliberada: 'super.entrar.avisoAcceso' NO está porque su llamada interpola
-  // números con una plantilla de JS y aún no pasa params; ver docs/HANDOFF-IDIOMAS.md.
+  // Las pide el carril SUPER con tOr('super.…', 'texto en español'), así que el código
+  // funciona igual sin diccionario; aquí solo se alimenta la traducción.
   'app.mod.super': 'Super',
 
   'menu.subirFoto': 'Subir foto',
@@ -437,6 +435,7 @@ export default {
   'super.entrar.detalleDespues': 'Verás su salón, su caja y sus tickets como si fueras equipo de esa empresa, con el límite de artículos que definas abajo. Tus datos quedan guardados y recuperas tu empresa con «volver a mi empresa».',
   'super.entrar.mesas': 'mesas',
   'super.entrar.cuentas': 'cuentas',
+  'super.entrar.avisoAcceso': 'Atención: el listado dice {esperadas} mesas pero la app solo ve {leidas}. Exportar e importar funcionan igual, pero para OPERAR esta empresa hace falta aplicar la migración supabase/migraciones/002_seguridad.sql (fijar_empresa para super).',
   'super.entrar.productos': 'productos',
   'super.entrar.cancelar': 'Cancelar',
   'super.entrar.confirmar': 'Sí, entrar en esa empresa',
@@ -516,4 +515,78 @@ export default {
   'super.importar.entrarAhora': 'Entrar ahora',
   'super.importar.idNuevo': 'Identificador nuevo',
   'super.importar.limpiar': 'Limpiar',
+
+  // ── Legal (src/pages/TerminosPage.jsx y PrivacidadPage.jsx) ──
+  // Adaptados de los de Catering Control (misma estructura de secciones y las mismas claves
+  // 'legal.*'), reescritos para un punto de venta: roles de personal, comandas, caja, plan
+  // gratuito con límite de artículos y fotos de catálogo. Sin razón social, correo ni dirección:
+  // el documento es deliberadamente agnóstico de empresa, porque cada negocio lo publica con el
+  // suyo. Nada de promesas que la app no cumpla: el límite de artículos existe pero no se ve en
+  // pantalla, y la PWA abre sin conexión pero operar requiere red.
+  'legal.back': 'Volver al inicio de sesión',
+  'legal.updated': 'Última actualización: 16 de octubre de 2026',
+  'legal.summaryLabel': 'En resumen:',
+  'legal.terms.title': 'Términos y condiciones de uso',
+  'legal.terms.intro': 'Estos términos regulan el uso de POS Control ("el software", "la plataforma"), un punto de venta para negocios de comida provisto a la empresa que te dio acceso a esta cuenta ("la empresa"). Al iniciar sesión, aceptas estos términos.',
+  'legal.terms.tocTitle': 'Índice',
+  'legal.terms.t1': 'Quién usa esta plataforma',
+  'legal.terms.t2': 'Cuentas y acceso',
+  'legal.terms.t3': 'Plan gratuito y límites de uso',
+  'legal.terms.t4': 'Uso aceptable',
+  'legal.terms.t5': 'Disponibilidad del servicio',
+  'legal.terms.t6': 'Datos e imágenes',
+  'legal.terms.t7': 'El servicio se ofrece "tal cual"',
+  'legal.terms.t8': 'Exclusión de responsabilidad',
+  'legal.terms.t9': 'Indemnización',
+  'legal.terms.t10': 'Ley aplicable',
+  'legal.terms.t11': 'Cambios a estos términos',
+  'legal.terms.s1': 'POS Control se ofrece a restaurantes, cafeterías y otros negocios de comida para que gestionen su operación diaria: las mesas del salón, la comanda de cocina, la caja y la venta directa en mostrador. Lo usan las personas del equipo de la empresa (administración, caja y salón); no existe un portal de clientes finales, y la relación del negocio con sus comensales sigue siendo del negocio.',
+  'legal.terms.s2a': 'Cada usuario (admin, cajero o mesero) es responsable de mantener la confidencialidad de su contraseña.',
+  'legal.terms.s2b': 'El acceso se bloquea temporalmente después de varios intentos fallidos al escribir el código de la empresa, como medida de seguridad.',
+  'legal.terms.s2c': 'La empresa administradora de la cuenta puede crear, editar o revocar el acceso de sus usuarios en cualquier momento.',
+  'legal.terms.s3': 'POS Control se entrega en un plan gratuito con límites de uso, como un número máximo de artículos en el menú por negocio. Esos límites no se muestran en pantalla: al intentar pasarlos, la plataforma avisa que hace falta pasar al plan de pago y todo lo demás sigue funcionando igual. Las condiciones y el alta del plan de pagos se acuerdan directamente con quien provee la plataforma.',
+  'legal.terms.s4': 'No está permitido usar la plataforma para registrar ventas o datos falsos a sabiendas, intentar acceder a la información de una empresa distinta a la propia, ni intentar vulnerar las medidas de seguridad del sistema. Cada sesión solo ve los datos de su empresa.',
+  'legal.terms.s5': 'Se procura mantener la plataforma disponible de forma continua, pero pueden ocurrir interrupciones programadas o no por mantenimiento, actualizaciones o factores fuera de nuestro control (por ejemplo, el proveedor de la base de datos). La aplicación se puede instalar en el teléfono o la tablet y abre sin conexión, pero para registrar ventas necesita estar en línea.',
+  'legal.terms.s6': 'El tratamiento de los datos personales que se cargan en la plataforma (los del personal del negocio y los de las ventas que este registra) se describe en la Política de privacidad, que forma parte de estos términos.',
+  'legal.terms.s7Summary': 'la plataforma se ofrece sin garantías de funcionamiento perfecto o ininterrumpido; se usa bajo el propio riesgo de quien la usa.',
+  'legal.terms.s7': 'La plataforma se ofrece "tal cual" ("as is") y "según disponibilidad" ("as available"), sin garantías de ningún tipo, expresas o implícitas, incluyendo (sin limitarse a) garantías de que funcionará sin errores, de forma ininterrumpida, o de que se ajustará a un propósito particular. El uso de la plataforma es bajo el propio riesgo de quien la usa.',
+  'legal.terms.s8Summary': 'POS Control no responde por daños indirectos derivados del uso de la plataforma; la empresa que la usa es responsable de sus propias decisiones de venta y de su relación con sus comensales.',
+  'legal.terms.s8': 'En la máxima medida permitida por la ley, POS Control (y quien lo provee) no será responsable por daños indirectos, incidentales, especiales o derivados (incluyendo pérdida de ganancias, de clientes o de datos) que resulten del uso o la imposibilidad de uso de la plataforma, incluso si se avisó de la posibilidad de esos daños. Esto no aplica a daños causados por dolo o negligencia grave, que la ley no permite excluir.',
+  'legal.terms.s8b': 'La empresa que usa la plataforma es responsable de la exactitud de los datos que carga, de sus decisiones de cobro (precios, propinas, descuentos y anulaciones) y de sus obligaciones fiscales y contables frente a su país: la plataforma imprime tickets y cierra cajas, no sustituye la facturación ni las declaraciones que correspondan al negocio.',
+  'legal.terms.s9Summary': 'la empresa que usa la plataforma responde por reclamos derivados de su mal uso, del incumplimiento de estos términos, o de reclamos de sus propios clientes por el servicio de comida.',
+  'legal.terms.s9': 'La empresa que usa la plataforma se compromete a responder por cualquier reclamo, daño o gasto (incluyendo honorarios legales razonables) que surja de: (a) el uso indebido de la plataforma, (b) el incumplimiento de estos términos, o (c) reclamos de sus propios clientes finales relacionados con el servicio de comida en sí (no con el funcionamiento técnico de la plataforma).',
+  'legal.terms.s10': 'Estos términos se rigen por las leyes del país donde la empresa que te dio acceso tenga su domicilio principal, sin perjuicio de las normas de protección al consumidor y de protección de datos de tu país que sean de aplicación obligatoria. Cualquier disputa se someterá a los tribunales competentes de ese país, salvo que ambas partes acuerden otra cosa por escrito.',
+  'legal.terms.s11': 'Estos términos pueden actualizarse. Los cambios relevantes se reflejarán en la fecha de "Última actualización" de esta página.',
+  'legal.terms.contact': '¿Preguntas sobre estos términos? Contacta a la empresa que te dio acceso a esta cuenta, o a quien te haya provisto la plataforma.',
+  'legal.terms.seePrivacy': 'Ver también la Política de privacidad →',
+  'legal.privacy.title': 'Política de privacidad',
+  'legal.privacy.intro': 'POS Control es el software que usa el negocio de comida que te dio acceso a esta cuenta para registrar y cobrar sus ventas. Esta página explica qué datos guarda la plataforma y cómo se manejan.',
+  'legal.privacy.t1': 'Qué datos se guardan',
+  'legal.privacy.tableWho': 'Quién',
+  'legal.privacy.tableWhat': 'Qué se guarda',
+  'legal.privacy.rowStaff': 'Personal del negocio',
+  'legal.privacy.rowStaffData': 'Nombre, correo y rol dentro del equipo (admin, cajero o mesero)',
+  'legal.privacy.rowSales': 'Ventas y cuentas',
+  'legal.privacy.rowSalesData': 'Salones y mesas, número de comensales, artículos servidos, importes, propinas, descuentos, formas de pago y turnos de caja',
+  'legal.privacy.rowMenu': 'Menú',
+  'legal.privacy.rowMenuData': 'Secciones, artículos, precios y la foto de miniatura de cada artículo',
+  'legal.privacy.s1Note': 'No se registran datos personales de los comensales ni una cartera de clientes: la plataforma lleva la operación del negocio, no a sus clientes.',
+  'legal.privacy.t2': 'Fotos',
+  'legal.privacy.s2Intro': 'La única imagen que se guarda en la plataforma es la foto de un artículo del menú:',
+  'legal.privacy.s2a': 'La miniatura se comprime en el propio navegador antes de subirse (90 píxeles de lado, unos pocos kilobytes) y se guarda con un nombre generado al azar, no con el nombre del artículo.',
+  'legal.privacy.s2Note': 'Esas imágenes viven en el mismo almacén que los datos del negocio y solo se ven desde dentro de la plataforma; al quitar la foto desde el menú, el archivo se borra.',
+  'legal.privacy.t3': 'Cómo se usan los datos',
+  'legal.privacy.s3': 'Los datos se usan exclusivamente para operar el negocio: saber qué mesas están abiertas, mandar la comanda a cocina, cobrar, imprimir el ticket y cerrar la caja del turno. No se venden ni se comparten con terceros ajenos a la empresa que administra tu cuenta.',
+  'legal.privacy.t4': 'Dónde se guardan',
+  'legal.privacy.s4': 'Los datos se almacenan en una base de datos con controles de acceso por usuario, por rol y por empresa: cada sesión requiere un inicio de sesión válido y una empresa no puede leer los datos de otra, aunque las dos usen la misma plataforma. Quien da soporte técnico a la plataforma puede entrar en una empresa concreta cuando hace falta (por ejemplo, para exportar o migrar los datos del negocio), y esa acción queda registrada.',
+  'legal.privacy.t5': 'Cuánto tiempo se conservan',
+  'legal.privacy.s5': 'Los registros de venta y de caja se conservan mientras la cuenta de la empresa esté activa. Si el negocio deja de usar la plataforma, sus datos se pueden exportar y eliminar a pedido.',
+  'legal.privacy.s5b': 'Las fotos de los artículos se conservan mientras el artículo siga en el menú, o hasta que alguien las quite.',
+  'legal.privacy.t6': 'Tus derechos',
+  'legal.privacy.s6': 'Si quieres consultar, corregir o pedir que se elimine tu información personal, comunícate directamente con la empresa que administra tu cuenta: es quien tiene el control directo de esos datos dentro de la plataforma.',
+  'legal.privacy.s6b': 'El acceso, la rectificación y la eliminación de tus datos personales se rigen por la legislación de protección de datos aplicable en tu país (por ejemplo, las leyes de privacidad de los distintos países de América Latina o de los estados de EE. UU.). En la medida que esas leyes lo exijan, no vendemos tu información personal; para ejercer cualquiera de estos derechos, contacta a la empresa.',
+  'legal.privacy.t7': 'Cambios a esta política',
+  'legal.privacy.s7': 'Esta política puede actualizarse. Los cambios relevantes se reflejarán en la fecha de "Última actualización" de esta página.',
+  'legal.privacy.contact': '¿Preguntas sobre esta política? Contacta a la empresa que te dio acceso a esta cuenta, o a quien te haya provisto la plataforma.',
+  'legal.privacy.seeTerms': 'Ver también los Términos y condiciones →',
 }

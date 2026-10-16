@@ -79,6 +79,7 @@ function reducer(s, a) {
     case 'precuenta': return upd(a.cuentaId, c => ({ ...c, estado: 'precuenta' }))
     case 'reabrir': return upd(a.cuentaId, c => ({ ...c, estado: 'abierta' }))
     case 'extras': return upd(a.cuentaId, c => ({ ...c, propina: a.propina ?? c.propina, descuento: a.descuento ?? c.descuento }))
+    case 'comensales~': return upd(a.cuentaId, c => ({ ...c, comensales: a.comensales }))
     case 'cobrar': return upd(a.cuentaId, c => ({ ...c, estado: 'cerrada', pagos: a.pagos, propina: a.propina ?? c.propina, descuento: a.descuento ?? c.descuento, cerradaPor: a.usuario, cerradaEn: Date.now() }))
 
     case 'mover': { // ítems a la cuenta activa de otra mesa (o a cuenta existente por id destino)

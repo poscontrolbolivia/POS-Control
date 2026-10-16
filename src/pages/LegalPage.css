@@ -1,0 +1,39 @@
+/* Páginas legales (/terminos y /privacidad). Mismo esqueleto visual que LegalPage.css de
+   Catering Control, pero con las variables de color de styles.css (POS Control no tiene
+   sistema de temas: claro/oscuro lo resuelve prefers-color-scheme en :root). */
+
+.legal-wrap{max-width:760px;margin:0 auto;padding:70px 20px 60px;color:var(--ink);line-height:1.6}
+.legal-cab{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.legal-back{
+  display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+  background:var(--ac);color:#fff;border-radius:999px;padding:10px 16px;font-weight:650;font-size:.9rem;
+}
+.legal-back:hover{filter:brightness(1.06)}
+.legal-marca{display:flex;align-items:center;gap:10px;margin-bottom:2px}
+.legal-wrap h1{font-size:1.55rem;margin:0;color:var(--ink)}
+.legal-updated{color:var(--mut);font-size:.85rem;margin:0 0 22px}
+.legal-wrap h2{font-size:1.12rem;margin:26px 0 8px;scroll-margin-top:16px;color:var(--ink)}
+.legal-wrap p,.legal-wrap li{font-size:.95rem}
+.legal-wrap ul{padding-left:20px}
+.legal-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 28px}
+.legal-tabla{width:100%;min-width:460px;border-collapse:collapse;font-size:.88rem;margin:10px 0 6px}
+.legal-tabla th,.legal-tabla td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.legal-tabla th{color:var(--mut);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.02em}
+.legal-tabla-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.legal-contact{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);font-size:.85rem;color:var(--mut)}
+.legal-crosslink{color:var(--ac);text-decoration:none}
+.legal-crosslink:hover{text-decoration:underline}
+.legal-toc{background:var(--libre);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:20px 0 8px}
+.legal-toc p{margin:0 0 8px;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;color:var(--mut);font-weight:600}
+.legal-toc ol{margin:0;padding-left:18px;columns:2;column-gap:20px}
+.legal-toc li{font-size:.85rem;margin-bottom:4px}
+.legal-toc a{color:var(--ink);text-decoration:none}
+.legal-toc a:hover{color:var(--ac)}
+.legal-summary{background:var(--libre);border-left:3px solid var(--ac);border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0 12px;font-size:.88rem}
+.legal-summary b{color:var(--ac)}
+.legal-back:focus-visible,.legal-toc a:focus-visible,.legal-crosslink:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+@media (max-width:600px){
+  .legal-wrap{padding-top:16px}
+  .legal-toc ol{columns:1}
+  .legal-card{padding:18px 16px}
+}

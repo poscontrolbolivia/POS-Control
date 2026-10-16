@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { useStore, guardarSesionSup } from '../../services/store.jsx'
-import { USAR_SUPABASE } from '../../config.js'
-import { sb, rpc, fijarEmpresa, mensajeError } from '../../services/supabase.js'
-import { esSuper } from '../../services/super/superApi.js'
-import { useIdioma } from '../../i18n/index.jsx'
-import './auth.css'
+import { Link } from 'react-router-dom'
+import { useStore, guardarSesionSup } from '../services/store.jsx'
+import { USAR_SUPABASE } from '../config.js'
+import { sb, rpc, fijarEmpresa, mensajeError } from '../services/supabase.js'
+import { esSuper } from '../services/super/superApi.js'
+import { useIdioma } from '../i18n/index.jsx'
+import BrandMark from '../components/login/BrandMark.jsx'
+import '../styles/auth.css'
 
 // Login en 2 pasos.
 //  · Supabase: 1) CÓDIGO de empresa (RPC public.empresa_por_codigo) 2) email+clave
@@ -32,20 +34,35 @@ export default function LoginPage({ onEntrar }) {
 
   const esDemo = codigo => codigo.trim().toLowerCase() === 'demo'
 
+  // El sandbox local necesita un acceso propio: si una empresa real de la base usa el código
+  // "demo", escribirlo entra en Supabase (su dueño debe poder entrar), así que el modo sin
+  // cuenta no puede depender de esa palabra.
+  const irDemo = () => {
+    setError('')
+    guardarSesionSup(null)
+    fijarEmpresa(null)
+    setEmpresa('demo'); setSup(false); setPaso(2)
+  }
+
   const continuar = async e => {
     e.preventDefault()
     const codigo = empresa.trim()
     if (!codigo) { setError(t('login.faltaCodigo')); return }
-    if (!USAR_SUPABASE || esDemo(codigo)) { // modo demo: paso 2 con usuariosDemo
+    if (!USAR_SUPABASE) { // sin base configurada: paso 2 con los usuariosDemo locales
       setError(''); setSup(false); setPaso(2)
       return
     }
     setError(''); setBusy(true)
     try {
+      // Primero siempre se pregunta a Supabase: un negocio real puede llamarse "demo"
+      // y su dueño debe poder entrar con su código. El modo de prueba local solo se
+      // usa cuando el código NO existe en la base (y escribe "demo").
       const filas = await rpc('empresa_por_codigo', { p_codigo: codigo }, { conEmpresa: false })
-      if (!filas || !filas.length) { setError(t('login.codigoNoEncontrado')); return }
-      setEmpresaSup(filas[0]); setSup(true); setPaso(2)
+      if (filas && filas.length) { setEmpresaSup(filas[0]); setSup(true); setPaso(2); return }
+      if (esDemo(codigo)) { setError(''); setSup(false); setPaso(2); return }
+      setError(t('login.codigoNoEncontrado'))
     } catch (err) {
+      if (esDemo(codigo)) { setError(''); setSup(false); setPaso(2); return } // sin base: prueba local
       setError(mensajeError(err))
     } finally { setBusy(false) }
   }
@@ -116,7 +133,7 @@ export default function LoginPage({ onEntrar }) {
     <div className="auth-pantalla">
       <form className="auth-tarjeta" onSubmit={paso === 1 ? continuar : entrar}>
         <div className="auth-marca">
-          <span className="auth-logo">🍽️</span>
+          <BrandMark className="auth-logo" />
           <h1>POS Control</h1>
         </div>
 
@@ -134,10 +151,14 @@ export default function LoginPage({ onEntrar }) {
               />
             </label>
             {USAR_SUPABASE
-              ? <p className="auth-aviso">{t('login.avisoSupaAntes')} <b>demo</b> {t('login.avisoSupaDespues')}</p>
+              ? <p className="auth-aviso">{t('login.avisoSupa')}</p>
               : <p className="auth-aviso">{t('login.avisoDemo')}</p>}
             {error && <p className="auth-error">{error}</p>}
             <button className="primary big auth-btn" type="submit" disabled={busy}>{busy ? t('login.buscando') : t('login.continuar')}</button>
+            {USAR_SUPABASE && <button className="auth-enlace" type="button" onClick={irDemo}>{t('login.probarDemo')}</button>}
+            <p className="auth-legal">
+              <Link to="/terminos">{t('legal.terms.title')}</Link> · <Link to="/privacidad">{t('legal.privacy.title')}</Link>
+            </p>
           </>
         ) : paso === 2 ? (
           <>

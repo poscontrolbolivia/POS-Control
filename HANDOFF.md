@@ -74,3 +74,103 @@ Que un usuario **normal** con 2+ membresías no pueda saltar de empresa: hace fa
 - Usuarios multi-empresa: los SELECTs/escrituras directas de catálogo dependen del fallback de `empresa_activa()` (exactamente 1 membresía); con 2+ empresas harían falta RPCs de lectura (CONTRATO §2 ya lo anticipa).
 - Ventana de `cuentas` en caché: se cargan las activas + las cerradas dentro del rango de los turnos (para el arqueo de CajaPage); cuentas cerradas más antiguas no aparecen en historial de caja.
 - `v_estado_mesas`/realtime no se suscriben aún: el refetch es por mutación propia (multi-dispositivo en v1 ⇒ requeriría poll o Realtime, checklist del schema).
+
+---
+
+# v0.3 · Seguridad + cuota + imágenes + comensales (2026-10-16)
+
+Trabajo de backend y capa de datos del hilo principal. Referencia canónica: `docs/CONTRATO.md` (§0 reglas 7-8, §1 tablas ocultas, §3.17-3.19, §8 deploy) y `docs/GUÍA.md` (§4, §10, §11, §15).
+
+## Deploy de migraciones — ORDEN EXACTO
+1. `supabase/schema.sql`
+2. `supabase/migraciones/001_super.sql`
+3. `supabase/migraciones/002_seguridad.sql`
+4. `supabase/migraciones/003_comensales.sql`
+
+Idempotentes, pegar en el SQL Editor en ese orden (002 requiere 001 porque usa `public.es_super()`/`supers`; 003 se puso después de 002 para poder auditar, aunque degrada sin ruido si 002 falta). **Estado en el proyecto Supabase real (`oeyrnenclklmczlfoxzy`): `002_seguridad.sql` y `003_comensales.sql` YA ESTÁN APLICADAS** (001 y el schema lo estaban desde v0.3).
+
+## `002_seguridad.sql` (aplicada) — paridad de seguridad con Catering Control
+- **Auditoría**: tabla `public.auditoria` (oculta) + helper `private.auditar(uuid,text,jsonb)`; acciones registradas: `super_entro`, `super_ajustar_cuota`, `super_exporto`, `super_importo`, `throttle_agotado`, `comensales`. Lectura solo por RPC del super.
+- **Cuota oculta de artículos**: `public.limites(empresa_id, max_productos int NULL=ilimitado, plan 'gratis'|'pago', notas, actualizado_en, actualizado_por)` con RLS deny-all (el tenant no la ve ni por REST: 403). Trigger `trg_nueva_cuota` en `empresas` siembra 30 artículos por empresa nueva; trigger `private.controlar_cuota_productos` sobre `productos` bloquea el alta que excede la cuota con el mensaje de venta: «El plan gratuito permite N artículos como máximo. Para tener más artículos, solicite el plan de pagos.» Los super administradores están exentos (la importación no se rompe con catálogos grandes); **reactivar un artículo inactivo sí consume cuota**; cambiar precio/nombre o dar de baja no.
+- **RPCs solo-super de cuota**: `public.super_ajustar_empresa(uuid,integer,text,text)` y `public.super_ver_cuota(uuid)` (client-side en `src/services/super/superApi.js`: `ajustarCuota`/`verCuota`).
+- **Miniaturas de artículos**: columna `public.productos.imagen_path` con CHECK de forma `productos/{uuid-empresa}/{uuid}.{webp|jpg}`; bucket público `pos-imagenes` (se crea por SQL, tope 209715 B, `allowed_mime_types = ['image/webp','image/jpeg']`) y CUATRO políticas de Storage (`pos_imagenes_insert|select|update|delete`) atadas a la carpeta de la empresa del miembro. Nota del SQL: sin la política SELECT el alta en Storage falla siempre (PostgREST hace `INSERT…RETURNING`), comprobado en vivo.
+- **Throttle anti-fuerza-bruta**: tabla `public.throttle` (oculta) + `private.throttle_ok(prefijo,max,ventana)`; `public.empresa_por_codigo(text)` redefinida a **30 intentos / 10 minutos por IP** y al agotar devuelve **0 filas** (indistinguible de "código inexistente") en vez de lanzar excepción: no enumera empresas y no revierte el conteo.
+- **Auditoría legible**: `public.super_listar_auditoria(uuid,integer)` y `public.super_registrar_exporte(uuid)` (el panel la llama tras descargar el .json).
+- **El super ya puede ENTRAR de verdad en otra empresa**: redefinidas `private.fijar_empresa` (acepta miembro o super), `private.mi_rol` (super sin membresía ⇒ rol efectivo admin) y `public.fijar_empresa` (GUC de SESIÓN, requiere header `X-Session-Id` — ya cableado en `src/services/supabase.js`). Esto es la Opción B de `docs/HANDOFF-SUPER.md` §4, pero aplicada dentro de `002_seguridad.sql` (el archivo suelto `002_super_entrar.sql` propuesto nunca existió como migración).
+- **Exportar/importar sin pérdidas**: `public.super_exportar_empresa` redefinido con `version: 2` (el bloque `equipo` incluye ahora `user_id`) y `public.super_importar_empresa` redefinido: además del catálogo restaura el **HISTÓRICO** (`cuentas`, `cuenta_mesas`, `cuenta_items`, `pagos`, `turnos_caja`) reasignando dueños (`abierta_por`/`cerrada_por`/`creada_por`) vía el mapa `user_id` de origen → usuario recreatedo.
+
+## `003_comensales.sql` (aplicada)
+- RPC `public.actualizar_comensales(p_cuenta_id uuid, p_comensales integer, p_empresa_id uuid default null) returns integer`, `security definer`: exige rol admin/cajero/mesero (`private.exigir_rol`), rechaza fuera de 1..99 con «El número de comensales debe estar entre 1 y 99», no deja tocar una cuenta ya cerrada ni de otra empresa, y audita la acción (si 002 está aplicada).
+- Cliente: acción `comensales~` en `src/services/store.jsx` (reducer), mapeada en `src/services/tiendaSupabase.js` (caso junto a `extras` → `rpc('actualizar_comensales')`) y usada por `src/components/salon/SalonPage.jsx`.
+
+## Salón e imágenes (lado cliente)
+- CRUD de salones/zonas con orden: acciones `zona+` (alta), `zona~` (renombrar/reordenar ▲▼) y `zona-` (borrado con confirmación inline) ⇒ escritura directa en `zonas` (RLS exige admin, `tiendaSupabase.js`).
+- Mover una mesa de salón (`mesa~` con `zona`), y **arrastre con posición persistida** (1 solo dispatch al soltar el puntero, no por frame).
+- Asignación de comensales (1..99) corregible después de abrir la mesa.
+- Layout móvil (≤768 px, `MAX_PX_MOVIL` en `SalonPage.jsx` + media-queries de `salon.css`): barras de acción como hojas inferiores ("hoja de pulgar") y objetivos táctiles ≥44 px.
+- Miniaturas de artículos a **45×45 px en pantalla**, guardadas a **90 px** (2×, nítidas en retina) — pipeline de compresión webp/jpeg en `src/services/imagenProducto.js` (`LADO_VISUAL_PX=45`); usadas en `MenuAdmin`, `PedidoPanel` y `VentaDirecta`.
+
+## i18n (estado verificado en disco)
+- Diccionarios planos `es`/`en`/`pt` con claves tipo `super.entrar.pregunta` e interpolación `{param}`; 461 claves × 3 idiomas.
+- Selector de idioma: `src/i18n/SelectorIdioma.jsx` (Topbar y panel de super).
+- Verificador: `node scripts/check-i18n.mjs` — compara los tres diccionarios (paridad, duplicados, vacíos, `{params}`) y avisa de claves usadas en código sin entrada. En verde.
+
+## Decisiones de seguridad (intencionales, no negociables)
+- `limites`, `throttle` y `auditoria` son **tablas ocultas**: `force row level security` sin políticas + `revoke all` desde `public/anon/authenticated`; solo se escriben desde funciones `security definer` y se leen por RPC privativas del super.
+- Toda función pública nueva lleva `revoke all … from public, anon;` + `grant execute … to authenticated;` (en `empresa_por_codigo` también a `anon` porque es pre-login) y `set search_path = ''`.
+- **El límite de artículos es invisible para el cliente**: la UI no muestra "plan gratuito" ni contador de cuota; el comercio solo recibe el mensaje de la base al intentar crear el artículo 31 (decisión del dueño del producto como modelo de negocio: gratis hasta 30 artículos, después plan de pagos).
+
+---
+
+# v0.3 · Verificación en vivo con Supabase + 3 bugs de arranque (2026-10-16)
+
+Se probó la app REAL (`http://localhost:5199`) contra el proyecto `oeyrnenclklmczlfoxzy`, no solo el SQL. Tres fallos rompían el modo Supabase desde el primer clic; los tres corregidos y re-verificados en el navegador:
+
+1. **`LoginPage.jsx` secuestraba el código `demo`**: con `demo` en el paso 1 la app se iba directo al carril local y nunca consultaba Supabase, así que era imposible entrar a la empresa real que se llama "Mi negocio" con código `demo`. Ahora el paso 1 SIEMPRE pregunta a `empresa_por_codigo` primero (si `USAR_SUPABASE`); solo cae a datos locales si la RPC no devuelve filas y el código escrito es `demo`.
+2. **TDZ en `cargarEstadoInicial`** (`tiendaSupabase.js`): `fetchCuentas` usaba `cajaT` dentro del mismo `Promise.all` que lo definía ⇒ `Cannot access 'cajaT' before initialization` en TODA carga inicial. Se sacó `fetchCaja` a su propia promesa (`cajaP`) y `fetchCuentas` se encadena con `cajaP.then(…)`.
+3. **Carta vacía en `PedidoPanel`**: el `sec` inicial venía de `secciones[0]?.id` del primer render (estado demo) y al llegar los datos de Supabase ninguna sección coincidía ⇒ "Sin artículos". Se deriva `secActiva` (`secciones.some(x => x.id === sec) ? sec : secciones[0]?.id`) y se usa en las pestañas y en el filtro de productos.
+
+## Probado en vivo (con sesión real de Supabase, rol admin)
+- **Comensales persisten**: abrir Mesa 1 ⇒ 6, ＋ ⇒ 7, **recargar la página** ⇒ la tarjeta sigue mostrando `👥 7/4` con el aviso de aforo. Circula `UI → acción comensales~ → rpc actualizar_comensales → cuentas.comensales → refresco`.
+- **Fotos de artículo, punta a punta**: se subió un PNG de 120×120 desde Menú → "Subir foto" y quedó `productos/8ebb24ae-…/6288f9fd-….webp` en el bucket `pos-imagenes`; el objeto medido por HTTP es **90×90 px, 932 B, `image/webp`** y se dibuja a **43 px** dentro de la caja de 45; la miniatura **sobrevive a la recarga** (lee `imagen_path`, no la caché de sesión). "Quitar foto" borró el objeto de Storage (`info/public` responde `404 NoSuchKey`) y dejó `productos.imagen_path = NULL`.
+- **Aviso de acceso del super**: `super.entrar.avisoAcceso` ya pasa `{esperadas}/{leidas}` y está en los 3 diccionarios.
+
+## Restos de estas pruebas — LIMPIADOS en la base (coord, 2026-10-16, SQL del dashboard con ids exactos)
+Se borraron `ui.test@test.local` (con sus `membresias`/`perfiles` en cascada), la cuenta abierta de Mesa 1, la venta directa #1 con su pago y el turno de caja abierto. Estado final verificado de la empresa demo: **0 cuentas, 0 turnos, 5 mesas, 2 zonas, 3 secciones, 9 productos, 0 objetos en Storage, 0 productos con `imagen_path`**, 1 solo `auth.users` (el super) y 1 membresía.
+
+## Regresión encontrada al re-probar el login y su fix
+Al hacer que el código `demo` pregunte primero a Supabase (para que el dueño de una empresa real llamada "demo" pueda entrar), **el sandbox local de `admin/1234` quedó inaccesible**: la RPC encontraba a la empresa seed y pedía correo y clave. Se resolvió con un acceso explícito en vez de depender de la palabra reservada:
+- Botón **"Probar el demo sin cuenta"** en el paso 1 (`LoginPage.jsx` → `irDemo()`), que limpia `pos-sesion` + `fijarEmpresa(null)` y lleva al paso 2 local. Clave `login.probarDemo` en es/en/pt (**462 claves × 3**, `node scripts/check-i18n.mjs` en verde).
+- Verificado en el navegador: el botón entra en demo (badge "demo", 4 mesas del seed local) y escribir `demo` en el campo sigue entrando al paso de correo/clave de "Mi negocio" en Supabase.
+
+## Cómo se crea el primer usuario de una empresa (hoy no hay auto-registro)
+No existe `crear_empresa` ni registro desde la app: las empresas nacen del seed o de la importación del super. Para que un comercio entre por Supabase hay que crearle el usuario desde **Authentication → Users** del dashboard (o con la API de gestión) y darle una fila en `membresias(user_id, empresa_id, rol)`; la importación de un `.json` exportado ya hace ambas cosas (`super_importar_empresa` recrea el equipo con `p_clave_inicial`). Si se borra un usuario con sesión abierta, la app no revienta: `cargarEstadoInicial` falla con «No tienes acceso a esta empresa (o no existe)» y el banner lo muestra.
+
+---
+
+# v0.4 · Logo real, estructura de rutas como Catering Control y textos legales (2026-10-16)
+
+## Logo de la app = logo de la PWA
+`scripts/gen-iconos.mjs` (nuevo, equivalente a los `scripts/` de Catering) genera los 7 archivos de `public/icons/` a partir del `Designer.png`: favicon-32/48, apple-touch-icon (180), icon-192, icon-512 e icon-maskable-192/512 (el dibujo al 90 % dentro de la zona segura del 80 % que recortan Android/iOS). Datos medidos del logo: fondo muestreado `#f8f7f9` (ese es el `background_color` del manifest) y dibujo que ocupa el **79 %** del lienzo.
+
+Se borró el placeholder `public/icon.svg` y sus enlaces. Donde vive el logo ahora: `index.html` (favicon-32/48 + apple-touch-icon), `public/manifest.json` (4 iconos: 2 `any` + 2 `maskable`), `src/components/login/BrandMark.jsx` (login, barra superior y páginas legales), y `public/sw.js` (`VERSION = 'v3'`, 10 entradas de shell).
+
+`sharp` se instaló con `npm i --no-save`: **no es dependencia del proyecto** (solo hace falta al cambiar el logo); el script avisa con la instrucción si falta.
+
+## El login no es "otra web": es la ruta `/`
+Era la duda pendiente del dueño; se respondió con código y se alineó al proyecto viejo: `src/App.jsx` es ahora un `BrowserRouter` con `/` (login), `/panel` (app), `/terminos`, `/privacidad` y `*` → `/`, idéntico a `src/App.jsx` de Catering Control (líneas 26-31 de ese archivo). La carcasa del panel se extrajo a `src/pages/PanelPage.jsx`. Movimientos de archivos: `components/auth/LoginPage.jsx → pages/LoginPage.jsx`, `components/auth/Topbar.jsx → components/panel/Topbar.jsx`, `components/auth/auth.css → styles/auth.css`, y CSS de pantalla con el mismo tallo que su componente (`salon.css → SalonPage.css`, `caja.css → CajaPage.css`, `venta.css → VentaDirecta.css`). `public/manifest.webmanifest → public/manifest.json` (como en Catering). La tabla completa de equivalencias quedó en **`docs/NOMBRES.md`**.
+
+## Términos y privacidad (nuevos, adaptados a POS Control)
+`src/pages/TerminosPage.jsx` (11 secciones, con índice y 3 bloques "En resumen") y `src/pages/PrivacidadPage.jsx` (7 secciones + tabla de datos). Comparten `src/pages/LegalPage.css`, `src/components/LegalBackButton.jsx` y el logo. **66 claves `legal.*` en los 3 diccionarios** (es/en/pt); total **527 claves × 3**, `node scripts/check-i18n.mjs` en verde. Se aprovechó para consolidar el aviso del login: `login.avisoSupaAntes` + `login.avisoSupaDespues` (que enseñaban a escribir `demo`, cosa que hoy entra a Supabase) se reemplazaron por una sola clave `login.avisoSupa` que señala el botón "Probar el demo sin cuenta".
+
+## Avisos de la PWA y atajos del ícono ahora sí abren la vista pedida
+`notificaciones.js` exportaba `suscribirVista()` **sin ningún consumidor** (ni en la versión commiteada): pulsar un aviso de cocina o el atajo `/#caja` del ícono solo cambiaba el hash y el módulo seguía en Salón. Se cableó en `PanelPage.jsx`: mapa `#salon|#cocina|#caja|#venta|#menu|#config` → módulo (con `#cocina` → salón, que no tiene pantalla propia), en el montaje y en `hashchange` (el aviso pulsado con la app abierta no recarga el documento). Además la ruta `/` redirige a `'/panel' + hash`, porque `entrar()` ya no llama `navegar()`: al enjuagar React el estado después del cambio de URL, `/panel` montaba sin sesión y rebotaba a `/` llevando el hash puesto.
+
+## Probado (build de producción, `npm run preview` en :4173 y dev en :5199)
+- `npm run build` en verde: 712.70 kB de JS (sube con `react-router-dom`) y 29.02 kB de CSS.
+- Rutas del artefacto real: `/`, `/panel`, `/terminos`, `/privacidad` → 200 `text/html`; `/manifest.json` → 200 `application/json`; `/sw.js` → 200; service worker activo y **precaché de shell con sus 10 entradas** (`/`, `/index.html`, `/manifest.json`, 7 iconos).
+- `/terminos` y `/privacidad` renderizados y leídos en los 3 idiomas: 11 y 7 secciones, índice con anclas `#s1…#s11` existentes, tabla de 3 filas en privacidad, cruces "Ver también →", logo cargado (192 px naturales) y **cero claves sin traducir** en el texto visible (búsqueda de patrones `namespace.clave` en el DOM: 0 resultados).
+- Login demo (`admin/1234`) → `/panel` con 5 pestañas y mapa de mesas; abrir `/#caja` logueado y entrar deja la pestaña **Caja** activa; ruta inventada (`/ruta-que-no-existe`) devuelve al login; cambiar a EN y PT desde las páginas legales persiste `pos-idioma-app` y traduce toda la página.
+
+## Comportamiento conocido (no es bug de esta versión)
+La sesión del sandbox demo vive **solo en memoria**: recargar `/panel` en demo devuelve al login (en Supabase la sesión sí persiste en `localStorage`). Se dejó así a propósito desde v0.3; si molesta, es un cambio de una línea en `App.jsx` (guardar la sesión demo bajo otra clave).

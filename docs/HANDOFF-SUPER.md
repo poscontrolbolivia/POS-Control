@@ -208,8 +208,18 @@ Si el otro carril renombra alguna de esas claves, hay que cambiar las constantes
 
 ## 4. Lo que la base todavía NO deja hacer (léelo antes de prometer "entrar a cualquier empresa")
 
+> **ACTUALIZADO 2026-10-16 — RESUELTO: `supabase/migraciones/002_seguridad.sql` está APLICADA en el
+> proyecto real.** Los tres huecos de backend descritos abajo (que reproducimos tal cual por
+> contexto histórico) quedaron cerrados en la sección 1 de esa migración: `private.fijar_empresa`
+> acepta super sin membresía, `private.mi_rol()` le da rol `admin` efectivo en la empresa que está
+> viendo, y `public.fijar_empresa` fija el GUC **de sesión** (el cliente ya manda el header
+> `X-Session-Id` en `src/services/supabase.js`, así que los SELECT directos ven la empresa). La
+> "Opción B" de más abajo NO se aplicó como archivo suelto `002_super_entrar.sql` (ese archivo no
+> existe): su contenido vive dentro de `002_seguridad.sql`. El aviso `sondearAcceso` del panel
+> (`super.entrar.avisoAcceso`) queda para instalaciones donde la migración aún no se pegó.
+
 Hoy funcionan, probados contra la base real: listado global, exportación completa e importación
-round-trip. La parte **"operar la empresa desde la app"** tiene tres huecos de backend, ajenos a este
+round-trip. La parte **"operar la empresa desde la app"** tenía tres huecos de backend, ajenos a este
 carril:
 
 1. **Escrituras.** Las RPCs de negocio llaman `private.fijar_empresa(p_empresa_id)`
@@ -237,7 +247,10 @@ inicial; el cliente entra con su propio login y ve TODO su histórico. Y si el s
 que use un usuario con membresía real en esa empresa (dos cuentas: la de dueño y la operativa).
 
 ### Opción B — parche de backend para que "Entrar" funcione de verdad
-`supabase/migraciones/002_super_entrar.sql` (PROPUESTA, **no aplicada**, la ejecuta el dueño):
+**APLICADA** — no como archivo suelto, sino dentro de `supabase/migraciones/002_seguridad.sql`
+(sección 1, ya ejecutada en el proyecto real). El código propuesto abajo se conserva como
+referencia histórica; difiere en detalles menores (usa `private.es_super_compat()` en vez de
+`public.es_super()` directamente y añade la validación «empresa inexistente»):
 
 ```sql
 -- 1) que un super pueda fijar cualquier empresa en las RPCs de negocio
@@ -303,7 +316,7 @@ aviso amarillo. Sin ellas, exportar/importar y el listado siguen funcionando igu
 - [ ] `LoginPage.jsx`: import `esSuper`, `listo` `async` con flag `es_super`, `await listo(...)`, login de super sin membresías (2.1).
 - [ ] `App.jsx`: imports de `SuperPage` y `superApi`, módulo `super`, `entrar()` con módulo inicial, rama `{modulo === 'super' && sesion.es_super && <SuperPage/>}`, banner `sesion.operando`, `salirDeEmpresa()` en `salir()` (2.2).
 - [ ] `Topbar.jsx`: opcional, chip `super` (2.3).
-- [ ] Decidir si se aplica `002_super_entrar.sql` (sección 4) y probar el header `x-empresa` en el carril de datos.
+- [x] ~~Decidir si se aplica `002_super_entrar.sql` (sección 4) y probar el header `x-empresa` en el carril de datos.~~ → **RESUELTO (2026-10-16)**: se aplicó `supabase/migraciones/002_seguridad.sql` (contiene el parche); el mecanismo elegido fue el GUC de sesión + header **`X-Session-Id`** (ya cableado en `src/services/supabase.js`), no el header `x-empresa`/`app.pre_request`.
 - [ ] Confirmar el `user_id` semilla de `public.supers` antes de vender a ningún cliente.
 - [ ] `npm run build` tras el merge y prueba manual con una cuenta real de super.
 - [ ] i18n: conectar `IdiomaSelector` (prop `value`/`onChange` + `localStorage['pos-idioma-app']`) al diccionario cuando exista.
@@ -320,3 +333,29 @@ aviso amarillo. Sin ellas, exportar/importar y el listado siguen funcionando igu
   `src/components/super/SuperPage.jsx` (correcto, 32 KB + 3.7 KB de CSS).
 * **Sin probar de verdad** (hace falta un login de super real): listado `super_listar_empresas`,
   descarga real del `.json`, importación desde el panel y el flujo Entrar/Salir en navegador.
+
+---
+
+## 7. Novedades para el panel super · migración 002_seguridad.sql (APLICADA, 2026-10-16)
+
+* **Cuota de artículos por empresa** (el modelo de negocio gratis→pago): RPCs solo-super
+  `super_ajustar_empresa(p_empresa, p_max_productos, p_plan 'gratis'|'pago', p_notas)` y
+  `super_ver_cuota(p_empresa) → {max_productos, plan, notas, productos_actuales}`. Client-side ya
+  cableado en `src/services/super/superApi.js` (`verCuota`, `ajustarCuota`). La tabla `limites` es
+  oculta (deny-all ⇒ REST 403): el comercio no ve su cuota; solo choca con el límite al crear el
+  artículo 31 y recibe el mensaje de venta de la base. Las empresas nacen con 30 (trigger
+  `trg_nueva_cuota`); el super está exento del trigger de cuota para que la importación no se rompa.
+* **Auditoría de accesos privilegiados**: `super_listar_auditoria(p_empresa, p_limite≤1000)` es la
+  única lectura posible de la tabla oculta `auditoria`; acciones registradas: `super_entro`,
+  `super_ajustar_cuota`, `super_exporto`, `super_importo`, `throttle_agotado`, `comensales`.
+  `super_registrar_exporte(p_empresa)` (client: `registrarExporte`) la llama el panel tras descargar
+  el .json para dejar prueba de qué empresa salió de la plataforma.
+* **Export/import v2**: `super_exportar_empresa` ahora emite `version: 2` y el bloque `equipo`
+  incluye `user_id`; `super_importar_empresa` **restaura el histórico** (cuentas, cuenta_mesas,
+  cuenta_items, pagos, turnos_caja) reasignando dueños vía el mapa `user_id` origen → usuario
+  recreatedo. Dos gotchas de GoTrue resueltos en 002: las columnas de token de `auth.users` van `''`
+  (no NULL, o GoTrue responde 500) y bcrypt con coste 10 explícito.
+* **Hardening de convención** (aplicado a toda función nueva de la migración):
+  `revoke all … from public, anon;` + `grant execute … to authenticated;` + `set search_path = ''`.
+* **Throttle pre-login**: `empresa_por_codigo` (30/IP/10 min) devuelve 0 filas al agotar — el panel
+  no debe asumirlo como empresa inexistente en pruebas de carga.

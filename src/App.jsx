@@ -1,36 +1,42 @@
 import { useEffect, useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useStore, leerSesionSup, guardarSesionSup } from './services/store.jsx'
-import { puede } from './services/permisos.js'
 import { USAR_SUPABASE } from './config.js'
 import { sb, fijarEmpresa, fijarEmpresaSesion } from './services/supabase.js'
 import { salirDeEmpresa } from './services/super/superApi.js'
-import { useIdioma } from './i18n/index.jsx'
-import LoginPage from './components/auth/LoginPage.jsx'
-import Topbar from './components/auth/Topbar.jsx'
-import SalonPage from './components/salon/SalonPage.jsx'
-import CajaPage from './components/caja/CajaPage.jsx'
-import VentaDirecta from './components/venta/VentaDirecta.jsx'
-import MenuAdmin from './components/admin/MenuAdmin.jsx'
-import ConfigAdmin from './components/admin/ConfigAdmin.jsx'
-import SuperPage from './components/super/SuperPage.jsx'
+import LoginPage from './pages/LoginPage.jsx'
+import PanelPage from './pages/PanelPage.jsx'
+import TerminosPage from './pages/TerminosPage.jsx'
+import PrivacidadPage from './pages/PrivacidadPage.jsx'
 
+// POS Control es UN solo index.html (una SPA), igual que Catering Control: el login no es
+// otra web, es la ruta '/'. Antes, en la versión vanilla de Catering, sí eran archivos .html
+// separados (login.html / app.js); hoy son rutas: '/' login · '/panel' la app · '/terminos'
+// y '/privacidad' las legales. El service worker responde cualquier ruta con /index.html, así
+// que /panel se puede abrir directo o pegar por enlace.
 export default function App() {
+  return (
+    <BrowserRouter>
+      <Rutas />
+    </BrowserRouter>
+  )
+}
+
+function Rutas() {
   const { s, error } = useStore()
-  const { t, tOr } = useIdioma()
+  const navegar = useNavigate()
+  const { hash } = useLocation()
   // Sesión Supabase se reanuda desde localStorage 'pos-sesion' (la lee el StoreProvider);
   // la sesión demo vive solo en memoria, como siempre.
   const [sesion, setSesion] = useState(() => {
     const sSup = leerSesionSup()
     return sSup && USAR_SUPABASE ? sSup : null
   })
-  // Un super sin empresa (dueño de la plataforma sin membresías) arranca directo en su panel;
-  // un super "operando" otra empresa arranca en el salón de ESA empresa.
-  const [modulo, setModulo] = useState(() => {
-    const sSup = USAR_SUPABASE ? leerSesionSup() : null
-    return sSup?.es_super && !sSup.empresaId ? 'super' : 'salon'
-  })
 
-  const entrar = u => { setSesion(u); setModulo(u.es_super && !u.empresaId ? 'super' : 'salon') }
+  // Entrar es solo cambiar el estado: la ruta '/' se encarga de mandar al panel. Si además
+  // llamáramos navegar('/panel') aquí, React enjuagaría el estado después del cambio de URL,
+  // '/panel' montaría aún sin sesión y rebotaría a '/', perdiendo el hash del atajo o aviso.
+  const entrar = u => setSesion(u)
 
   // El panel de super cambia 'pos-sesion' en caliente (Entrar/Salir); el store ya escucha el
   // evento, pero App guarda su propia copia de la sesión: sin esto el banner "estás viendo la
@@ -65,34 +71,23 @@ export default function App() {
       try { sb?.auth.signOut() } catch { /* noop */ }
     }
     setSesion(null)
+    navegar('/')
   }
 
-  if (!sesion) return <LoginPage onEntrar={entrar} />
-
-  // Los ids de módulo NO se traducen (son el estado de navegación); solo la etiqueta visible.
-  const modulos = [{ id: 'salon', nombre: t('app.mod.salon') }, { id: 'caja', nombre: t('app.mod.caja') }, { id: 'venta', nombre: t('app.mod.venta') }]
-  if (puede(sesion.rol, 'gestionar_menu')) modulos.push({ id: 'menu', nombre: t('app.mod.menu') })
-  if (sesion.rol === 'admin') modulos.push({ id: 'config', nombre: t('app.mod.config') })
-  if (sesion.es_super) modulos.push({ id: 'super', nombre: tOr('app.mod.super', 'Super') })
-
   return (
-    <div className="app">
-      <Topbar sesion={{ ...sesion, empresa: sesion.empresa || s.config.nombre }} modulo={modulo} modulos={modulos}
-        onModulo={setModulo} onSalir={salir} aviso={error || undefined} />
-      {/* Aviso permanente mientras el super opera otra empresa: cubre Salón/Caja/Venta, no solo el panel */}
-      {sesion.operando && (
-        <div className="topbar-rol" style={{ background: '#8a6d1a', color: '#fff', padding: '6px 14px', borderRadius: 0, display: 'block', width: '100%', textAlign: 'center' }}>
-          👁️ {tOr('super.banner.viendo', 'Estás viendo la empresa')} <b>{sesion.empresa}</b> —{' '}
-          <button className="auth-enlace" type="button" onClick={volverDeEmpresa}>{tOr('super.banner.volver', 'volver a mi empresa')}</button>
-        </div>
-      )}
-      {s._supCargando && <div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}
-      {modulo === 'salon' && <SalonPage rol={sesion.rol} sesion={sesion} />}
-      {modulo === 'caja' && <CajaPage rol={sesion.rol} sesion={sesion} />}
-      {modulo === 'venta' && <VentaDirecta rol={sesion.rol} sesion={sesion} />}
-      {modulo === 'menu' && <MenuAdmin rol={sesion.rol} />}
-      {modulo === 'config' && <ConfigAdmin rol={sesion.rol} sesion={sesion} />}
-      {modulo === 'super' && sesion.es_super && <SuperPage sesion={sesion} />}
-    </div>
+    <Routes>
+      <Route path="/terminos" element={<TerminosPage />} />
+      <Route path="/privacidad" element={<PrivacidadPage />} />
+      {/* El hash se conserva al saltar al panel: es cómo un aviso pulsado o un atajo del ícono
+          de la PWA (/#salon, /#cocina, /#caja) abre la vista pedida aunque hiciera falta loguearse. */}
+      <Route path="/" element={sesion ? <Navigate to={'/panel' + hash} replace /> : <LoginPage onEntrar={entrar} />} />
+      <Route
+        path="/panel"
+        element={sesion
+          ? <PanelPage sesion={{ ...sesion, empresa: sesion.empresa || s.config?.nombre }} onSalir={salir} onVolver={volverDeEmpresa} aviso={error} />
+          : <Navigate to="/" replace />}
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

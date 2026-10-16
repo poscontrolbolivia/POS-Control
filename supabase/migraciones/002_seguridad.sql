@@ -511,17 +511,65 @@ revoke all on function public.super_registrar_exporte(uuid) from public, anon;
 grant execute on function public.super_registrar_exporte(uuid) to authenticated;
 
 -- ----------------------------------------------------------------------------
--- 6) SUPER IMPORTAR: redefinido sobre el de 001_super.sql, con 3 arreglos.
---    a) auth.users con las columnas de token en '' y NO NULL: con NULL, GoTrue
---       falla al iniciar sesión ('Database error querying schema') y el usuario
---       importado nunca puede entrar.
---    b) bcrypt con coste 10 vía extensions.gen_salt('bf', 10): GoTrue solo acepta
---       hashes de ese formato en este proyecto.
---    c) auditoría de la importación + validación de roles.
+-- 6) EXPORTAR / IMPORTAR SIN PÉRDIDAS — redefinidos sobre 001_super.sql.
+--    a) auth.users con las columnas de token en '' y NO NULL: con NULL GoTrue
+--       responde 500 "Database error querying schema" y ningún usuario importado
+--       puede iniciar sesión (probado con el correo de pruebas).
+--    b) bcrypt con coste 10 explícito: extensions.gen_salt('bf') sin argumento
+--       deja hashes que GoTrue rechaza al verificar.
+--    c) RESTAURA EL HISTÓRICO (cuentas, sus mesas, items, pagos y turnos de caja).
+--       La versión de 001 los exportaba pero NO los importaba: "llevar todos los
+--       datos" al pasar a plan de pago incluye lo ya facturado.
+--    d) auditoría de la importación y validación de roles.
 -- ----------------------------------------------------------------------------
+
+-- El equipo necesita el id del usuario de origen para poder reasignar las cuentas
+-- históricas a su autor real (abierta_por / cerrada_por / creada_por).
+create or replace function public.super_exportar_empresa(p_empresa uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare v jsonb;
+begin
+  if not public.es_super() then raise exception 'requiere super'; end if;
+  select jsonb_build_object(
+    'version', 2,
+    'exportado_en', now(),
+    'empresa', (select to_jsonb(e) from public.empresas e where e.id = p_empresa),
+    'zonas',       coalesce((select jsonb_agg(to_jsonb(z) order by z.orden) from public.zonas z where z.empresa_id = p_empresa), '[]'),
+    'mesas',       coalesce((select jsonb_agg(to_jsonb(m) || jsonb_build_object('zona_nombre',
+                                      (select z.nombre from public.zonas z where z.id = m.zona_id)))
+                                 from public.mesas m where m.empresa_id = p_empresa), '[]'),
+    'secciones',   coalesce((select jsonb_agg(to_jsonb(s) order by s.orden) from public.secciones_menu s where s.empresa_id = p_empresa), '[]'),
+    'productos',   coalesce((select jsonb_agg(to_jsonb(p) || jsonb_build_object('seccion_nombre', s.nombre)) from public.productos p
+                             left join public.secciones_menu s on s.id = p.seccion_id where p.empresa_id = p_empresa), '[]'),
+    'cuentas',     coalesce((select jsonb_agg(to_jsonb(c)) from public.cuentas c where c.empresa_id = p_empresa), '[]'),
+    'cuenta_mesas',coalesce((select jsonb_agg(to_jsonb(cm)) from public.cuenta_mesas cm
+                             join public.cuentas c on c.id = cm.cuenta_id where c.empresa_id = p_empresa), '[]'),
+    'cuenta_items',coalesce((select jsonb_agg(to_jsonb(ci)) from public.cuenta_items ci
+                             join public.cuentas c on c.id = ci.cuenta_id where c.empresa_id = p_empresa), '[]'),
+    'pagos',       coalesce((select jsonb_agg(to_jsonb(pg)) from public.pagos pg
+                             join public.cuentas c on c.id = pg.cuenta_id where c.empresa_id = p_empresa), '[]'),
+    'turnos',      coalesce((select jsonb_agg(to_jsonb(t)) from public.turnos_caja t where t.empresa_id = p_empresa), '[]'),
+    'equipo',      coalesce((select jsonb_agg(jsonb_build_object('user_id', m.user_id, 'correo', u.email,
+                                                                 'rol', m.rol, 'nombre', coalesce(p.display_name,'')))
+                             from public.membresias m
+                             join auth.users u on u.id = m.user_id
+                             left join public.perfiles p on p.user_id = m.user_id
+                             where m.empresa_id = p_empresa), '[]')
+  ) into v;
+  if v->'empresa' is null then raise exception 'empresa inexistente'; end if;
+  return v;
+end $fn$;
+revoke all on function public.super_exportar_empresa(uuid) from public, anon;
+grant execute on function public.super_exportar_empresa(uuid) to authenticated;
+
 create or replace function public.super_importar_empresa(
-  p_datos        jsonb,
-  p_codigo       text,
+  p_datos         jsonb,
+  p_codigo        text,
   p_clave_inicial text default 'pos12345'
 )
 returns uuid
@@ -530,150 +578,212 @@ security definer
 set search_path = ''
 as $fn$
 declare
-  v_empresa   uuid := gen_random_uuid();
-  v_empresa_o uuid;
-  v_codigo    text := lower(btrim(coalesce(p_codigo, '')));
-  v_ingeniero uuid := auth.uid();
-  e           jsonb;
-  s           jsonb;
-  z           jsonb;
-  p           jsonb;
-  u           jsonb;
-  r           jsonb;
-  v_seccion   uuid;
-  v_zona      uuid;
-  v_usuario   uuid;
-  v_rol       text;
-  v_nuevos    int := 0;
+  v_emp    uuid;
+  r        jsonb;
+  v_new    uuid;
+  v_old    uuid;
+  v_rol    text;
+  v_cuenta uuid;
+  v_mesa   uuid;
+  v_prod   uuid;
+  v_map_zonas     jsonb := '{}'::jsonb;
+  v_map_secciones jsonb := '{}'::jsonb;
+  v_map_mesas     jsonb := '{}'::jsonb;
+  v_map_productos jsonb := '{}'::jsonb;
+  v_map_cuentas   jsonb := '{}'::jsonb;
+  v_map_users     jsonb := '{}'::jsonb;
 begin
   if not public.es_super() then raise exception 'requiere super'; end if;
-  if p_datos is null or jsonb_typeof(p_datos) <> 'object' then
-    raise exception 'snapshot inválido: falta la información de la empresa';
+  if p_datos is null or jsonb_typeof(p_datos->'empresa') <> 'object'
+     or coalesce(p_datos->'empresa'->>'nombre','') = '' then
+    raise exception 'snapshot invalido';
   end if;
-  if v_codigo = '' then raise exception 'Falta el código de la empresa'; end if;
-
-  -- La empresa del snapshot ya existe en esta base → se reusa (importar encima).
-  v_empresa_o := nullif(p_datos#>>'{empresa,id}', '')::uuid;
-  if v_empresa_o is not null then
-    select id into v_empresa from public.empresas where id = v_empresa_o;
-    if v_empresa is null then
-      select id into v_empresa from public.empresas where codigo = v_codigo;
-    end if;
-  else
-    select id into v_empresa from public.empresas where codigo = v_codigo;
+  if coalesce(trim(p_codigo),'') = '' then raise exception 'Falta el código de la empresa'; end if;
+  if exists (select 1 from public.empresas where lower(codigo) = lower(p_codigo)) then
+    raise exception 'el codigo % ya existe', p_codigo;
   end if;
 
-  if v_empresa is null then
-    insert into public.empresas (id, nombre, codigo, moneda, iva_pct, propina_pct, config)
-    values (v_empresa,
-            coalesce(p_datos#>>'{empresa,nombre}', 'Importada'),
-            v_codigo,
-            coalesce(p_datos#>>'{empresa,moneda}', 'BOB'),
-            coalesce((p_datos#>>'{empresa,ivaPct}')::numeric, 3),
-            coalesce((p_datos#>>'{empresa,propinaPct}')::numeric, 0),
-            coalesce(p_datos#'{"empresa","config"}', '{}'::jsonb));
-  else
-    update public.empresas
-       set nombre       = coalesce(p_datos#>>'{empresa,nombre}', nombre),
-           moneda       = coalesce(p_datos#>>'{empresa,moneda}', moneda),
-           iva_pct      = coalesce((p_datos#>>'{empresa,ivaPct}')::numeric, iva_pct),
-           propina_pct  = coalesce((p_datos#>>'{empresa,propinaPct}')::numeric, propina_pct),
-           config       = coalesce(p_datos#'{"empresa","config"}', config)
-     where id = v_empresa;
-  end if;
+  insert into public.empresas (nombre, codigo, moneda, iva_pct, propina_pct, config)
+  values (p_datos->'empresa'->>'nombre', lower(p_codigo),
+          coalesce(p_datos->'empresa'->>'moneda','Bs'),
+          coalesce((p_datos->'empresa'->>'iva_pct')::numeric, 0),
+          coalesce((p_datos->'empresa'->>'propina_pct')::numeric, 10),
+          coalesce(p_datos->'empresa'->'config', '{}'::jsonb))
+  returning id into v_emp;
 
-  private.fijar_empresa(v_empresa, v_ingeniero);
+  -- El trigger trg_nueva_cuota ya sembró public.limites (30 / gratis) para v_emp.
 
-  -- Secciones
-  for s in select * from jsonb_array_elements(coalesce(p_datos->'secciones', '[]'::jsonb))
-  loop
-    select id into v_seccion from public.secciones_menu
-     where empresa_id = v_empresa and coalesce(nombre, '') = coalesce(s->>'nombre', '___sin_nombre___');
-    if v_seccion is null then
-      v_seccion := gen_random_uuid();
-      insert into public.secciones_menu (id, empresa_id, nombre, orden, activo)
-      values (v_seccion, v_empresa, coalesce(s->>'nombre', 'Sección'),
-              coalesce((s->>'orden')::int, 0), coalesce((s->>'activo')::bool, true));
-    end if;
-    s := jsonb_set(s, '{_id}', to_jsonb(v_seccion));
-  end loop;
-
-  -- Zonas del salón
-  for z in select * from jsonb_array_elements(coalesce(p_datos->'zonas', '[]'::jsonb))
-  loop
-    select id into v_zona from public.zonas
-     where empresa_id = v_empresa and coalesce(nombre, '') = coalesce(z->>'nombre', '___sin_nombre___');
-    if v_zona is null then
-      v_zona := gen_random_uuid();
-      insert into public.zonas (id, empresa_id, nombre, orden)
-      values (v_zona, v_empresa, coalesce(z->>'nombre', 'Zona'), coalesce((z->>'orden')::int, 0));
-    end if;
-    z := jsonb_set(z, '{_id}', to_jsonb(v_zona));
-  end loop;
-
-  -- Artículos (el super está exento del control de cuota del trigger)
-  for p in select * from jsonb_array_elements(coalesce(p_datos->'productos', '[]'::jsonb))
-  loop
-    if not exists (select 1 from public.productos
-                    where empresa_id = v_empresa and coalesce(nombre, '') = coalesce(p->>'nombre', '___sin_nombre___')) then
-      insert into public.productos (id, empresa_id, seccion_id, nombre, precio, activo, imagen_path)
-      values (gen_random_uuid(), v_empresa, (p->>'_seccion_id')::uuid,
-              coalesce(p->>'nombre', 'Artículo'), coalesce((p->>'precio')::numeric, 0),
-              coalesce((p->>'activo')::bool, true), null);
-      v_nuevos := v_nuevos + 1;
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'zonas','[]'::jsonb)) loop
+    insert into public.zonas (empresa_id, nombre, orden)
+    values (v_emp, coalesce(nullif(r->>'nombre',''),'Zona'), coalesce((r->>'orden')::int, 0))
+    returning id into v_new;
+    if (r->>'id') is not null then
+      v_map_zonas := jsonb_set(v_map_zonas, array[r->>'id'], to_jsonb(v_new));
     end if;
   end loop;
 
-  -- Mesas
-  for r in select * from jsonb_array_elements(coalesce(p_datos->'mesas', '[]'::jsonb))
-  loop
-    if not exists (select 1 from public.mesas
-                    where empresa_id = v_empresa
-                      and coalesce(numero::text, '') = coalesce(r->>'numero', '___sin_numero___')) then
-      insert into public.mesas (id, empresa_id, zona_id, numero, capacidad, x, y, estado)
-      values (gen_random_uuid(), v_empresa, (r->>'_zona_id')::uuid,
-              coalesce((r->>'numero')::int, 1), coalesce((r->>'capacidad')::int, 4),
-              coalesce((r->>'x')::int, 0), coalesce((r->>'y')::int, 0), 'libre');
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'secciones','[]'::jsonb)) loop
+    insert into public.secciones_menu (empresa_id, nombre, orden)
+    values (v_emp, coalesce(nullif(r->>'nombre',''),'Sección'), coalesce((r->>'orden')::int, 0))
+    returning id into v_new;
+    if (r->>'id') is not null then
+      v_map_secciones := jsonb_set(v_map_secciones, array[r->>'id'], to_jsonb(v_new));
     end if;
   end loop;
 
-  -- Usuarios: recrea auth.users con las columnas de token en '' (no NULL).
-  for u in select * from jsonb_array_elements(coalesce(p_datos->'usuarios', '[]'::jsonb))
-  loop
-    v_rol := lower(coalesce(u->>'rol', 'cajero'));
-    if v_rol not in ('admin', 'cajero', 'mesero') then v_rol := 'cajero'; end if;
-    v_usuario := nullif(u->>'id', '')::uuid;
-    if v_usuario is null then v_usuario := gen_random_uuid(); end if;
+  -- Artículos: el super está exento del trigger de cuota, así que un snapshot de
+  -- 500 artículos se instala entero aunque la empresa nueva nazca en plan gratis.
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'productos','[]'::jsonb)) loop
+    v_new := nullif(v_map_secciones->>(r->>'seccion_id'), '')::uuid;
+    if v_new is null then
+      select s.id into v_new from public.secciones_menu s
+       where s.empresa_id = v_emp and s.nombre = (r->>'seccion_nombre') limit 1;
+    end if;
+    insert into public.productos (empresa_id, seccion_id, nombre, precio, activo)
+    values (v_emp, v_new, coalesce(nullif(r->>'nombre',''),'Artículo'),
+            coalesce((r->>'precio')::numeric, 0), coalesce((r->>'activo')::boolean, true))
+    returning id into v_prod;
+    if (r->>'id') is not null then
+      v_map_productos := jsonb_set(v_map_productos, array[r->>'id'], to_jsonb(v_prod));
+    end if;
+  end loop;
 
-    if not exists (select 1 from auth.users where id = v_usuario) then
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'mesas','[]'::jsonb)) loop
+    v_new := nullif(v_map_zonas->>(r->>'zona_id'), '')::uuid;
+    if v_new is null then
+      select z.id into v_new from public.zonas z
+       where z.empresa_id = v_emp and z.nombre = (r->>'zona_nombre') limit 1;
+    end if;
+    insert into public.mesas (empresa_id, zona_id, nombre, x, y, w, h, forma, capacidad, activa)
+    values (v_emp, v_new, coalesce(nullif(r->>'nombre',''),'Mesa'),
+            least(1000, greatest(0, coalesce((r->>'x')::numeric, 0))),
+            least(600,  greatest(0, coalesce((r->>'y')::numeric, 0))),
+            least(1000, greatest(10, coalesce((r->>'w')::numeric, 100))),
+            least(600,  greatest(10, coalesce((r->>'h')::numeric, 100))),
+            case when r->>'forma' in ('cuadrada','redonda','rect') then r->>'forma' else 'cuadrada' end,
+            coalesce((r->>'capacidad')::int, 4), coalesce((r->>'activa')::boolean, true))
+    returning id into v_mesa;
+    if (r->>'id') is not null then
+      v_map_mesas := jsonb_set(v_map_mesas, array[r->>'id'], to_jsonb(v_mesa));
+    end if;
+  end loop;
+
+  -- Equipo: recrea auth.users que no existen (confirmados, clave temporal) y mapea
+  -- el id de origen para que el histórico conserve a su autor.
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'equipo','[]'::jsonb)) loop
+    if coalesce(nullif(r->>'correo',''),'') = '' then continue; end if;
+    select u.id into v_new from auth.users u
+     where lower(u.email) = lower(r->>'correo') limit 1;
+    if v_new is null then
+      v_new := gen_random_uuid();
       insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
                               email_confirmed_at, created_at, updated_at,
                               raw_app_meta_data, raw_user_meta_data,
                               confirmation_token, recovery_token,
                               email_change, email_change_token_new, email_change_token_current,
                               phone_change, phone_change_token, reauthentication_token)
-      values ('00000000-0000-0000-0000-000000000000', v_usuario, 'authenticated', 'authenticated',
-              lower(btrim(u->>'email')),
-              extensions.crypt(coalesce(nullif(p_clave_inicial, ''), 'pos12345'),
+      values ('00000000-0000-0000-0000-000000000000', v_new, 'authenticated', 'authenticated',
+              lower(r->>'correo'),
+              extensions.crypt(coalesce(nullif(p_clave_inicial,''), 'pos12345'),
                                extensions.gen_salt('bf', 10)),
               now(), now(), now(),
               '{"provider":"email","providers":["email"]}'::jsonb,
-              jsonb_build_object('nombre', coalesce(u->>'nombre', '')),
-              '', '', '', '', '', '', '', '', '');
-      insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
-      values (gen_random_uuid(), v_usuario, v_usuario::text, 'email',
-              jsonb_build_object('sub', v_usuario::text, 'email', lower(btrim(u->>'email'))),
+              jsonb_build_object('display_name', coalesce(r->>'nombre','')),
+              '', '', '', '', '', '', '', '');
+      insert into auth.identities (id, user_id, provider_id, provider, identity_data,
+                                   last_sign_in_at, created_at, updated_at)
+      values (gen_random_uuid(), v_new, v_new::text, 'email',
+              jsonb_build_object('sub', v_new::text, 'email', lower(r->>'correo'), 'email_verified', true),
               now(), now(), now());
+      insert into public.perfiles (user_id, display_name)
+      values (v_new, coalesce(r->>'nombre',''))
+      on conflict (user_id) do nothing;
     end if;
-
-    insert into public.membresias (empresa_id, usuario_id, rol)
-    values (v_empresa, v_usuario, v_rol)
-    on conflict (empresa_id, usuario_id) do update set rol = excluded.rol;
+    v_rol := case when r->>'rol' in ('admin','cajero','mesero') then r->>'rol' else 'cajero' end;
+    insert into public.membresias (empresa_id, user_id, rol)
+    values (v_emp, v_new, v_rol)
+    on conflict (empresa_id, user_id) do nothing;
+    if (r->>'user_id') is not null then
+      v_map_users := jsonb_set(v_map_users, array[r->>'user_id'], to_jsonb(v_new));
+    end if;
   end loop;
 
-  perform private.auditar(v_empresa, 'super_importo',
-    jsonb_build_object('codigo', v_codigo, 'empresa', v_empresa::text, 'articulos_nuevos', v_nuevos));
-  return v_empresa;
+  -- HISTÓRICO · cuentas (una importación no borra el dinero ya cobrado)
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'cuentas','[]'::jsonb)) loop
+    if not coalesce(r->>'tipo','') in ('mesa','directa') then continue; end if;
+    insert into public.cuentas (empresa_id, tipo, numero, estado, comensales, propina, descuento, nota,
+                                abierta_por, abierta_en, cerrada_por, cerrada_en)
+    values (v_emp, r->>'tipo', (r->>'numero')::int,
+            case when coalesce(r->>'estado','abierta') in ('abierta','precuenta','cerrada')
+                 then r->>'estado' else 'cerrada' end,
+            coalesce((r->>'comensales')::int, 1),
+            coalesce((r->>'propina')::numeric, 0), coalesce((r->>'descuento')::numeric, 0), r->>'nota',
+            nullif(v_map_users->>(r->>'abierta_por'), '')::uuid,
+            coalesce((r->>'abierta_en')::timestamptz, now()),
+            nullif(v_map_users->>(r->>'cerrada_por'), '')::uuid,
+            (r->>'cerrada_en')::timestamptz)
+    returning id into v_cuenta;
+    if (r->>'id') is not null then
+      v_map_cuentas := jsonb_set(v_map_cuentas, array[r->>'id'], to_jsonb(v_cuenta));
+    end if;
+  end loop;
+
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'cuenta_mesas','[]'::jsonb)) loop
+    v_cuenta := nullif(v_map_cuentas->>(r->>'cuenta_id'), '')::uuid;
+    v_mesa   := nullif(v_map_mesas->>(r->>'mesa_id'), '')::uuid;
+    if v_cuenta is null or v_mesa is null then continue; end if;
+    insert into public.cuenta_mesas (cuenta_id, mesa_id, empresa_id)
+    values (v_cuenta, v_mesa, v_emp)
+    on conflict do nothing;
+  end loop;
+
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'cuenta_items','[]'::jsonb)) loop
+    v_cuenta := nullif(v_map_cuentas->>(r->>'cuenta_id'), '')::uuid;
+    if v_cuenta is null then continue; end if;
+    v_old    := nullif(v_map_productos->>(r->>'producto_id'), '')::uuid;
+    insert into public.cuenta_items (empresa_id, cuenta_id, producto_id, nombre_snapshot,
+                                     precio_snapshot, qty, estado, nota, motivo_anulacion, enviado_en)
+    values (v_emp, v_cuenta, v_old,
+            coalesce(nullif(r->>'nombre_snapshot',''),'(importado)'),
+            coalesce((r->>'precio_snapshot')::numeric, 0),
+            greatest(1, coalesce((r->>'qty')::int, 1)),
+            case when coalesce(r->>'estado','pendiente') in ('pendiente','enviado','anulado')
+                 then r->>'estado' else 'pendiente' end,
+            coalesce(r->>'nota',''), r->>'motivo_anulacion',
+            (r->>'enviado_en')::timestamptz);
+  end loop;
+
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'pagos','[]'::jsonb)) loop
+    v_cuenta := nullif(v_map_cuentas->>(r->>'cuenta_id'), '')::uuid;
+    if v_cuenta is null then continue; end if;
+    if not coalesce(r->>'metodo','') in ('efectivo','qr','tarjeta','mixed') then continue; end if;
+    insert into public.pagos (empresa_id, cuenta_id, metodo, monto, detalle, creada_por, creada_en)
+    values (v_emp, v_cuenta, r->>'metodo', coalesce((r->>'monto')::numeric, 0),
+            coalesce(r->'detalle', '{}'::jsonb),
+            nullif(v_map_users->>(r->>'creada_por'), '')::uuid,
+            coalesce((r->>'creada_en')::timestamptz, now()));
+  end loop;
+
+  for r in select * from jsonb_array_elements(coalesce(p_datos->'turnos','[]'::jsonb)) loop
+    insert into public.turnos_caja (id, empresa_id, abierto_por, abierto_en, fondo, cerrado_en,
+                                   cerrado_por, contado, esperado, movimientos)
+    values (gen_random_uuid(), v_emp,
+            nullif(v_map_users->>(r->>'abierto_por'), '')::uuid,
+            coalesce((r->>'abierto_en')::timestamptz, now()),
+            coalesce((r->>'fondo')::numeric, 0),
+            (r->>'cerrado_en')::timestamptz,
+            nullif(v_map_users->>(r->>'cerrado_por'), '')::uuid,
+            (r->>'contado')::numeric, (r->>'esperado')::numeric,
+            coalesce(r->'movimientos', '{"movimientos":[]}'::jsonb));
+  end loop;
+
+  perform private.auditar(v_emp, 'super_importo', jsonb_build_object(
+    'codigo', lower(p_codigo),
+    'origen', p_datos->'empresa'->>'id',
+    'articulos', jsonb_array_length(coalesce(p_datos->'productos','[]'::jsonb)),
+    'cuentas',   jsonb_array_length(coalesce(p_datos->'cuentas','[]'::jsonb)),
+    'equipo',    jsonb_array_length(coalesce(p_datos->'equipo','[]'::jsonb))));
+  return v_emp;
 end $fn$;
 revoke all on function public.super_importar_empresa(jsonb, text, text) from public, anon;
 grant execute on function public.super_importar_empresa(jsonb, text, text) to authenticated;
