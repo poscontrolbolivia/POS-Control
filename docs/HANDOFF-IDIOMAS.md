@@ -162,7 +162,7 @@ npm run build                 # que Vite no rompa nada
 2. **`super.entrar.avisoAcceso`** — **RESUELTO (repaso 2026-10-16):** la clave ya está en los tres
    diccionarios con marcadores `{esperadas}`/`{leidas}` y `SuperPage.jsx` pasa los params
    (`tOr('super.entrar.avisoAcceso', fallback, { esperadas, leidas })`), tal como pedía esta nota.
-   El texto en español, además, ahora orienta al fix real: aplicar `supabase/migraciones/002_seguridad.sql`
+   El texto en español, además, ahora orienta al fix real: aplicar `supabase/setup.sql`
    (ya aplicada en el proyecto real). Solo quedan sin traducir los textos que lanzan los servicios en español (§6.1).
 3. **Notificaciones push del service worker**: `public/sw.js` fija `lang: 'es'` en su propia
    `opcionesNotif` y el título/cuerpo los manda el servidor (español). `notificaciones.js` ahora

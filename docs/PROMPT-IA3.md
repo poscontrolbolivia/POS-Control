@@ -1,6 +1,6 @@
 # PROMPT · IA-3 — Acceso y administración (Login multiempresa, Menú, Config, Personal)
 
-Copia y pega esto en la IA encargada del acceso y la administración. Antes de trabajar, que lea `docs/GUÍA.md`, `docs/CONTRATO.md`, `src/services/store.jsx`, `src/services/permisos.js`.
+Copia y pega esto en la IA encargada del acceso y la administración. Antes de trabajar, que lea `docs/GUIA.md`, `docs/CONTRATO.md`, `src/services/store.jsx`, `src/services/permisos.js`.
 
 ---
 

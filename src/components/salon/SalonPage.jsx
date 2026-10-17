@@ -9,10 +9,10 @@ import './SalonPage.css'
 const W = 1000, H = 600 // coordenadas normalizadas del lienzo
 const TODAS = 'todas'   // valor del filtro "ver todos los salones" (no es un id de zona)
 
-// Longitudes que exige la base (supabase/schema.sql): zonas.nombre 1..80, mesas.nombre
+// Longitudes que exige la base (supabase/setup.sql): zonas.nombre 1..80, mesas.nombre
 // 1..60 y capacidad 1..50. Validamos en la UI para no disparar un error de RLS/RPC en pantalla.
 const LARGO_ZONA = 80, LARGO_MESA = 60, CAP_MIN = 1, CAP_MAX = 50
-const COM_MIN = 1, COM_MAX = 99 // cuentas.comensales between 1 and 99 (supabase/schema.sql)
+const COM_MIN = 1, COM_MAX = 99 // cuentas.comensales between 1 and 99 (supabase/setup.sql)
 const TAM_MIN = 60       // tamaño mínimo en el lienzo normalizado (mesas más chicas no se leen)
 const MAX_PX_MOVIL = 768 // mismo criterio que los media-query de SalonPage.css
 

@@ -79,7 +79,7 @@ export default function SuperPage({ sesion }) {
           const leidas = await sondearAcceso(e.id)
           if (leidas < esperadas) {
             setAvisoAcceso(tOr('super.entrar.avisoAcceso',
-              `Atención: el listado dice ${esperadas} mesas pero la app solo ve ${leidas}. Exportar e importar funcionan igual, pero para OPERAR esta empresa hace falta aplicar la migración supabase/migraciones/002_seguridad.sql (fijar_empresa para super).`,
+              `Atención: el listado dice ${esperadas} mesas pero la app solo ve ${leidas}. Exportar e importar funcionan igual, pero para OPERAR esta empresa hace falta aplicar la migración supabase/setup.sql (fijar_empresa para super).`,
               { esperadas, leidas }))
           }
         } catch { /* el sondeo es informativo: si falla no bloqueamos la entrada a la empresa */ }
@@ -160,7 +160,7 @@ export default function SuperPage({ sesion }) {
       <section className="panel super-bloque">
         <h3>{tOr('super.comoFunciona', 'Cómo funciona por dentro')}</h3>
         <p className="super-ayuda">
-          {tOr('super.comoFuncionaTexto', 'Este panel solo llama a las RPCs security definer de las migraciones 001_super.sql y 002_seguridad.sql (es_super, super_listar_empresas, super_exportar_empresa, super_importar_empresa, fijar_empresa, super_ver_cuota, super_ajustar_empresa, super_registrar_exporte). La anon key del navegador no puede leer tablas de otras empresas: lo filtra RLS. Exportar descarga el snapshot jsonb completo; Importar lo recrea aquí con código nuevo y clave temporal para el equipo que no exista.')}
+          {tOr('super.comoFuncionaTexto', 'Este panel solo llama a las RPCs security definer de supabase/setup.sql (es_super, super_listar_empresas, super_exportar_empresa, super_importar_empresa, fijar_empresa, super_ver_cuota, super_ajustar_empresa, super_registrar_exporte). La anon key del navegador no puede leer tablas de otras empresas: lo filtra RLS. Exportar descarga el snapshot jsonb completo; Importar lo recrea aquí con código nuevo y clave temporal para el equipo que no exista.')}
         </p>
       </section>
     </div>

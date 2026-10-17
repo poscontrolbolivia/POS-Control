@@ -1,5 +1,5 @@
 // Capa de acceso a datos del carril SUPER ADMIN.
-// Todo pasa por RPCs `security definer` de supabase/migraciones/001_super.sql y 002_seguridad.sql;
+// Todo pasa por RPCs `security definer` de supabase/setup.sql;
 // la base es la que decide si el que llama es super (public.es_super()). Este archivo no escribe tablas.
 // El flujo "entrar/salir de una empresa" usa el cliente COMPARTIDO de src/services/supabase.js
 // (exporta fijarEmpresaSesion), porque ese cliente manda el header X-Session-Id que ancla la
@@ -57,7 +57,7 @@ export async function importarEmpresa(datos, codigo, clave) {
   return nuevoId
 }
 
-// ─────────── cuota del plan por empresa (RPCs de la migración 002_seguridad.sql) ───────────
+// ─────────── cuota del plan por empresa (RPCs de la migración setup.sql) ───────────
 
 // verCuota(id): { max_productos (null = sin límite), plan ('gratis'|'pago'), productos_actuales }.
 // La RPC solo responde a un super; cualquier otro usuario recibe 'requiere super'.
@@ -73,7 +73,7 @@ export async function verCuota(id) {
 }
 
 // ajustarCuota(id, { maxProductos, plan, notas }): fija el máximo de artículos a la venta y el plan.
-// p_max_productos null (campo vacío) o plan 'pago' ⇒ sin límite, según 002_seguridad.sql.
+// p_max_productos null (campo vacío) o plan 'pago' ⇒ sin límite, según setup.sql.
 export async function ajustarCuota(id, { maxProductos = null, plan = 'gratis', notas = '' } = {}) {
   if (!esUuid(id)) throw new Error('El identificador de la empresa no es válido.')
   if (plan !== 'gratis' && plan !== 'pago') throw new Error('El plan debe ser «gratis» o «pago».')

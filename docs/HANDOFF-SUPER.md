@@ -208,14 +208,14 @@ Si el otro carril renombra alguna de esas claves, hay que cambiar las constantes
 
 ## 4. Lo que la base todavía NO deja hacer (léelo antes de prometer "entrar a cualquier empresa")
 
-> **ACTUALIZADO 2026-10-16 — RESUELTO: `supabase/migraciones/002_seguridad.sql` está APLICADA en el
+> **ACTUALIZADO 2026-10-16 — RESUELTO: `supabase/setup.sql` está APLICADA en el
 > proyecto real.** Los tres huecos de backend descritos abajo (que reproducimos tal cual por
 > contexto histórico) quedaron cerrados en la sección 1 de esa migración: `private.fijar_empresa`
 > acepta super sin membresía, `private.mi_rol()` le da rol `admin` efectivo en la empresa que está
 > viendo, y `public.fijar_empresa` fija el GUC **de sesión** (el cliente ya manda el header
 > `X-Session-Id` en `src/services/supabase.js`, así que los SELECT directos ven la empresa). La
-> "Opción B" de más abajo NO se aplicó como archivo suelto `002_super_entrar.sql` (ese archivo no
-> existe): su contenido vive dentro de `002_seguridad.sql`. El aviso `sondearAcceso` del panel
+> "Opción B" de más abajo NO se aplicó como archivo suelto `setup.sql` (ese archivo no
+> existe): su contenido vive dentro de `setup.sql`. El aviso `sondearAcceso` del panel
 > (`super.entrar.avisoAcceso`) queda para instalaciones donde la migración aún no se pegó.
 
 Hoy funcionan, probados contra la base real: listado global, exportación completa e importación
@@ -223,18 +223,18 @@ round-trip. La parte **"operar la empresa desde la app"** tenía tres huecos de 
 carril:
 
 1. **Escrituras.** Las RPCs de negocio llaman `private.fijar_empresa(p_empresa_id)`
-   (`supabase/schema.sql:364`), que exige **membresía real** y no mira `es_super()`.
+   (`supabase/setup.sql:364`), que exige **membresía real** y no mira `es_super()`.
    Un super que pulse Entrar en una empresa ajena recibirá
    `el usuario actual no tiene membresía en la empresa …` al abrir una cuenta o cobrar.
 2. **Lecturas.** `src/services/tiendaSupabase.js` hace `SELECT` directos (`sb.from('mesas')…`) y la
    política usa `private.empresa_activa()`, que lee el GUC `app.empresa_id`. Ese GUC vive en la
    conexión de Postgres y PostgREST lo limpia entre peticiones HTTP, así que
    `public.fijar_empresa()` **no** lo conserva para las siguientes llamadas.
-   (Además la versión de `empresa_activa()` de `001_super.sql` devuelve `null` para un super sin GUC,
+   (Además la versión de `empresa_activa()` de `setup.sql` devuelve `null` para un super sin GUC,
    aunque tenga membresía.)
 3. **Rol efectivo.** Al pulsar **Entrar** el panel pone `rol: 'admin'` en la sesión para que el dueño
    pueda ver todas las pantallas (Menú, Configuración, Caja). Eso es solo UI: las políticas de
-   escritura de `schema.sql` consultan `private.mi_rol()`, que devuelve `NULL` si no hay membresía,
+   escritura de `supabase/setup.sql` consultan `private.mi_rol()`, que devuelve `NULL` si no hay membresía,
    así que un super sin membresía seguiría recibiendo "rol insuficiente". El parche de abajo lo cubre.
 
 El panel lo detecta y lo dice en pantalla (`sondearAcceso`: compara las mesas del listado con las que
@@ -247,7 +247,7 @@ inicial; el cliente entra con su propio login y ve TODO su histórico. Y si el s
 que use un usuario con membresía real en esa empresa (dos cuentas: la de dueño y la operativa).
 
 ### Opción B — parche de backend para que "Entrar" funcione de verdad
-**APLICADA** — no como archivo suelto, sino dentro de `supabase/migraciones/002_seguridad.sql`
+**APLICADA** — no como archivo suelto, sino dentro de `supabase/setup.sql`
 (sección 1, ya ejecutada en el proyecto real). El código propuesto abajo se conserva como
 referencia histórica; difiere en detalles menores (usa `private.es_super_compat()` en vez de
 `public.es_super()` directamente y añade la validación «empresa inexistente»):
@@ -316,7 +316,7 @@ aviso amarillo. Sin ellas, exportar/importar y el listado siguen funcionando igu
 - [ ] `LoginPage.jsx`: import `esSuper`, `listo` `async` con flag `es_super`, `await listo(...)`, login de super sin membresías (2.1).
 - [ ] `App.jsx`: imports de `SuperPage` y `superApi`, módulo `super`, `entrar()` con módulo inicial, rama `{modulo === 'super' && sesion.es_super && <SuperPage/>}`, banner `sesion.operando`, `salirDeEmpresa()` en `salir()` (2.2).
 - [ ] `Topbar.jsx`: opcional, chip `super` (2.3).
-- [x] ~~Decidir si se aplica `002_super_entrar.sql` (sección 4) y probar el header `x-empresa` en el carril de datos.~~ → **RESUELTO (2026-10-16)**: se aplicó `supabase/migraciones/002_seguridad.sql` (contiene el parche); el mecanismo elegido fue el GUC de sesión + header **`X-Session-Id`** (ya cableado en `src/services/supabase.js`), no el header `x-empresa`/`app.pre_request`.
+- [x] ~~Decidir si se aplica `setup.sql` (sección 4) y probar el header `x-empresa` en el carril de datos.~~ → **RESUELTO (2026-10-16)**: se aplicó `supabase/setup.sql` (contiene el parche); el mecanismo elegido fue el GUC de sesión + header **`X-Session-Id`** (ya cableado en `src/services/supabase.js`), no el header `x-empresa`/`app.pre_request`.
 - [ ] Confirmar el `user_id` semilla de `public.supers` antes de vender a ningún cliente.
 - [ ] `npm run build` tras el merge y prueba manual con una cuenta real de super.
 - [ ] i18n: conectar `IdiomaSelector` (prop `value`/`onChange` + `localStorage['pos-idioma-app']`) al diccionario cuando exista.
@@ -336,7 +336,7 @@ aviso amarillo. Sin ellas, exportar/importar y el listado siguen funcionando igu
 
 ---
 
-## 7. Novedades para el panel super · migración 002_seguridad.sql (APLICADA, 2026-10-16)
+## 7. Novedades para el panel super · migración setup.sql (APLICADA, 2026-10-16)
 
 * **Cuota de artículos por empresa** (el modelo de negocio gratis→pago): RPCs solo-super
   `super_ajustar_empresa(p_empresa, p_max_productos, p_plan 'gratis'|'pago', p_notas)` y

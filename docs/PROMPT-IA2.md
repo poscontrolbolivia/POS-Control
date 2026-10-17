@@ -1,6 +1,6 @@
 # PROMPT · IA-2 — Operación de venta (Salón, Pedido, Caja, Venta directa, Tickets)
 
-Copia y pega esto en la IA encargada de la operación. Antes de trabajar, que lea `docs/GUÍA.md`, `src/services/store.jsx`, `src/services/permisos.js` y los componentes de su carril.
+Copia y pega esto en la IA encargada de la operación. Antes de trabajar, que lea `docs/GUIA.md`, `src/services/store.jsx`, `src/services/permisos.js` y los componentes de su carril.
 
 ---
 
