@@ -19,8 +19,18 @@ const productos = [
   ['Jugo de naranja', 's3', 14], ['Refresco', 's3', 10], ['Cerveza', 's3', 25],
 ].map(([nombre, seccionId, precio]) => ({ id: uid(), nombre, seccionId, precio, activo: true }))
 
+const GRUPOS_DEMO = [
+  { id: 'cocina', nombre: 'Cocina', ancho: 32, baud: 9600 },
+  { id: 'barra', nombre: 'Barra', ancho: 32, baud: 9600 },
+  { id: 'caja', nombre: 'Caja (tickets)', ancho: 32, baud: 9600, tickets: true },
+]
+
 const inicial = {
-  config: { nombre: 'Mi negocio', moneda: 'Bs', ivaPct: 0, propinaPct: 10 },
+  config: {
+    nombre: 'Mi negocio', moneda: 'Bs', ivaPct: 0, propinaPct: 10,
+    // Bebidas salen en la Barra; desayunos y comida en la Cocina (editable al crear/editar la sección).
+    gruposImpresion: GRUPOS_DEMO, impresoraPorSeccion: { s1: 'cocina', s2: 'cocina', s3: 'barra' },
+  },
   zonas: [{ id: 'z1', nombre: 'Salón' }, { id: 'z2', nombre: 'Terraza' }],
   mesas: [1, 2, 3, 4].map((n, i) => ({ id: 'm' + n, zona: 'z1', nombre: 'Mesa ' + n, x: 120 + i * 200, y: 150, w: 110, h: 110, forma: i % 2 ? 'redonda' : 'cuadrada', cap: 4 }))
     .concat([{ id: 'm5', zona: 'z2', nombre: 'Mesa 5', x: 300, y: 250, w: 150, h: 100, forma: 'rect', cap: 6 }]),
@@ -32,6 +42,15 @@ const inicial = {
     { usuario: 'cajero', clave: '1234', rol: 'cajero', nombre: 'Cajero' },
     { usuario: 'mesero', clave: '1234', rol: 'mesero', nombre: 'Mesero' },
   ],
+}
+
+// Estados demo guardados por versiones anteriores no traen grupos de impresión: se completan.
+const migrar = e => {
+  if (!e || typeof e !== 'object') return inicial
+  const config = { ...inicial.config, ...(e.config || {}) }
+  if (!Array.isArray(config.gruposImpresion) || !config.gruposImpresion.length) config.gruposImpresion = GRUPOS_DEMO
+  if (!config.impresoraPorSeccion) config.impresoraPorSeccion = inicial.config.impresoraPorSeccion
+  return { ...e, config }
 }
 
 const nuevaCuenta = (a) => ({ id: uid(), tipo: 'mesa', canal: 'mesa', estado: 'abierta', items: [], pagos: [], propina: 0, descuento: 0, comensales: 1, abiertaEn: Date.now(), ...a })
@@ -93,10 +112,36 @@ function reducer(s, a) {
         : c.id === destino.id ? { ...c, items: [...c.items, ...moverItems] } : c) }
     }
 
-    case 'turno+': return s.caja.turno ? s : { ...s, caja: { ...s.caja, turno: { id: uid(), abiertoEn: Date.now(), abiertoPor: a.usuario, fondo: a.fondo, movimientos: [] } } }
+    case 'intercambiar': { // cambia una línea de la cuenta A por una línea de la cuenta B
+      const A = s.cuentas.find(c => c.id === a.cuentaA), B = s.cuentas.find(c => c.id === a.cuentaB)
+      const iA = A?.items.find(i => i.id === a.itemA && i.estado !== 'anulado'), iB = B?.items.find(i => i.id === a.itemB && i.estado !== 'anulado')
+      if (!A || !B || !iA || !iB || A.id === B.id) return s
+      return { ...s, cuentas: s.cuentas.map(c => c.id === A.id ? { ...c, items: [...c.items.filter(i => i.id !== iA.id), iB] }
+        : c.id === B.id ? { ...c, items: [...c.items.filter(i => i.id !== iB.id), iA] } : c) }
+    }
+
+    case 'usuario+': return s.usuariosDemo.some(u => u.usuario.toLowerCase() === a.usuario.usuario.toLowerCase()) ? s
+      : { ...s, usuariosDemo: [...s.usuariosDemo, { creadoEn: Date.now(), ...a.usuario }] }
+    case 'usuario~': return { ...s, usuariosDemo: s.usuariosDemo.map(u => (u.usuario === a.usuario ? { ...u, ...a.cambios } : u)) }
+    case 'usuario-': return { ...s, usuariosDemo: s.usuariosDemo.filter(u => u.usuario !== a.usuario) }
+
+    case 'turno+': {
+      if (s.caja.turno) return s
+      // Las mesas que ya estaban abiertas pasan a este turno ("heredadas del turno anterior").
+      const heredadas = s.cuentas.filter(c => c.estado !== 'cerrada').map(c => c.id)
+      return { ...s, caja: { ...s.caja, turno: { id: uid(), abiertoEn: Date.now(), abiertoPor: a.usuario, fondo: a.fondo, movimientos: [], heredadas } } }
+    }
     case 'turno-': {
       if (!s.caja.turno) return s
-      const turno = { ...s.caja.turno, cerradoEn: Date.now(), cerradoPor: a.usuario, contado: a.contado }
+      const fin = Date.now()
+      const t0 = s.caja.turno
+      // Ventas del turno agrupadas por quien cobró y mesas que siguen abiertas: NO se fuerza a
+      // cerrarlas, pasan al turno siguiente para que la caja no se detenga.
+      const cobradas = s.cuentas.filter(c => c.estado === 'cerrada' && (c.pagos || []).length && (c.cerradaEn || 0) >= t0.abiertoEn && (c.cerradaEn || 0) <= fin)
+      const porUsuario = {}
+      cobradas.forEach(c => { const u = c.cerradaPor || '—'; const x = porUsuario[u] || { n: 0, total: 0 }; porUsuario[u] = { n: x.n + 1, total: x.total + totalFinal(c) } })
+      const traspaso = s.cuentas.filter(c => c.estado !== 'cerrada').map(c => ({ cuentaId: c.id, tipo: c.tipo, numero: c.numero, mesaIds: c.mesaIds, total: totalFinal(c) }))
+      const turno = { ...t0, cerradoEn: fin, cerradoPor: a.usuario, contado: a.contado, porUsuario, traspaso }
       return { ...s, caja: { ...s.caja, turno: null, historial: [turno, ...s.caja.historial] } }
     }
 
@@ -199,7 +244,7 @@ export function StoreProvider({ children }) {
 
   // Ramas montadas SIEMPRE (reglas de hooks); solo una alimenta el contexto.
   const supActivo = Boolean(sesion?.empresaId && USAR_SUPABASE)
-  const [sDemo, dDemo] = useReducer(reducer, null, () => { try { return JSON.parse(localStorage.getItem(KEY)) || inicial } catch { return inicial } })
+  const [sDemo, dDemo] = useReducer(reducer, null, () => { try { return migrar(JSON.parse(localStorage.getItem(KEY))) } catch { return inicial } })
   useEffect(() => { if (!supActivo) localStorage.setItem(KEY, JSON.stringify(sDemo)) }, [sDemo, supActivo])
   const sup = useSupabaseStore(supActivo ? sesion.empresaId : null)
 

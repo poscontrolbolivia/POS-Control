@@ -41,7 +41,7 @@ a.cc-btn,a.cc-btn:hover{color:#fff;text-decoration:none}
 .cc-btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(.95);box-shadow:0 8px 22px color-mix(in srgb,var(--cc) 42%,transparent)}
 .cc-btn:active{transform:translateY(0) scale(.98)}
 .cc-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
-.cc-blue{--cc:var(--btn-blue)}.cc-yellow{--cc:var(--btn-yellow)}.cc-green{--cc:var(--btn-green)}.cc-whatsapp{--cc:var(--btn-whatsapp)}.cc-slate{--cc:var(--btn-slate)}
+.cc-blue{--cc:var(--btn-blue)}.cc-yellow{--cc:var(--btn-yellow)}.cc-green{--cc:var(--btn-green)}.cc-whatsapp{--cc:var(--btn-whatsapp)}.cc-slate{--cc:var(--btn-slate)}.cc-red{--cc:var(--btn-red)}.cc-orange{--cc:var(--btn-orange)}.cc-violet{--cc:var(--btn-violet)}
 [data-theme="night"] .cc-blue{--cc:#4f7bff}
 
 /* Pie legal */
@@ -51,11 +51,3 @@ a.cc-btn,a.cc-btn:hover{color:#fff;text-decoration:none}
 .lg-footer-links{margin-top:6px;font-size:.78rem}
 .lg-footer-links a{color:inherit;text-decoration:none}.lg-footer-links a:hover{text-decoration:underline;color:var(--ac)}
 .lg-footer-copy{margin-top:3px;font-size:.72rem}
-
-/* Botón compartir: fondo verde sólido */
-.lg-share .lg-share-btn{background:var(--btn-green);border:0;color:#fff;box-shadow:0 4px 12px color-mix(in srgb,var(--btn-green) 40%,transparent)}
-.lg-share .lg-share-btn:hover{filter:brightness(.93)}
-/* "¿Olvidaste tu clave?": al final de la tarjeta, discreto, separado de los botones */
-.lg-olvido{align-self:center;margin-top:10px;padding:6px 12px;min-height:0;border:0;background:none;color:var(--mut);font-family:var(--font-display);font-size:.9rem;font-weight:600;cursor:pointer;border-radius:999px}
-.lg-olvido:hover{color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,transparent)}
-.lg-demo{padding:8px 12px;border-radius:12px;background:var(--libre)}

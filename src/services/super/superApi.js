@@ -57,7 +57,7 @@ export async function importarEmpresa(datos, codigo, clave) {
   return nuevoId
 }
 
-// ─────────── cuota del plan por empresa (RPCs de la migración setup.sql) ───────────
+// ─────────── cuota del plan por empresa (RPCs de la setup.sql.sql) ───────────
 
 // verCuota(id): { max_productos (null = sin límite), plan ('gratis'|'pago'), productos_actuales }.
 // La RPC solo responde a un super; cualquier otro usuario recibe 'requiere super'.

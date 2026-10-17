@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useStore } from '../../services/store.jsx'
 import { useIdioma } from '../../i18n/index.jsx'
+import SelectorIdioma from '../../i18n/SelectorIdioma.jsx'
+import ThemeSelect from '../login/ThemeSelect.jsx'
 import ImpresorasAdmin from './ImpresorasAdmin.jsx'
 import EquipoAdmin from './EquipoAdmin.jsx'
 import './admin.css'
@@ -19,10 +21,21 @@ export default function ConfigAdmin({ rol, sesion }) {
   const [msg, setMsg] = useState('')
   const [verImpresoras, setVerImpresoras] = useState(false)
 
+  const preferencias = (
+    <div className="adm-card">
+      <div className="adm-card-cab"><h3>{t('config.preferencias')}</h3></div>
+      <div className="pref-fila">
+        <SelectorIdioma soloSuper={false} esSuper={Boolean(sesion?.es_super)} />
+        <ThemeSelect />
+      </div>
+    </div>
+  )
+
   if (rol !== 'admin') {
     return (
       <div className="adm-panel">
-        <div className="adm-aviso">{t('config.sinPermiso')}{sesion?.nombre ? t('config.sesionParent', { nombre: sesion.nombre }) : ''}</div>
+        <div className="adm-cab"><h2>{t('config.titulo')}</h2></div>
+        {preferencias}
       </div>
     )
   }
@@ -45,6 +58,7 @@ export default function ConfigAdmin({ rol, sesion }) {
   return (
     <div className="adm-panel">
       <div className="adm-cab"><h2>{t('config.titulo')}</h2></div>
+      {preferencias}
       <form className="adm-card adm-config" onSubmit={guardar}>
         {sesion && <p className="adm-sub">{t('config.sesionLabel')} <b>{sesion.nombre}</b> ({tOr('rol.' + sesion.rol, sesion.rol)}) · {sesion.empresa}</p>}
         <label className="adm-campo">

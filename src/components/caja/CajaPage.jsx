@@ -13,7 +13,7 @@ const round2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100
 // Convención de pagos: {metodo, monto} con monto = importe aplicado a la cuenta (el cambio va en p.cambio).
 function calcularResumen(turno, cuentas) {
   const fin = turno.cerradoEn ?? Date.now()
-  const tickets = cuentas.filter(c => c.estado === 'cerrada' && (c.cerradaEn || 0) >= turno.abiertoEn && (c.cerradaEn || 0) <= fin)
+  const tickets = cuentas.filter(c => c.estado === 'cerrada' && (c.pagos || []).length > 0 && (c.cerradaEn || 0) >= turno.abiertoEn && (c.cerradaEn || 0) <= fin)
   const ventas = { efectivo: 0, qr: 0, tarjeta: 0, otros: 0 }
   tickets.forEach(c => (c.pagos || []).forEach(p => {
     const k = ['efectivo', 'qr', 'tarjeta'].includes(p.metodo) ? p.metodo : 'otros'
@@ -24,7 +24,9 @@ function calcularResumen(turno, cuentas) {
   const egresos = round2(movs.filter(x => x.t === 'egreso').reduce((acc, x) => acc + (Number(x.monto) || 0), 0))
   const esperado = round2((Number(turno.fondo) || 0) + ventas.efectivo + ingresos - egresos)
   const vendido = round2(tickets.reduce((acc, c) => acc + totalFinal(c), 0))
-  return { tickets, ventas, ingresos, egresos, esperado, vendido }
+  const porUsuario = {}
+  tickets.forEach(c => { const u = c.cerradaPor || '—'; const x = porUsuario[u] || { n: 0, total: 0 }; porUsuario[u] = { n: x.n + 1, total: round2(x.total + totalFinal(c)) } })
+  return { tickets, ventas, ingresos, egresos, esperado, vendido, porUsuario }
 }
 
 export default function CajaPage({ rol, sesion }) {
@@ -46,6 +48,8 @@ export default function CajaPage({ rol, sesion }) {
   const [mov, setMov] = useState(null)      // {tipo, monto, motivo}
   const [cierre, setCierre] = useState(null) // {contado}
 
+  const abiertas = s.cuentas.filter(c => c.estado !== 'cerrada') // pasan al turno siguiente al cerrar
+  const heredadas = (turno?.heredadas || []).filter(id => abiertas.some(c => c.id === id)).length
   const resumen = useMemo(() => (turno ? calcularResumen(turno, s.cuentas) : null), [turno, s.cuentas])
 
   const abrirTurno = e => {
@@ -108,7 +112,7 @@ export default function CajaPage({ rol, sesion }) {
                 <input type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.00"
                   value={fondo} onChange={e => setFondo(e.target.value)} />
               </label>
-              <button className="primary" type="submit">{t('caja.abrirTurno')}</button>
+              <button className="success" type="submit">{t('caja.abrirTurno')}</button>
             </form>
           ) : <p className="caja-nota">{t('caja.sinPermisoAbrir', { rol })}</p>}
         </section>
@@ -125,6 +129,7 @@ export default function CajaPage({ rol, sesion }) {
                     <b>{t('caja.turnoNumero', { n: s.caja.historial.length - i })}</b>
                     <span className="caja-hora">{new Date(h.cerradoEn || h.abiertoEn).toLocaleString()}</span>
                     <span className="sp" />
+                    {h.traspaso?.length > 0 && <span className="caja-hora">{t('caja.traspasoHist', { n: h.traspaso.length })}</span>}
                     <span>{t('caja.vendidoM', { monto: m(r.vendido) })}</span>
                     <span className={'caja-diff ' + (Math.abs(dif) < 0.005 ? 'ok' : dif > 0 ? 'sobra' : 'falta')}>
                       {Math.abs(dif) < 0.005 ? t('caja.cuadrado') : dif > 0 ? t('caja.sobraM', { monto: m(dif) }) : t('caja.faltaM', { monto: m(-dif) })}
@@ -161,14 +166,23 @@ export default function CajaPage({ rol, sesion }) {
           <div className="caja-stat"><span>{t('caja.stEgresos')}</span><b>{m(resumen.egresos)}</b></div>
           <div className="caja-stat esperado"><span>{t('caja.stEsperado')}</span><b>{m(resumen.esperado)}</b></div>
         </div>
+        {heredadas > 0 && <p className="caja-nota">↩ {t('caja.heredadas', { n: heredadas })}</p>}
+        {Object.keys(resumen.porUsuario).length > 0 && (
+          <div className="caja-usuarios">
+            <b>{t('caja.porUsuario')}</b>
+            {Object.entries(resumen.porUsuario).map(([u, x]) => (
+              <span key={u} className="caja-user-chip">{u} · {x.n} · <b>{m(x.total)}</b></span>
+            ))}
+          </div>
+        )}
       </section>
 
       <div className="caja-dos">
         <section className="caja-card">
           <div className="caja-head"><h2>{t('caja.movimientos')}</h2><span className="sp" />
             {puede(rol, 'movimiento_caja') && !mov && <>
-              <button className="ghost" onClick={() => setMov({ tipo: 'ingreso', monto: '', motivo: '' })}>{t('caja.masIngreso')}</button>
-              <button className="danger" onClick={() => setMov({ tipo: 'egreso', monto: '', motivo: '' })}>{t('caja.masEgreso')}</button>
+              <button className="success" onClick={() => setMov({ tipo: 'ingreso', monto: '', motivo: '' })}>{t('caja.masIngreso')}</button>
+              <button className="orange" onClick={() => setMov({ tipo: 'egreso', monto: '', motivo: '' })}>{t('caja.masEgreso')}</button>
             </>}
           </div>
           {mov && (
@@ -222,8 +236,15 @@ export default function CajaPage({ rol, sesion }) {
         {!puede(rol, 'cerrar_turno') ? <p className="caja-nota">{t('caja.sinPermisoCerrar', { rol })}</p>
           : !cierre
             ? <>
+              <div className="caja-traspaso">
+                <b>{abiertas.length ? t('caja.traspasoTitulo', { n: abiertas.length }) : t('caja.sinTraspaso')}</b>
+                {abiertas.length > 0 && <>
+                  <ul>{abiertas.map(c => <li key={c.id}>{nombreCorto(c)} <b>{m(totalFinal(c))}</b></li>)}</ul>
+                  <small>{t('caja.traspasoNota')}</small>
+                </>}
+              </div>
               <p className="caja-nota">{t('caja.esperadoA')} <b>{m(resumen.esperado)}</b> {t('caja.esperadoB')}</p>
-              <button className="danger" onClick={() => setCierre({ contado: '' })}>{t('caja.cerrarTurno')}</button>
+              <button className="danger solid" onClick={() => setCierre({ contado: '' })}>{t('caja.cerrarTurno')}</button>
             </>
             : (
               <form className="caja-form" onSubmit={cerrarTurno}>
@@ -234,7 +255,7 @@ export default function CajaPage({ rol, sesion }) {
                 <span className={'caja-diff grande ' + (Math.abs(dif) < 0.005 ? 'ok' : dif > 0 ? 'sobra' : 'falta')}>
                   {cierre.contado === '' ? '…' : Math.abs(dif) < 0.005 ? t('caja.cuadrado') : dif > 0 ? t('caja.sobraM', { monto: m(dif) }) : t('caja.faltaM', { monto: m(-dif) })}
                 </span>
-                <button className="primary" type="submit">{t('caja.confirmarCierre')}</button>
+                <button className="danger solid" type="submit">{t('caja.confirmarCierre')}</button>
                 <button className="ghost" type="button" onClick={() => setCierre(null)}>{t('comun.cancelar')}</button>
               </form>
             )}

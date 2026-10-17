@@ -1,8 +1,13 @@
 // Impresión en silencio por Web Serial API + comandos ESC/POS para impresoras térmicas USB
 // de 58 mm (32 col) / 80 mm (48 col): Goojprt POS-580, Xprinter, etc.
 // Solo funciona en Chrome/Edge (escritorio o Android) con HTTPS o localhost.
-// Cola interna: un trabajo a la vez; si falla reintenta 1 vez y deja error visible (estadoImpresora().error).
-// Web Serial NO persiste permisos entre sesiones: al arrancar se reutiliza el puerto ya emparejado con navigator.serial.getPorts().
+//
+// VARIAS IMPRESORAS: cada "grupo de impresión" (Cocina, Barra…) tiene su propio puerto. Un mismo
+// puerto puede servir a varios grupos (una sola impresora para todo). Los trabajos se serializan en
+// UNA cola global (abrir → escribir → cerrar), así dos grupos que comparten puerto no se pisan.
+// Web Serial NO persiste permisos entre sesiones: al arrancar se reutilizan los puertos ya
+// emparejados con navigator.serial.getPorts(), reasignándolos a cada grupo por vendorId/productId
+// (la correspondencia grupo→puerto se guarda en localStorage).
 
 const ESC = 0x1b
 const GS = 0x1d
@@ -19,89 +24,115 @@ const PC437 = {
   '▀': 0xdc, '▓': 0xdb, '▒': 0xb1, '░': 0xb0, '•': 0xf5, '€': 0xd5,
 }
 
-let puerto = null          // SerialPort emparejado (variable de módulo)
-let abierto = false        // ¿puerto.open() activo? (lo cerramos tras cada trabajo)
-let baudRate = 9600        // 9600 o 115200 según config.impresoraBaud
-let errorActual = ''       // error visible para la UI
-let ultimoError = ''
-let cola = []              // trabajos en espera {lineas, ancho, corte, beep, resolver, rechazo}
+
+export const GRUPO_DEFECTO = 'general'
+const LLAVE_MAPA = 'pos-impresoras-puertos'
+
+// grupo → { puerto, baud, error, ultimoError }
+const grupos = new Map()
+let cola = []              // trabajos en espera {grupo, lineas, ancho, corte, beep, resolver, rechazo}
 let ejecutando = false
 const escuchas = new Set() // suscriptores de estado (React)
 
-const notificar = () => escuchas.forEach(f => { try { f(estadoImpresora()) } catch { /* ignore */ } })
+const grupoDe = id => {
+  const k = id || GRUPO_DEFECTO
+  if (!grupos.has(k)) grupos.set(k, { puerto: null, baud: 9600, error: '', ultimoError: '' })
+  return grupos.get(k)
+}
+
+const notificar = () => escuchas.forEach(f => { try { f() } catch { /* ignore */ } })
 
 export const soporteSerial = () => typeof navigator !== 'undefined' && Boolean(navigator.serial)
 
-export function estadoImpresora() {
+export function estadoImpresora(grupo = GRUPO_DEFECTO) {
+  const g = grupoDe(grupo)
   return {
     soportado: soporteSerial(),
-    conectada: Boolean(puerto),
-    abierta,
-    baudRate,
-    error: errorActual,
-    ultimoError,
-    cola: cola.length,
+    conectada: Boolean(g.puerto),
+    baudRate: g.baud,
+    error: g.error,
+    ultimoError: g.ultimoError,
+    cola: cola.filter(j => j.grupo === (grupo || GRUPO_DEFECTO)).length,
     ocupado: ejecutando,
   }
 }
 
-// Para que la UI (ImpresorasAdmin) reaccione a cambios de estado sin consultar a cada rato.
+// Para que la UI reaccione a cambios de estado sin consultar a cada rato.
 export function suscribirImpresora(fn) {
   escuchas.add(fn)
   return () => escuchas.delete(fn)
 }
 
-// Detecta desconexión en caliente (cable fuera).
+const leerMapa = () => { try { return JSON.parse(localStorage.getItem(LLAVE_MAPA)) || {} } catch { return {} } }
+const guardarMapa = m => { try { localStorage.setItem(LLAVE_MAPA, JSON.stringify(m)) } catch { /* sin almacenamiento */ } }
+const llavePuerto = p => { const i = p.getInfo?.() || {}; return `${i.usbVendorId ?? 'x'}:${i.usbProductId ?? 'x'}` }
+
+// Detecta desconexión en caliente (cable fuera): todos los grupos que usaban ese puerto.
 if (soporteSerial()) {
   try {
     navigator.serial.addEventListener('disconnect', e => {
-      if (e.target === puerto) {
-        puerto = null
-        abierto = false
-        errorActual = 'La impresora se desconectó. Vuelve a conectarla.'
-        notificar()
-      }
+      let alguno = false
+      grupos.forEach(g => {
+        if (g.puerto === e.target) { g.puerto = null; g.error = 'La impresora se desconectó. Vuelve a conectarla.'; alguno = true }
+      })
+      if (alguno) notificar()
     })
   } catch { /* ignore */ }
 }
 
-// Pide el puerto al usuario (solo una vez por sesión; el navegador recuerda los emparejados).
-export async function conectarImpresora({ baud = baudRate } = {}) {
+// Pide el puerto al usuario para UN grupo (el navegador muestra su selector de dispositivos).
+export async function conectarImpresora({ grupo = GRUPO_DEFECTO, baud } = {}) {
   if (!soporteSerial()) throw new Error('Este navegador no soporta Web Serial (usa Chrome o Edge)')
-  if (abierto) { try { await puerto.close() } catch { /* ignore */ } abierto = false }
+  const g = grupoDe(grupo)
   const p = await navigator.serial.requestPort()
-  puerto = p
-  baudRate = Number(baud) || 9600
-  errorActual = ''
-  ultimoError = ''
+  g.puerto = p
+  g.baud = Number(baud) || g.baud || 9600
+  g.error = ''
+  g.ultimoError = ''
+  // Recuerda a qué grupo pertenece este puerto (n = posición entre los puertos iguales).
+  try {
+    const todos = await navigator.serial.getPorts()
+    const k = llavePuerto(p)
+    const iguales = todos.filter(x => llavePuerto(x) === k)
+    const n = Math.max(0, iguales.indexOf(p))
+    const m = leerMapa(); m[grupo || GRUPO_DEFECTO] = { k, n }; guardarMapa(m)
+  } catch { /* sin getPorts: solo esta sesión */ }
   notificar()
-  return estadoImpresora()
+  return estadoImpresora(grupo)
 }
 
-// Reutiliza el puerto ya emparejado en sesiones anteriores (getPorts no pide permiso).
-// Llamar al arrancar la app o al montar ImpresorasAdmin: "recordar impresora".
-export async function reutilizarImpresora({ baud = baudRate } = {}) {
+// Reasigna los puertos ya emparejados a sus grupos (getPorts no pide permiso). Llamar al arrancar
+// la app o al montar la pantalla de impresoras. `lista`: [{ id, baud }].
+export async function reutilizarImpresoras(lista = [{ id: GRUPO_DEFECTO }]) {
   if (!soporteSerial()) return false
   try {
     const puertos = await navigator.serial.getPorts()
-    if (puertos.length) {
-      puerto = puertos[puertos.length - 1]
-      baudRate = Number(baud) || baudRate
-      errorActual = ''
-      notificar()
-      return true
-    }
-  } catch { /* ignore */ }
-  return false
+    if (!puertos.length) return false
+    const m = leerMapa()
+    let alguno = false
+    lista.forEach(({ id, baud }) => {
+      const g = grupoDe(id)
+      if (g.puerto && puertos.includes(g.puerto)) return // ya está conectado en esta sesión
+      const quiere = m[id || GRUPO_DEFECTO]
+      let p = null
+      if (quiere) p = puertos.filter(x => llavePuerto(x) === quiere.k)[quiere.n] || null
+      else if (lista.length === 1 && puertos.length === 1) p = puertos[0] // instalación de una sola impresora
+      if (p) { g.puerto = p; g.baud = Number(baud) || g.baud; g.error = ''; alguno = true }
+    })
+    if (alguno) notificar()
+    return alguno
+  } catch { return false }
 }
 
-export async function desconectarImpresora() {
-  if (abierto && puerto) { try { await puerto.close() } catch { /* ignore */ } }
-  abierto = false
-  puerto = null
-  errorActual = ''
+export async function desconectarImpresora(grupo = GRUPO_DEFECTO) {
+  const g = grupoDe(grupo)
+  g.puerto = null
+  g.error = ''
+  const m = leerMapa(); delete m[grupo || GRUPO_DEFECTO]; guardarMapa(m)
   notificar()
 }
+
+export const fijarBaud = (grupo, baud) => { grupoDe(grupo).baud = Number(baud) || 9600 }
 
 // ---------- generación de bytes ESC/POS ----------
 
@@ -129,6 +160,14 @@ function guion(texto, cols) {
   return (izq + '-'.repeat(espacio) + der).slice(0, cols)
 }
 
+// Texto final de una línea (mismas reglas que la térmica): útil para imprimir en impresoras de Windows.
+export function lineaATexto(l, ancho = 32) {
+  const tam = Math.min(4, Math.max(1, Number(l?.tam) || 1))
+  const cols = Math.max(8, Math.floor(ancho / tam))
+  const t = String(l?.texto ?? '')
+  return l?.guion ? guion(t, cols) : t.slice(0, cols)
+}
+
 function generarBytes({ lineas = [], ancho = 32, corte = true, beep = false } = {}) {
   const b = [ESC, 0x40, ESC, 0x74, 0x00] // ESC @ inicializar + ESC t 0 (tabla PC437)
   for (const l of lineas) {
@@ -150,11 +189,9 @@ function generarBytes({ lineas = [], ancho = 32, corte = true, beep = false } = 
 
 // ---------- escritura por writable stream (abre → escribe → cierra writer y puerto) ----------
 
-async function escribirBytes(bytes) {
+async function escribirBytes(puerto, baudRate, bytes) {
   if (!puerto) throw new Error('No hay impresora conectada')
-  if (abierto) { try { await puerto.close() } catch { /* ignore */ } abierto = false } // estado sucio de un trabajo previo
   await puerto.open({ baudRate })
-  abierto = true
   let fallo = null
   try {
     const writer = puerto.writable.getWriter()
@@ -168,12 +205,11 @@ async function escribirBytes(bytes) {
     if (!fallo) fallo = e // puerto.writable indisponible
   } finally {
     try { await puerto.close() } catch { /* ignore */ }
-    abierto = false
   }
   if (fallo) throw fallo
 }
 
-// ---------- cola de trabajos (uno a la vez, 1 reintento, error visible) ----------
+// ---------- cola global (uno a la vez, 1 reintento, error visible por grupo) ----------
 
 async function procesarCola() {
   if (ejecutando) return
@@ -181,25 +217,25 @@ async function procesarCola() {
   if (!trabajo) return
   ejecutando = true
   notificar()
-  const { resolver, rechazo, ...params } = trabajo
+  const { resolver, rechazo, grupo, ...params } = trabajo
+  const g = grupoDe(grupo)
   const bytes = generarBytes(params)
   let intento = 0
   for (;;) {
     try {
-      await escribirBytes(bytes)
-      errorActual = ''
+      await escribirBytes(g.puerto, g.baud, bytes)
+      g.error = ''
       resolver('silencioso')
       break
     } catch (e) {
-      ultimoError = String(e?.message || e || 'Error de impresión')
-      abierto = false
-      if (intento === 0) { // reintenta UNA vez (puerto puede necesitar respirar)
+      g.ultimoError = String(e?.message || e || 'Error de impresión')
+      if (intento === 0 && g.puerto) { // reintenta UNA vez (el puerto puede necesitar respirar)
         intento++
         await new Promise(r => setTimeout(r, 400))
         continue
       }
-      errorActual = ultimoError // error visible mientras la UI no reconecte
-      rechazo(new Error(ultimoError))
+      g.error = g.ultimoError // error visible mientras la UI no reconecte
+      rechazo(new Error(g.ultimoError))
       break
     }
   }
@@ -209,10 +245,11 @@ async function procesarCola() {
 }
 
 // lineas: [{ texto, negrita, tam, centrado, guion }] · resuelve 'silencioso' o rechaza con el error.
-export function imprimirSilencioso({ lineas, ancho = 32, corte = true, beep = false } = {}) {
+export function imprimirSilencioso({ grupo = GRUPO_DEFECTO, lineas, ancho = 32, corte = true, beep = false } = {}) {
   if (!soporteSerial()) return Promise.reject(new Error('Web Serial no soportado por este navegador'))
+  if (!grupoDe(grupo).puerto) return Promise.reject(new Error('No hay impresora conectada'))
   return new Promise((resolver, rechazo) => {
-    cola.push({ lineas, ancho: Number(ancho) || 32, corte, beep, resolver, rechazo })
+    cola.push({ grupo: grupo || GRUPO_DEFECTO, lineas, ancho: Number(ancho) || 32, corte, beep, resolver, rechazo })
     notificar()
     procesarCola()
   })

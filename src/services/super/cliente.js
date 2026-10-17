@@ -19,7 +19,7 @@ export const NO_SUPER = 'Este usuario no es super administrador: el panel solo e
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const esUuid = v => typeof v === 'string' && UUID_RE.test(v.trim())
 
-// Traduce a español legible los `raise exception` de la migración setup.sql y los
+// Traduce a español legible los `raise exception` de la setup.sql.sql y los
 // fallos de red/cliente. Nunca devolvemos un objeto raro a la UI.
 export function mensajeError(e) {
   const bruto = String((e && (e.message || e.error_description || e.hint)) || e || '')

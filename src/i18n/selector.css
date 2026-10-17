@@ -1,3 +1,20 @@
-/* Selector de idioma (desplegable). Mismo aspecto que el selector de tema. */
-.sel-idioma{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--mut)}
-.sel-idioma select{min-height:32px;padding:2px 8px;font-size:.85rem;border-radius:8px;width:auto}
+/* Estilos del SelectorIdioma (carril IDIOMAS). Van aquí y no en src/index.css para
+   no pisar el CSS compartido. Usa las variables de src/styles.css. */
+
+.sel-idioma{
+  display:inline-flex;align-items:center;gap:2px;
+  border:1px solid var(--line);border-radius:999px;background:var(--card);
+  padding:2px 4px;
+}
+.sel-idioma-icono{font-size:.9rem;line-height:1;margin:0 2px 0 4px}
+.sel-idioma-btn{
+  min-height:0;padding:4px 8px;border:none;background:none;border-radius:999px;
+  font-size:.75rem;font-weight:700;letter-spacing:.4px;color:var(--mut);
+}
+.sel-idioma-btn:hover{color:var(--ink)}
+.sel-idioma-btn.on{background:var(--ac);color:#fff}
+@media (max-width:640px){
+  .sel-idioma{padding:2px}
+  .sel-idioma-icono{display:none}
+  .sel-idioma-btn{padding:4px 6px}
+}

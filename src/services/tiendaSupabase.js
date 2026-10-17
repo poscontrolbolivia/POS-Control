@@ -297,6 +297,12 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       return refrescarNegocio(E)
     }
 
+    case 'intercambiar': { // dos movimientos cruzados con mover_items (cada uno atómico)
+      await rpc('mover_items', { p_cuenta_id: rid(mapa, a.cuentaA), p_item_ids: [rid(mapa, a.itemA)], p_cuenta_destino_id: rid(mapa, a.cuentaB) })
+      await rpc('mover_items', { p_cuenta_id: rid(mapa, a.cuentaB), p_item_ids: [rid(mapa, a.itemB)], p_cuenta_destino_id: rid(mapa, a.cuentaA) })
+      return refrescarNegocio(E)
+    }
+
     // ── caja (RPCs §3.14-3.16) ──
     case 'turno+':
       await rpc('abrir_turno', { p_fondo: a.fondo || 0 })

@@ -73,10 +73,9 @@ a.auth-btn{
 .topbar-rol-cajero{background:#6fb3e0;color:#123}
 .topbar-rol-mesero{background:#f4a259;color:#3a2506}
 .topbar-user{color:var(--mut);font-size:.85rem;white-space:nowrap}
-.topbar-mods{display:flex;gap:6px;flex-wrap:wrap;flex:1;justify-content:center}
+.topbar-mods{display:flex;gap:6px;flex-wrap:wrap;order:3;width:100%;justify-content:flex-start;padding-top:2px}
 .topbar-tab{border-radius:999px;min-height:38px;padding:6px 14px;font-size:.9rem}
 .topbar-tab.on{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
-.topbar-salir{min-height:38px;color:#c0392b;border-color:var(--line)}
 @media (max-width:640px){
   .topbar{gap:6px;padding:8px 10px}
   .topbar-user{display:none}

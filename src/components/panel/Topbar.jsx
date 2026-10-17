@@ -1,6 +1,5 @@
 import { useIdioma } from '../../i18n/index.jsx'
-import SelectorIdioma from '../../i18n/SelectorIdioma.jsx'
-import ThemeSelect from '../login/ThemeSelect.jsx'
+import { useState } from 'react'
 import BrandMark from '../login/BrandMark.jsx'
 import '../../styles/auth.css'
 
@@ -9,6 +8,9 @@ import '../../styles/auth.css'
 // modulos: ['Salón', ...] o [{id, nombre}, ...] — las etiquetas ya llegan traducidas de App.jsx.
 export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir, aviso }) {
   const { t, tOr } = useIdioma()
+  // Menú plegable (☰): en escritorio arranca abierto; en móvil cerrado para dejar espacio.
+  const [abierto, setAbierto] = useState(() => typeof window === 'undefined' || window.innerWidth > 850)
+  const elegir = id => { onModulo?.(id); if (typeof window !== 'undefined' && window.innerWidth <= 850) setAbierto(false) }
   const items = modulos.map(m => (typeof m === 'string' ? { id: m, nombre: m } : m))
   const rol = (sesion?.rol || '').toLowerCase()
   const conectado = Boolean(sesion?.supabase)
@@ -31,29 +33,26 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
           {conectado ? t('topbar.conectado') : t('topbar.demo')}
         </span>
       </div>
-      <nav className="topbar-mods">
+      <div className="topbar-acc">
+        <button type="button" className="topbar-menu" onClick={() => setAbierto(v => !v)} aria-expanded={abierto}
+          aria-label={abierto ? t('topbar.cerrarMenu') : t('topbar.abrirMenu')} title={abierto ? t('topbar.cerrarMenu') : t('topbar.abrirMenu')}>☰</button>
+        <button type="button" className="topbar-salir" onClick={onSalir} title={t('topbar.salir')}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg>
+          <span className="topbar-salir-txt">{t('topbar.salir')}</span>
+        </button>
+      </div>
+      <nav className={'topbar-mods' + (abierto ? '' : ' cerrado')}>
         {items.map(m => (
           <button
             key={m.id}
             type="button"
             className={'topbar-tab' + (m.id === modulo ? ' on' : '')}
-            onClick={() => onModulo?.(m.id)}
+            onClick={() => elegir(m.id)}
           >
             {m.nombre}
           </button>
         ))}
       </nav>
-      {/*
-        Selector de idioma (ES/EN/PT) siempre visible.
-        `soloSuper` está a false porque el dueño pidió que por ahora cualquiera pueda cambiarlo.
-        El panel de super YA está integrado (sesion.es_super lo pone esSuper() en el login),
-        así que restringirlo es cambiar esta misma línea por:
-            <SelectorIdioma soloSuper esSuper={Boolean(sesion?.es_super)} />
-        Ver src/i18n/SelectorIdioma.jsx y docs/HANDOFF-IDIOMAS.md.
-      */}
-      <SelectorIdioma soloSuper={false} esSuper={Boolean(sesion?.es_super)} />
-      <ThemeSelect />
-      <button type="button" className="topbar-salir" onClick={onSalir}>{t('topbar.salir')}</button>
       {aviso && (
         <div className="auth-error" role="alert" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, margin: 0, padding: '6px 16px' }}>
           {t('topbar.avisoBase', { aviso })}

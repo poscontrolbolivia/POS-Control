@@ -204,7 +204,7 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
   /* Editor de mesa en una columna, campos al ancho disponible, Y fijado al borde
      inferior como hoja de pulgar (la mesa se selecciona tocándola; el fondo del
      lienzo la deselecciona y cierra la hoja). */
-  .salon .barra.mesa-edit, .salon .barra.pax-bar {
+  .salon .mesa-edit {
     position: fixed;
     left: 0;
     right: 0;
@@ -221,7 +221,7 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
     padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   }
   /* Asa visual: pista de que es una hoja desplegable, no parte del mapa. */
-  .salon .barra.mesa-edit::before {
+  .salon .mesa-edit::before {
     content: '';
     align-self: center;
     width: 44px;
@@ -229,13 +229,11 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
     border-radius: 3px;
     background: var(--line);
   }
-  .salon .barra.mesa-edit { flex-direction: column; align-items: stretch; }
   .mesa-edit .campo { width: 100%; }
   .mesa-edit .campo input, .mesa-edit .campo select { width: 100%; min-width: 0; }
   .mesa-edit .grupo { justify-content: space-between; width: 100%; }
   .mesa-edit > button { width: 100%; }
   /* La barra de comensales es una tira fina: stepper a la izquierda, texto debajo. */
-  .salon .barra.pax-bar { border-top-color: var(--line); }
   .pax-bar .grupo { justify-content: space-between; }
 
   /* El lienzo ocupa todo el ancho útil; la proporción 1000:600 (aspectRatio inline)
@@ -270,4 +268,43 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   .salon .lienzo .mesa { transition: none; }
   .salon .mesa.arrastrando { box-shadow: none; opacity: 1; }
+}
+
+/* ── menú de edición de la mesa: rejilla alineada, etiquetas legibles, controles de 44px ── */
+.mesa-edit{margin:8px 0;padding:12px 14px;background:var(--card);border:2px solid var(--ac);border-radius:14px;box-shadow:var(--sombra)}
+.me-cab{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;color:var(--ink)}
+.me-nom{color:var(--ac);font-weight:700}
+.me-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 14px;align-items:end}
+.me-campo{display:flex;flex-direction:column;gap:5px;min-width:0}
+.me-campo>span{font-size:.8rem;font-weight:700;color:var(--ink)}
+.me-ancho2{grid-column:span 2}
+.me-campo input,.me-campo select,.me-campo>button{width:100%;min-height:44px}
+.me-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1.5px solid var(--line-fuerte);border-radius:10px;overflow:hidden}
+.me-opc{border:0;border-radius:0;min-height:44px;padding:4px 6px;background:var(--card);font-weight:600;font-size:.88rem}
+.me-opc+.me-opc{border-left:1.5px solid var(--line-fuerte)}
+.me-opc.on{background:var(--ac);color:#fff}
+.me-step{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;border:1.5px solid var(--line-fuerte);border-radius:10px;overflow:hidden;background:var(--card)}
+.me-step button{border:0;border-radius:0;min-height:44px;padding:0;font-size:1.2rem;background:var(--card-2)}
+.me-step b{text-align:center;color:var(--ink)}
+.badge-heredada{position:absolute;bottom:3px;left:5px;font-size:.7rem;font-weight:800;background:var(--btn-violet);color:#fff;border-radius:999px;padding:0 6px}
+.salon .salon-aviso.sin-turno{background:color-mix(in srgb,var(--btn-yellow) 22%,var(--card));border-color:var(--btn-yellow);color:var(--ink)}
+@media(max-width:768px){.me-ancho2{grid-column:span 1}.me-grid{grid-template-columns:1fr 1fr}.me-seg{grid-column:1/-1}}
+.me-opc.on,.me-opc.on:hover:not(:disabled){background:var(--ac);color:#fff}
+
+/* ── v0.9 · vista lista de mesas + comensales ocultos en móvil ── */
+.vista-sel{display:inline-flex;gap:6px;flex:0 0 auto}
+.mesas-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.mesa-item{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;padding:10px 12px;border-radius:14px;border:2px solid var(--line-fuerte);text-align:left;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.mesa-item .nombre{font-size:1.05rem}
+.mesa-item .mi-est{font-size:.8rem;font-weight:600;opacity:.85}
+.mesa-item .importe{font-weight:700}
+.mesa-item .etiqueta-zona{font-size:.72rem;opacity:.75}
+.mesa-item.libre{background:var(--libre-bg);border-color:var(--libre-bd);color:var(--libre-ink)}
+.mesa-item.ocupada{background:var(--ocupada-bg);border-color:var(--ocupada-bd);color:var(--ocupada-ink)}
+.mesa-item.enviada{background:var(--enviada-bg);border-color:var(--enviada-bd);color:var(--enviada-ink)}
+.mesa-item.porcobrar{background:var(--porcobrar-bg);border-color:var(--porcobrar-bd);color:var(--porcobrar-ink)}
+.mesa-item:hover:not(:disabled){filter:brightness(.97);transform:translateY(-1px)}
+@media(max-width:768px){
+  .vista-sel .txt{display:none}
+  .salon .mesa .pax{display:none}
 }

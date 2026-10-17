@@ -9,6 +9,8 @@
 import { MONEDA } from '../../config'
 import { totalCuenta, totalFinal, pagadoCuenta } from '../../services/store.jsx'
 import { imprimirSilencioso, estadoImpresora } from '../../services/impresora.js'
+import { gruposDe, grupoTickets, repartirPorGrupo } from '../../services/impresion.js'
+import { modoImpresion, encolarImpresion } from '../../services/colaImpresion.js'
 import { tGlobal, existeClave, idiomaActivo } from '../../i18n/index.jsx'
 
 const round2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100
@@ -202,25 +204,41 @@ function lineasPlanas({ cuenta, config = {}, titulo, comanda = false, ancho = 32
   return L
 }
 
-// Elige el canal según config.impresion (acepta el alias 'imprimacion'):
-//  - 'silenciosa' + impresora conectada → imprimirSilencioso (sin diálogo, funciona en teléfonos) → 'silencioso'
-//  - 'silenciosa' SIN impresora → 'sin-impresora' (el llamador muestra aviso). Si fallbackDialog=true
-//    además abre el diálogo de respaldo (comportamiento deseado cuando el usuario pidió imprimir explícitamente);
-//    en comandas automáticas se pasa false para NUNCA abrir diálogos.
-//  - fallo de escritura → 'error' (el servicio deja error visible en estadoImpresora())
-//  - resto → imprimirTicket (diálogo manual) y devuelve 'manual'
-export async function imprimirCuenta({ cuenta, config = {}, titulo, comanda = false, modo, ancho, fallbackDialog = true } = {}) {
+// Trabajo para la cola de la estación: mismas líneas que saldrían por la térmica local.
+const trabajoDe = ({ cuenta, config, titulo, comanda, grupoId, cols }) => ({
+  grupo: grupoId,
+  titulo: titulo || (comanda ? tGlobal('ticket.comanda') : tGlobal('ticket.titulo')),
+  payload: { lineas: lineasPlanas({ cuenta, config, titulo, comanda, ancho: cols }), ancho: cols, corte: true, beep: Boolean(config?.impresoraBeep) },
+})
+
+// Imprime UNA cuenta/ticket/comanda. Reglas:
+//  · COMANDA (comanda=true): va SIEMPRE en silencio al puerto del grupo indicado (`grupo`), nunca abre
+//    el diálogo del navegador ni pide elegir impresora. Sin impresora conectada → 'sin-impresora'.
+//  · TICKET / PRE-CUENTA: si config.impresion === 'silenciosa' y el grupo de tickets (Caja) tiene
+//    impresora → silencioso; si no → diálogo del navegador (pedido explícito del usuario).
+//  · fallo de escritura → 'error' (el servicio deja el error visible en estadoImpresora(grupo)).
+export async function imprimirCuenta({ cuenta, config = {}, titulo, comanda = false, grupo, ancho, fallbackDialog = true } = {}) {
   if (!cuenta) return null
-  const canal = modo || config?.impresion || config?.imprimacion || 'manual'
-  const cols = Number(ancho) || Number(config?.impresoraAncho) || 32
+  const g = comanda ? gruposDe(config).find(x => x.id === grupo) : grupoTickets(config)
+  const grupoId = g?.id || grupo || 'general'
+  const cols = Number(ancho) || Number(g?.ancho) || Number(config?.impresoraAncho) || 32
   const mm = cols >= 42 ? 80 : 58 // para el diálogo de respaldo (imprimirTicket recibe milímetros)
-  if (canal === 'silenciosa') {
-    if (!estadoImpresora().conectada) {
-      if (fallbackDialog) imprimirTicket({ cuenta, config, titulo, comanda, ancho: mm })
+  const silenciosa = comanda || config?.impresion === 'silenciosa' || config?.imprimacion === 'silenciosa'
+  // ESTACIÓN DE IMPRESIÓN: este equipo no imprime; deja el trabajo en la cola y la PC del local lo saca.
+  if (silenciosa && modoImpresion(config) === 'estacion') {
+    try {
+      await encolarImpresion([trabajoDe({ cuenta, config, titulo, comanda, grupoId, cols })])
+      return 'encolado'
+    } catch { return 'error' }
+  }
+  if (silenciosa) {
+    if (!estadoImpresora(grupoId).conectada) {
+      if (!comanda && fallbackDialog) imprimirTicket({ cuenta, config, titulo, comanda, ancho: mm })
       return 'sin-impresora'
     }
     try {
       await imprimirSilencioso({
+        grupo: grupoId,
         lineas: lineasPlanas({ cuenta, config, titulo, comanda, ancho: cols }),
         ancho: cols,
         corte: true,
@@ -233,4 +251,29 @@ export async function imprimirCuenta({ cuenta, config = {}, titulo, comanda = fa
   }
   imprimirTicket({ cuenta, config, titulo, comanda, ancho: mm })
   return 'manual'
+}
+
+// Envía la comanda REPARTIDA por grupo (bebida → Barra, comida → Cocina…) sin preguntar nada.
+// `items`: los ítems pendientes que se están enviando. Devuelve [{ grupo, resultado, n }].
+export async function imprimirComandas({ cuenta, items, productos = [], config = {}, titulo }) {
+  const reparto = repartirPorGrupo(items, productos, config)
+  const salida = []
+  if (modoImpresion(config) === 'estacion') {
+    // Un solo envío con todas las partes (Cocina, Barra…): o llegan todas a la cola o ninguna.
+    const trabajos = reparto.map(({ grupo, items: its }) => trabajoDe({
+      cuenta: { ...cuenta, items: its }, config, titulo: `${titulo} · ${grupo.nombre}`, comanda: true,
+      grupoId: grupo.id, cols: Number(grupo.ancho) || Number(config?.impresoraAncho) || 32,
+    }))
+    let resultado = 'encolado'
+    try { if (trabajos.length) await encolarImpresion(trabajos) } catch { resultado = 'error' }
+    return reparto.map(({ grupo, items: its }) => ({ grupo, resultado, n: its.length }))
+  }
+  for (const { grupo, items: its } of reparto) {
+    const resultado = await imprimirCuenta({
+      cuenta: { ...cuenta, items: its }, config, comanda: true, grupo: grupo.id,
+      titulo: `${titulo} · ${grupo.nombre}`, fallbackDialog: false,
+    })
+    salida.push({ grupo, resultado, n: its.length })
+  }
+  return salida
 }

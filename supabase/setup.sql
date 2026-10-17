@@ -1,14 +1,20 @@
 -- ============================================================================
--- POS Control · setup.sql  —  ARCHIVO ÚNICO de base de datos (pegar COMPLETO)
--- Supabase → SQL Editor → pegar todo → Run. Idempotente: se puede volver a pegar
--- completo cada vez que haya una versión nueva, sin perder datos.
--- Para nombrar a un super admin: usar supabase/super-admin.sql (aparte).
--- Orden interno: schema → super → seguridad → comensales → altas → login.
+-- setup.sql · POS Control · TODO el backend en UN solo archivo (1 de 2 SQL del proyecto)
+-- ----------------------------------------------------------------------------
+-- Pegar COMPLETO en el SQL Editor de Supabase. Es idempotente: se puede volver a correr
+-- siempre (base nueva o ya instalada) sin romper ni duplicar datos, y es atómico
+-- (begin/commit: si algo falla, no queda nada a medias).
+-- Contiene, en este orden: esquema + RLS + RPCs · super admin (tablas/funciones) ·
+-- seguridad (cuota, auditoría, throttle, fotos) · comensales · altas y equipo ·
+-- lista de empresas del login · cola de impresión (estación de impresión del local). Regla de caja: cajero y admin pueden anular ítems enviados (con motivo).
+-- El único otro SQL es super-admin.sql (crear/promover al super administrador).
 -- ============================================================================
+begin;
 
--- ############################################################################
--- PARTE 1/6 · schema (tablas, RLS, RPC del POS)
--- ############################################################################
+
+-- ################################################################
+-- ## schema.sql
+-- ################################################################
 -- ============================================================================
 -- POS MULTI-TENANT · SUPABASE POSTGRES · schema.sql
 -- (c) IA-1 · Proyecto "Punto de venta / POS Control Gratis" · Bolivia, moneda Bs
@@ -889,8 +895,8 @@ begin
     raise exception 'el ítem ya está anulado';
   end if;
   if v_it.estado = 'enviado' then
-    if v_rol <> 'admin' then
-      raise exception 'anular un ítem enviado requiere rol admin';
+    if v_rol not in ('admin','cajero') then
+      raise exception 'anular un ítem enviado requiere rol cajero o admin';
     end if;
     if coalesce(trim(p_motivo), '') = '' then
       raise exception 'el motivo de anulación es obligatorio para ítems enviados';
@@ -1938,9 +1944,9 @@ create trigger on_auth_user_created
 --    a nivel rol) para que numero por día de venta_directa y "hoy" coincidan.
 -- ============================================================================
 
--- ############################################################################
--- PARTE 2/6 · super admin (tabla supers, exportar/importar)
--- ############################################################################
+-- ################################################################
+-- ## 001 · super admin
+-- ################################################################
 -- ============================================================================
 -- migraciones/001_super.sql · Super admin multiempresa + exportar/importar
 -- Idempotente. Ejecutar como postgres en el SQL Editor (después de schema.sql).
@@ -1955,6 +1961,7 @@ alter table public.supers enable row level security;
 drop policy if exists supers_propio on public.supers;
 create policy supers_propio on public.supers for select using (user_id = auth.uid());
 
+-- (el super admin se crea con super-admin.sql, no se siembra aquí)
 
 -- 2) helper es_super()
 create or replace function public.es_super()
@@ -2165,9 +2172,9 @@ $fn$;
 select (select count(*) from public.supers) as supers_semilla,
        (select count(*) from public.empresas) as empresas;
 
--- ############################################################################
--- PARTE 3/6 · seguridad (cuotas, auditoría, throttle)
--- ############################################################################
+-- ################################################################
+-- ## 002 · seguridad
+-- ################################################################
 -- ============================================================================
 -- migraciones/002_seguridad.sql · Paridad de seguridad con Catering Control
 -- Idempotente. Orden de aplicación en una base nueva:
@@ -2972,9 +2979,9 @@ union all select 'politicas_storage', count(*)::bigint from pg_policies
    where schemaname='storage' and tablename='objects' and policyname like 'pos_imagenes%'
 union all select 'bucket', count(*)::bigint from storage.buckets where id='pos-imagenes';
 
--- ############################################################################
--- PARTE 4/6 · comensales
--- ############################################################################
+-- ################################################################
+-- ## 003 · comensales
+-- ################################################################
 -- ============================================================================
 -- migraciones/003_comensales.sql · Asignar / corregir el número de comensales
 -- Idempotente. Ejecutar DESPUÉS de schema.sql, 001_super.sql y 002_seguridad.sql.
@@ -3036,9 +3043,9 @@ select 'funcion' as objeto, p.proname as nombre,
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
  where n.nspname = 'public' and p.proname = 'actualizar_comensales';
 
--- ############################################################################
--- PARTE 5/6 · altas self-service y equipo
--- ############################################################################
+-- ################################################################
+-- ## 004 · altas y equipo
+-- ################################################################
 -- ============================================================================
 -- migraciones/004_altas.sql · Alta self-service de empresa + gestión de equipo
 -- Idempotente. Ejecutar DESPUÉS de schema.sql, 001_super.sql y 002_seguridad.sql
@@ -3496,9 +3503,9 @@ select 'trigger' as objeto, tgname as nombre
   from pg_trigger
  where tgname = 'trg_alta_empresa_registrado' and not tgisinternal;
 
--- ############################################################################
--- PARTE 6/6 · lista de empresas para el login
--- ############################################################################
+-- ################################################################
+-- ## 006 · empresas para el login
+-- ################################################################
 -- 006 · Lista de empresas para el selector del login (pantalla sin sesión).
 -- Expone SOLO código y nombre (nada de datos del negocio). Pegar en SQL Editor de Supabase.
 create or replace function public.empresas_para_login()
@@ -3515,16 +3522,248 @@ $$;
 revoke all on function public.empresas_para_login() from public;
 grant execute on function public.empresas_para_login() to anon, authenticated;
 
--- ############################################################################
--- VERIFICACIÓN (resultado final en una fila)
--- ############################################################################
-select
-  (select count(*) from information_schema.tables where table_schema='public' and table_name in
-    ('empresas','perfiles','membresias','zonas','mesas','secciones_menu','productos','cuentas','cuenta_mesas','cuenta_items','pagos','turnos_caja')) as tablas_ok,
-  (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
-    where n.nspname='public' and c.relkind='r' and c.relrowsecurity) as tablas_con_rls,
-  (select count(*) from pg_policies where schemaname='public') as politicas,
-  (select count(*) from information_schema.routines where routine_schema='public') as funciones,
-  (select count(distinct routine_name) from information_schema.routines where routine_schema='public' and routine_name in
-    ('abrir_cuenta','abrir_venta_directa','agregar_items','cambiar_qty_item','poner_nota','enviar_items','anular_item','unir_mesas','separar_mesa','mover_items','aplicar_extras','cobrar_cuenta','abrir_turno','registrar_movimiento_caja','cerrar_turno')) as rpcs_ok,
-  (select count(*) from information_schema.views where table_schema='public' and table_name='v_estado_mesas') as vista_ok;
+-- ################################################################
+-- ## 007 · cola de impresión (estación de impresión del local)
+-- ################################################################
+-- Los teléfonos de meseros y cajeros NO hablan con la impresora: dejan el trabajo en esta cola
+-- (RPC encolar_impresion) y la PC del local, con la pestaña "Impresión" abierta, lo reclama
+-- (reclamar_impresion, atómico y sin duplicar aunque haya 2 estaciones) y lo imprime en la
+-- impresora de su grupo (Cocina, Barra, Caja…). Sin IPs ni configuración de red.
+-- La tabla es de SOLO LECTURA para el cliente: todo cambio pasa por RPCs con control de rol.
+create table if not exists public.trabajos_impresion (
+  id           uuid primary key default gen_random_uuid(),
+  empresa_id   uuid not null references public.empresas(id) on delete cascade,
+  grupo        text not null check (char_length(grupo) between 1 and 60),
+  titulo       text not null default '',
+  payload      jsonb not null,                       -- {lineas:[...], ancho, corte, beep}
+  estado       text not null default 'pendiente'
+               check (estado in ('pendiente','imprimiendo','impreso','error')),
+  intentos     integer not null default 0,
+  error        text,
+  creado_por   uuid references auth.users(id),
+  creado_en    timestamptz not null default now(),
+  tomado_en    timestamptz,
+  terminado_en timestamptz
+);
+create index if not exists idx_trabajos_impresion_cola
+  on public.trabajos_impresion (empresa_id, estado, creado_en);
+
+alter table public.trabajos_impresion enable row level security;
+drop policy if exists trabajos_impresion_select on public.trabajos_impresion;
+create policy trabajos_impresion_select on public.trabajos_impresion for select to authenticated
+  using (empresa_id = (select private.empresa_activa()));
+-- sin políticas de insert/update/delete + sin privilegios: solo escriben las RPCs (security definer)
+revoke all on public.trabajos_impresion from public, anon;
+revoke insert, update, delete, truncate on public.trabajos_impresion from authenticated;
+grant select on public.trabajos_impresion to authenticated;
+
+-- Realtime (aviso instantáneo a la estación). Si la publicación no existe o ya la tiene, no pasa nada:
+-- la estación además consulta la cola cada pocos segundos.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables
+                      where pubname = 'supabase_realtime' and schemaname = 'public'
+                        and tablename = 'trabajos_impresion') then
+    alter publication supabase_realtime add table public.trabajos_impresion;
+  end if;
+exception when others then
+  null;
+end $$;
+
+-- encolar_impresion: meseros, cajeros y admin dejan 1..20 trabajos [{grupo,titulo,payload}].
+create or replace function public.encolar_impresion(
+  p_trabajos   jsonb,
+  p_empresa_id uuid default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  t     jsonb;
+  v_n   integer := 0;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
+
+  if p_trabajos is null or jsonb_typeof(p_trabajos) <> 'array' then
+    raise exception 'Trabajos de impresión inválidos';
+  end if;
+  if jsonb_array_length(p_trabajos) = 0 or jsonb_array_length(p_trabajos) > 20 then
+    raise exception 'Se admiten de 1 a 20 trabajos de impresión por envío';
+  end if;
+
+  for t in select * from jsonb_array_elements(p_trabajos) loop
+    if coalesce(t->>'grupo', '') = '' or char_length(t->>'grupo') > 60 then
+      raise exception 'Falta el grupo de impresión';
+    end if;
+    if jsonb_typeof(t->'payload') <> 'object'
+       or jsonb_typeof(t->'payload'->'lineas') <> 'array'
+       or jsonb_array_length(t->'payload'->'lineas') > 400
+       or length(t->>'payload') > 60000 then
+      raise exception 'El contenido a imprimir es inválido o demasiado grande';
+    end if;
+    insert into public.trabajos_impresion (empresa_id, grupo, titulo, payload, creado_por)
+    values (v_emp, t->>'grupo', left(coalesce(t->>'titulo', ''), 120), t->'payload', auth.uid());
+    v_n := v_n + 1;
+  end loop;
+
+  -- Limpieza: el historial de la cola solo sirve unos días.
+  delete from public.trabajos_impresion
+   where empresa_id = v_emp and creado_en < now() - interval '3 days';
+
+  return v_n;
+end $fn$;
+revoke all on function public.encolar_impresion(jsonb, uuid) from public, anon;
+grant execute on function public.encolar_impresion(jsonb, uuid) to authenticated;
+
+-- reclamar_impresion: la estación toma los trabajos pendientes de SUS grupos (los que puede imprimir).
+-- Atómico (for update skip locked): dos estaciones nunca imprimen el mismo trabajo. Un trabajo que
+-- quedó "imprimiendo" más de 2 minutos (estación caída) vuelve a la cola una vez; luego pasa a error.
+create or replace function public.reclamar_impresion(
+  p_grupos     jsonb   default null,
+  p_limite     integer default 10,
+  p_empresa_id uuid    default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_lim integer := least(greatest(coalesce(p_limite, 10), 1), 25);
+  v     jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+
+  update public.trabajos_impresion
+     set estado = case when intentos >= 2 then 'error' else 'pendiente' end,
+         error  = case when intentos >= 2 then 'La estación dejó de responder mientras imprimía' else error end,
+         terminado_en = case when intentos >= 2 then now() else terminado_en end
+   where empresa_id = v_emp and estado = 'imprimiendo'
+     and tomado_en < now() - interval '2 minutes';
+
+  with c as (
+    select id from public.trabajos_impresion
+     where empresa_id = v_emp and estado = 'pendiente'
+       and (p_grupos is null
+            or grupo in (select jsonb_array_elements_text(p_grupos)))
+     order by creado_en
+     limit v_lim
+     for update skip locked
+  ), u as (
+    update public.trabajos_impresion t
+       set estado = 'imprimiendo', intentos = t.intentos + 1, tomado_en = now(), error = null
+      from c where t.id = c.id
+    returning t.*
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', u.id, 'grupo', u.grupo, 'titulo', u.titulo,
+           'payload', u.payload, 'intentos', u.intentos, 'creado_en', u.creado_en)
+         order by u.creado_en), '[]'::jsonb)
+    into v from u;
+  return v;
+end $fn$;
+revoke all on function public.reclamar_impresion(jsonb, integer, uuid) from public, anon;
+grant execute on function public.reclamar_impresion(jsonb, integer, uuid) to authenticated;
+
+-- finalizar_impresion: la estación informa el resultado (ok / error con motivo).
+create or replace function public.finalizar_impresion(
+  p_id         uuid,
+  p_ok         boolean,
+  p_error      text default null,
+  p_empresa_id uuid default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+  update public.trabajos_impresion
+     set estado = case when coalesce(p_ok, false) then 'impreso' else 'error' end,
+         error  = case when coalesce(p_ok, false) then null else left(coalesce(p_error, 'Error de impresión'), 300) end,
+         terminado_en = now()
+   where id = p_id and empresa_id = v_emp and estado = 'imprimiendo';
+  return found;
+end $fn$;
+revoke all on function public.finalizar_impresion(uuid, boolean, text, uuid) from public, anon;
+grant execute on function public.finalizar_impresion(uuid, boolean, text, uuid) to authenticated;
+
+-- listar_impresion: últimos trabajos (sin el contenido) para la pantalla de la estación.
+create or replace function public.listar_impresion(
+  p_limite     integer default 40,
+  p_empresa_id uuid    default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v     jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+  select coalesce(jsonb_agg(r order by (r->>'creado_en') desc), '[]'::jsonb) into v
+    from (
+      select jsonb_build_object('id', t.id, 'grupo', t.grupo, 'titulo', t.titulo, 'estado', t.estado,
+                                'error', t.error, 'intentos', t.intentos, 'creado_en', t.creado_en) as r
+        from public.trabajos_impresion t
+       where t.empresa_id = v_emp
+       order by t.creado_en desc
+       limit least(greatest(coalesce(p_limite, 40), 1), 100)
+    ) q;
+  return v;
+end $fn$;
+revoke all on function public.listar_impresion(integer, uuid) from public, anon;
+grant execute on function public.listar_impresion(integer, uuid) to authenticated;
+
+-- gestionar_impresion: 'reintentar' (error/imprimiendo → pendiente), 'descartar' (borra un trabajo
+-- no impreso) o 'descartar_todo' (borra todos los pendientes y con error de la empresa).
+create or replace function public.gestionar_impresion(
+  p_accion     text,
+  p_id         uuid default null,
+  p_empresa_id uuid default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_n   integer := 0;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+  if p_accion = 'reintentar' then
+    update public.trabajos_impresion
+       set estado = 'pendiente', error = null, intentos = 0, terminado_en = null
+     where id = p_id and empresa_id = v_emp and estado in ('error','imprimiendo');
+  elsif p_accion = 'descartar' then
+    delete from public.trabajos_impresion
+     where id = p_id and empresa_id = v_emp and estado <> 'impreso';
+  elsif p_accion = 'descartar_todo' then
+    delete from public.trabajos_impresion
+     where empresa_id = v_emp and estado in ('pendiente','error','imprimiendo');
+  else
+    raise exception 'Acción de impresión desconocida';
+  end if;
+  get diagnostics v_n = row_count;
+  return v_n;
+end $fn$;
+revoke all on function public.gestionar_impresion(text, uuid, uuid) from public, anon;
+grant execute on function public.gestionar_impresion(text, uuid, uuid) to authenticated;
+
+commit;

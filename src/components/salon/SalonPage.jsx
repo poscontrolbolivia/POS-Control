@@ -9,10 +9,10 @@ import './SalonPage.css'
 const W = 1000, H = 600 // coordenadas normalizadas del lienzo
 const TODAS = 'todas'   // valor del filtro "ver todos los salones" (no es un id de zona)
 
-// Longitudes que exige la base (supabase/setup.sql): zonas.nombre 1..80, mesas.nombre
+// Longitudes que exige la base (supabase/schema.sql): zonas.nombre 1..80, mesas.nombre
 // 1..60 y capacidad 1..50. Validamos en la UI para no disparar un error de RLS/RPC en pantalla.
 const LARGO_ZONA = 80, LARGO_MESA = 60, CAP_MIN = 1, CAP_MAX = 50
-const COM_MIN = 1, COM_MAX = 99 // cuentas.comensales between 1 and 99 (supabase/setup.sql)
+const COM_MIN = 1, COM_MAX = 99 // cuentas.comensales between 1 and 99 (supabase/schema.sql)
 const TAM_MIN = 60       // tamaño mínimo en el lienzo normalizado (mesas más chicas no se leen)
 const MAX_PX_MOVIL = 768 // mismo criterio que los media-query de SalonPage.css
 
@@ -75,13 +75,19 @@ export const capacidadCuenta = (c, mesas) => {
   return ids.reduce((t, id) => t + (mesas.find(m => m.id === id)?.cap ?? 0), 0)
 }
 
-export default function SalonPage({ rol }) {
+export default function SalonPage({ rol, sesion }) {
   const { s, d, modo } = useStore()
   const { t } = useIdioma()
   const admin = puede(rol, 'editar_mapa') // único permiso de salón en permisos.js (solo admin)
 
   const [zona, setZona] = useState(() => s.zonas[0]?.id ?? TODAS)
   const [edit, setEdit] = useState(false)
+  // Vista de mesas: mapa o lista (se recuerda en este equipo; en celular arranca en lista).
+  const [vista, setVista] = useState(() => {
+    try { const v = localStorage.getItem('pos-salon-vista'); if (v === 'mapa' || v === 'lista') return v } catch { /* ignore */ }
+    return typeof window !== 'undefined' && window.innerWidth <= 768 ? 'lista' : 'mapa'
+  })
+  const cambiarVista = v => { setVista(v); try { localStorage.setItem('pos-salon-vista', v) } catch { /* ignore */ } }
   const [sel, setSel] = useState(null)
   // Ediciones de salón inline (nunca window.prompt / window.confirm):
   const [nueva, setNueva] = useState(null)       // texto del alta de salón
@@ -91,11 +97,6 @@ export default function SalonPage({ rol }) {
   // nativos congelan el navegador de pruebas).
   const [aviso, setAviso] = useState('')
   const avisoTimer = useRef(null)
-  // Comensales escritos desde aquí que el store todavía no devolvió (cuentaId → número):
-  // el espejo pinta el valor nuevo de inmediato, sin esperar el refetch de la capa de
-  // datos (en Supabase 'comensales~' refresca el negocio completo).
-  const [pax, setPax] = useState({})
-  const [paxTxt, setPaxTxt] = useState(null)     // texto del campo numérico mientras se teclea
   // Arrastre: el estado local pinta la mesa en movimiento y SOLO se guarda (1 dispatch)
   // al soltar. Si despacháramos en cada pointermove, en modo Supabase iría un UPDATE por
   // frame a la cola de RPCs.
@@ -114,8 +115,8 @@ export default function SalonPage({ rol }) {
   const mesasZona = s.mesas.filter(m => activo === TODAS || m.zona === activo)
   const mesaSel = s.mesas.find(m => m.id === sel)
   const cuentaSel = sel ? cuentaActiva(s, sel) : null
-  const comDe = c => (c ? pax[c.id] ?? c.comensales ?? 0 : 0)
-  const comSel = comDe(cuentaSel)
+  const comDe = c => (c ? c.comensales ?? 0 : 0)
+  const heredadas = s.caja?.turno?.heredadas || [] // cuentas abiertas que venían del turno anterior
   const avisar = m => {
     setAviso(m)
     clearTimeout(avisoTimer.current) // reprograma: si llegan dos avisos, el segundo manda
@@ -133,8 +134,8 @@ export default function SalonPage({ rol }) {
     return { id: m.id, ...dentroDelLienzo(p.x - of.current.dx, p.y - of.current.dy, m.w, m.h) }
   }
   const down = (e, m) => {
+    if (!(edit && admin)) return // en operación la mesa se abre con el clic (onClick), no al apoyar el dedo
     setSel(m.id)
-    if (!(edit && admin)) return
     e.currentTarget.setPointerCapture(e.pointerId)
     const p = aCoord(e)
     of.current = { dx: p.x - m.x, dy: p.y - m.y }
@@ -193,11 +194,23 @@ export default function SalonPage({ rol }) {
     setSel(id)
   }
   // Redimensionar también reencuadra x/y: con w/h más grandes la mesa podría salirse del lienzo.
-  const tam = k => {
-    const w = Math.max(TAM_MIN, Math.min(W, mesaSel.w + k)), h = Math.max(TAM_MIN, Math.min(H, mesaSel.h + k))
+  // Cuadrada y redonda mantienen la proporción 1:1 (cambian ancho y alto juntos); la rectangular
+  // permite ancho y alto por separado.
+  const tam = (dim, k) => {
+    const ajusta = v => Math.max(TAM_MIN, Math.min(dim === 'w' ? W : H, v + k))
+    let w = mesaSel.w, h = mesaSel.h
+    if (mesaSel.forma === 'rect') { if (dim === 'w') w = ajusta(w); else h = ajusta(h) }
+    else { const lado = Math.max(TAM_MIN, Math.min(H, Math.min(w, h) + k)); w = lado; h = lado }
     d({ t: 'mesa~', id: sel, cambios: { w, h, ...dentroDelLienzo(mesaSel.x, mesaSel.y, w, h) } })
   }
-  const forma = () => d({ t: 'mesa~', id: sel, cambios: { forma: { cuadrada: 'redonda', redonda: 'rect', rect: 'cuadrada' }[mesaSel.forma] } })
+  // Cambiar de forma ajusta las medidas: rectangular = más ancha que alta (1.6:1), las otras 1:1.
+  const ponerForma = f => {
+    if (f === mesaSel.forma) return
+    let { w, h } = mesaSel
+    if (f === 'rect') { h = Math.min(w, h); w = Math.min(W, Math.round(h * 1.6)) }
+    else { const lado = Math.min(w, h); w = lado; h = lado }
+    d({ t: 'mesa~', id: sel, cambios: { forma: f, w, h, ...dentroDelLienzo(mesaSel.x, mesaSel.y, w, h) } })
+  }
   const cap = k => d({ t: 'mesa~', id: sel, cambios: { cap: limitarCapacidad((mesaSel.cap || 0) + k) } })
   const cambiarZona = id => {
     d({ t: 'mesa~', id: sel, cambios: { zona: id || null } })
@@ -207,17 +220,6 @@ export default function SalonPage({ rol }) {
   const borrar = () => {
     if (cuentaSel) return avisar(cuentaSel.mesaIds.length > 1 ? t('salon.alertUnida') : t('salon.alertAbierta'))
     d({ t: 'mesa-', id: sel }); setSel(null)
-  }
-
-  // ─────────── comensales de la cuenta abierta ───────────
-  // 'comensales~' existe en el reducer y en la capa Supabase (RPC
-  // actualizar_comensales, migración 003): demo y base real siguen el mismo camino.
-  const ponerComensales = val => {
-    if (!cuentaSel) return
-    const v = Math.max(COM_MIN, Math.min(COM_MAX, Math.round(Number(val)) || COM_MIN))
-    setPax(p => ({ ...p, [cuentaSel.id]: v }))
-    setPaxTxt(null)
-    d({ t: 'comensales~', cuentaId: cuentaSel.id, comensales: v })
   }
 
   return (
@@ -275,9 +277,13 @@ export default function SalonPage({ rol }) {
               </button>
             )}
           </div>
+          <div className="vista-sel" role="group" aria-label={t('salon.vista')}>
+            <button type="button" className={'tab' + (vista === 'mapa' || edit ? ' on' : '')} aria-pressed={vista === 'mapa' || edit} onClick={() => cambiarVista('mapa')}>🗺 <span className="txt">{t('salon.vistaMapa')}</span></button>
+            <button type="button" className={'tab' + (vista === 'lista' && !edit ? ' on' : '')} aria-pressed={vista === 'lista' && !edit} disabled={edit} onClick={() => cambiarVista('lista')}>☰ <span className="txt">{t('salon.vistaLista')}</span></button>
+          </div>
           {admin && (
             <button className={edit ? 'primary' : 'ghost'} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
-              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { setEdit(!edit); setNueva(null); setRen(null); setConf(null) }}>
+              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { setEdit(!edit); setSel(null); setNueva(null); setRen(null); setConf(null) }}>
               <span aria-hidden="true">{edit ? '✓' : '✎'}</span><span className="txt">{edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}</span>
             </button>
           )}
@@ -312,59 +318,82 @@ export default function SalonPage({ rol }) {
         )}
 
         {edit && admin && mesaSel && (
-          <div className="barra mesa-edit">
-            <label className="campo">{t('pedido.mesaCorta')}
-              <input value={mesaSel.nombre} maxLength={LARGO_MESA} onChange={e => renombrarMesa(e.target.value)} />
-            </label>
-            <label className="campo">{t('salon.zona')}
-              <select value={mesaSel.zona ?? ''} onChange={e => cambiarZona(e.target.value)}>
-                <option value="">{t('salon.sinZona')}</option>
-                {zonas.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}
-              </select>
-            </label>
-            <span className="grupo">{t('salon.tamano')}
-              <button className="ico" title={t('salon.tamanoMenos')} aria-label={t('salon.tamanoMenos')} onClick={() => tam(-10)}>−</button>
-              <button className="ico" title={t('salon.tamanoMas')} aria-label={t('salon.tamanoMas')} onClick={() => tam(10)}>＋</button>
-            </span>
-            <span className="grupo">{t('salon.capacidad')}
-              <button className="ico" title={t('salon.capacidadMenos')} aria-label={t('salon.capacidadMenos')} onClick={() => cap(-1)}>−</button>
-              <b>{mesaSel.cap}</b>
-              <button className="ico" title={t('salon.capacidadMas')} aria-label={t('salon.capacidadMas')} onClick={() => cap(1)}>＋</button>
-            </span>
-            <button className="ghost" title={t('salon.formaTitle')} aria-label={t('salon.formaTitle')} onClick={forma}>
-              <span aria-hidden="true">{{ cuadrada: '▢', redonda: '◯', rect: '▭' }[mesaSel.forma] || '▢'}</span>
-              <span className="txt">{t('salon.forma')}</span>
-            </button>
-            <button className="danger" onClick={borrar} title={t('comun.eliminar')} aria-label={t('comun.eliminar')}>{t('comun.eliminar')}</button>
-          </div>
-        )}
-
-        {/* Comensales de la cuenta activa (1..99 en public.cuentas): asignables desde el
-            salón sin entrar al panel de pedido; en móvil esta barra queda fija abajo. */}
-        {!edit && cuentaSel && puede(rol, 'abrir_mesa') && (
-          <div className="barra pax-bar" role="group" aria-label={t('pedido.comensales')}>
-            <span className="grupo">{t('pedido.comensales')}
-              {/* Literales en español: el carril IDIOMAS aún no define claves propias para
-                  estos botones (t() de una clave inexistente muestra la clave en pantalla). */}
-              <button className="ico" title="Quitar un comensal" aria-label="Quitar un comensal"
-                disabled={comSel <= COM_MIN} onClick={() => ponerComensales(comSel - 1)}>−</button>
-              <input className="pax-num" type="number" min={COM_MIN} max={COM_MAX} inputMode="numeric"
-                aria-label={t('pedido.comensales')}
-                value={paxTxt === null ? comSel : paxTxt}
-                onChange={e => setPaxTxt(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') ponerComensales(paxTxt) }}
-                onBlur={() => { if (paxTxt !== null) ponerComensales(paxTxt) }} />
-              <button className="ico" title="Sumar un comensal" aria-label="Sumar un comensal"
-                disabled={comSel >= COM_MAX} onClick={() => ponerComensales(comSel + 1)}>＋</button>
-            </span>
-            <span className="pista">{mesaSel?.nombre} · {t('salon.comensalesTitle', {
-              comensales: comSel, cap: capacidadCuenta(cuentaSel, s.mesas) || (mesaSel?.cap ?? 0) })}</span>
+          <div className="mesa-edit" role="group" aria-label={t('salon.mesaSel')}>
+            <div className="me-cab"><b>{t('salon.mesaSel')}</b><span className="me-nom">{mesaSel.nombre}</span></div>
+            <div className="me-grid">
+              <label className="me-campo me-ancho2"><span>{t('pedido.mesaCorta')}</span>
+                <input value={mesaSel.nombre} maxLength={LARGO_MESA} onChange={e => renombrarMesa(e.target.value)} />
+              </label>
+              <label className="me-campo"><span>{t('salon.zona')}</span>
+                <select value={mesaSel.zona ?? ''} onChange={e => cambiarZona(e.target.value)}>
+                  <option value="">{t('salon.sinZona')}</option>
+                  {zonas.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}
+                </select>
+              </label>
+              <div className="me-campo me-ancho2"><span>{t('salon.forma')}</span>
+                <div className="me-seg" role="radiogroup" aria-label={t('salon.forma')}>
+                  {[['cuadrada', '▢', t('salon.formaCuadrada')], ['redonda', '◯', t('salon.formaRedonda')], ['rect', '▭', t('salon.formaRect')]].map(([k, ico, txt]) => (
+                    <button key={k} type="button" role="radio" aria-checked={mesaSel.forma === k}
+                      className={'me-opc' + (mesaSel.forma === k ? ' on' : '')} onClick={() => ponerForma(k)}>
+                      <span aria-hidden="true">{ico}</span> {txt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="me-campo"><span>{mesaSel.forma === 'rect' ? t('salon.ancho') : t('salon.tamano')}</span>
+                <div className="me-step">
+                  <button type="button" title={t('salon.tamanoMenos')} aria-label={t('salon.tamanoMenos')} onClick={() => tam('w', -10)}>−</button>
+                  <b>{mesaSel.forma === 'rect' ? mesaSel.w : Math.min(mesaSel.w, mesaSel.h)}</b>
+                  <button type="button" title={t('salon.tamanoMas')} aria-label={t('salon.tamanoMas')} onClick={() => tam('w', 10)}>＋</button>
+                </div>
+              </div>
+              {mesaSel.forma === 'rect' && (
+                <div className="me-campo"><span>{t('salon.alto')}</span>
+                  <div className="me-step">
+                    <button type="button" title={t('salon.tamanoMenos')} aria-label={t('salon.tamanoMenos')} onClick={() => tam('h', -10)}>−</button>
+                    <b>{mesaSel.h}</b>
+                    <button type="button" title={t('salon.tamanoMas')} aria-label={t('salon.tamanoMas')} onClick={() => tam('h', 10)}>＋</button>
+                  </div>
+                </div>
+              )}
+              <div className="me-campo"><span>{t('salon.capacidad')}</span>
+                <div className="me-step">
+                  <button type="button" title={t('salon.capacidadMenos')} aria-label={t('salon.capacidadMenos')} onClick={() => cap(-1)}>−</button>
+                  <b>{mesaSel.cap}</b>
+                  <button type="button" title={t('salon.capacidadMas')} aria-label={t('salon.capacidadMas')} onClick={() => cap(1)}>＋</button>
+                </div>
+              </div>
+              <div className="me-campo"><span aria-hidden="true">&nbsp;</span>
+                <button type="button" className="danger solid" onClick={borrar} title={t('comun.eliminar')}>🗑 {t('comun.eliminar')}</button>
+              </div>
+            </div>
           </div>
         )}
 
         {!admin && <p className="pista">{t('salon.soloLectura')}</p>}
+        {!edit && !s.caja?.turno && !s._supCargando && (
+          <div className="salon-aviso sin-turno" role="status">{t('salon.sinTurno')}</div>
+        )}
 
-        <div ref={lienzo} className={'lienzo' + (edit ? ' edit' : '')} style={{ aspectRatio: `${W} / ${H}` }}
+        {vista === 'lista' && !edit && (
+          <div className="mesas-lista">
+            {mesasZona.length === 0 && <p className="lienzo-vacio" style={{ position: 'static' }}>{t('salon.sinMesasZona')}</p>}
+            {mesasZona.map(m => {
+              const c = cuentaActiva(s, m.id), est = estadoMesa(c)
+              const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
+              return (
+                <button type="button" key={m.id} className={`mesa-item ${est}`} onClick={() => setSel(m.id)}>
+                  <b className="nombre">{m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : ''}</b>
+                  <span className="mi-est">{t('salon.' + est)}</span>
+                  {c && <small className="importe">{MONEDA} {totalFinal(c).toFixed(2)}</small>}
+                  {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        <div ref={lienzo} hidden={vista === 'lista' && !edit} className={'lienzo' + (edit ? ' edit' : '')} style={{ aspectRatio: `${W} / ${H}` }}
           onPointerDown={e => { if (e.target === e.currentTarget) setSel(null) }} // tocar el fondo cierra la hoja móvil
           onPointerMove={move} onPointerUp={up} onPointerCancel={suelta}>
           {mesasZona.length === 0 && (
@@ -380,7 +409,7 @@ export default function SalonPage({ rol }) {
             const p = mueve && mueve.id === m.id ? mueve : m
             return (
               <div key={m.id} className={`mesa ${m.forma} ${est}${sel === m.id ? ' sel' : ''}${mueve?.id === m.id ? ' arrastrando' : ''}`}
-                onPointerDown={e => down(e, m)} style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%`, width: `${(p.w / W) * 100}%`, height: `${(p.h / H) * 100}%` }}>
+                onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) setSel(m.id) }} style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%`, width: `${(p.w / W) * 100}%`, height: `${(p.h / H) * 100}%` }}>
                 <b className="nombre">{m.nombre}</b>
                 <span className={'pax' + (com !== null && com > capT ? ' alerta' : '')}
                   title={c ? (com > capT ? t('salon.comensalesDeMas', { comensales: com, cap: capT }) : t('salon.comensalesTitle', { comensales: com, cap: capT })) : t('salon.capacidadTitle', { cap: m.cap })}>
@@ -388,6 +417,7 @@ export default function SalonPage({ rol }) {
                 </span>
                 {c && <small className="importe">{MONEDA} {totalFinal(c).toFixed(2)}</small>}
                 {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
+                {c && heredadas.includes(c.id) && <span className="badge-heredada" title={t('salon.heredadaTitle')}>↩</span>}
                 {unida && (
                   <span className="badge-unida" title={t('salon.unidaTitle', { n: c.mesaIds.length, total: `${MONEDA} ${totalCuenta(c).toFixed(2)}` })}>
                     🔗 ×{c.mesaIds.length}
@@ -406,7 +436,7 @@ export default function SalonPage({ rol }) {
           <span><i className="pt unida" />{t('salon.leyendaUnidas')}</span>
         </div>
       </section>
-      <PedidoPanel rol={rol} mesa={mesaSel} onClose={() => setSel(null)} bloqueado={edit} />
+      <PedidoPanel rol={rol} sesion={sesion} mesa={mesaSel} onClose={() => setSel(null)} bloqueado={edit} />
     </div>
   )
 }

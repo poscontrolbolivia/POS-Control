@@ -56,7 +56,7 @@ export default function SuperPage({ sesion }) {
     setOp({ tipo: 'exportar', id: e.id })
     try {
       descargarJson(await exportarEmpresa(e.id), e.codigo || e.nombre)
-      // Auditoría (migración 002_seguridad): registra la descarga en el log.
+      // Auditoría (setup.sql): registra la descarga en el log.
       // Si el aviso falla no puede deshacer una exportación correcta: solo lo dejamos en consola.
       try { await registrarExporte(e.id) } catch (aviso) { console.warn('super_registrar_exporte:', aviso?.message) }
     } catch (err) { setErrorLista(mensajeError(err)) } finally { setOp(null) }
@@ -71,7 +71,7 @@ export default function SuperPage({ sesion }) {
       await entrarEnEmpresa({ id: e.id, nombre: e.nombre })
       setViendo(empresaViendo())
       // La lista ya nos dijo cuántas mesas tiene la empresa: si el sondeo lee menos, la
-      // migración 002_seguridad aún no está aplicada (o el GUC se perdió) y lo avisamos
+      // setup.sql aún no está aplicada (o el GUC se perdió) y lo avisamos
       // en pantalla en vez de dejar un salón vacío.
       const esperadas = Number(e.mesas || 0)
       if (esperadas > 0) {
@@ -160,7 +160,7 @@ export default function SuperPage({ sesion }) {
       <section className="panel super-bloque">
         <h3>{tOr('super.comoFunciona', 'Cómo funciona por dentro')}</h3>
         <p className="super-ayuda">
-          {tOr('super.comoFuncionaTexto', 'Este panel solo llama a las RPCs security definer de supabase/setup.sql (es_super, super_listar_empresas, super_exportar_empresa, super_importar_empresa, fijar_empresa, super_ver_cuota, super_ajustar_empresa, super_registrar_exporte). La anon key del navegador no puede leer tablas de otras empresas: lo filtra RLS. Exportar descarga el snapshot jsonb completo; Importar lo recrea aquí con código nuevo y clave temporal para el equipo que no exista.')}
+          {tOr('super.comoFuncionaTexto', 'Este panel solo llama a las RPCs security definer de setup.sql (es_super, super_listar_empresas, super_exportar_empresa, super_importar_empresa, fijar_empresa, super_ver_cuota, super_ajustar_empresa, super_registrar_exporte). La anon key del navegador no puede leer tablas de otras empresas: lo filtra RLS. Exportar descarga el snapshot jsonb completo; Importar lo recrea aquí con código nuevo y clave temporal para el equipo que no exista.')}
         </p>
       </section>
     </div>

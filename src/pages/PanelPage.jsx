@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../services/store.jsx'
 import { puede } from '../services/permisos.js'
 import { suscribirVista } from '../services/notificaciones.js'
@@ -10,11 +10,13 @@ import VentaDirecta from '../components/venta/VentaDirecta.jsx'
 import MenuAdmin from '../components/admin/MenuAdmin.jsx'
 import ConfigAdmin from '../components/admin/ConfigAdmin.jsx'
 import SuperPage from '../components/super/SuperPage.jsx'
+import EstacionPage from '../components/estacion/EstacionPage.jsx'
+import { iniciarEstacion, detenerEstacion, estacionRecordada, actualizarConfig } from '../services/estacion.js'
 
 // Los avisos del sistema (al pulsarlos) y los atajos del ícono de la PWA llegan como
 // '#salon', '#cocina', '#caja'. No existe pantalla de cocina: lo enviado a preparar se ve
 // en el mapa del salón, así que '#cocina' abre el salón.
-const VISTAS = { '#salon': 'salon', '#cocina': 'salon', '#caja': 'caja', '#venta': 'venta', '#menu': 'menu', '#config': 'config' }
+const VISTAS = { '#salon': 'salon', '#cocina': 'salon', '#caja': 'caja', '#estacion': 'estacion', '#venta': 'venta', '#menu': 'menu', '#config': 'config' }
 
 // Panel de la app (la ruta /panel). Es el equivalente al PanelPage.jsx de Catering Control:
 // el shell con la barra de arriba y el módulo activo. Los ids de módulo NO se traducen (son
@@ -28,8 +30,21 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
 
   const modulos = [{ id: 'salon', nombre: t('app.mod.salon') }, { id: 'caja', nombre: t('app.mod.caja') }, { id: 'venta', nombre: t('app.mod.venta') }]
   if (puede(sesion.rol, 'gestionar_menu')) modulos.push({ id: 'menu', nombre: t('app.mod.menu') })
-  if (sesion.rol === 'admin') modulos.push({ id: 'config', nombre: t('app.mod.config') })
+  if (sesion.supabase && (sesion.rol === 'admin' || sesion.rol === 'cajero')) modulos.push({ id: 'estacion', nombre: t('app.mod.estacion') })
+  modulos.push({ id: 'config', nombre: t('app.mod.config') }) // todos: idioma y tema; el resto solo admin
   if (sesion.es_super) modulos.push({ id: 'super', nombre: tOr('app.mod.super', 'Super') })
+
+  // Estación de impresión: si esta PC quedó configurada como estación, arranca sola al entrar
+  // (y sigue imprimiendo aunque se cambie de módulo). Se apaga al salir de la sesión.
+  const configRef = useRef(s.config)
+  configRef.current = s.config
+  useEffect(() => { actualizarConfig(() => configRef.current || {}) }, [s.config])
+  const puedeEstacion = Boolean(sesion.supabase) && (sesion.rol === 'admin' || sesion.rol === 'cajero')
+  useEffect(() => {
+    if (!puedeEstacion) return undefined
+    if (estacionRecordada()) iniciarEstacion(() => configRef.current || {})
+    return () => detenerEstacion({ recordar: true })
+  }, [puedeEstacion, sesion.empresaId]) // eslint-disable-line
 
   // El hash solo cambia el módulo si ese módulo está habilitado para este rol.
   const permitidos = modulos.map(m => m.id).join(',')
@@ -66,6 +81,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
       {modulo === 'caja' && <CajaPage rol={sesion.rol} sesion={sesion} />}
       {modulo === 'venta' && <VentaDirecta rol={sesion.rol} sesion={sesion} />}
       {modulo === 'menu' && <MenuAdmin rol={sesion.rol} />}
+      {modulo === 'estacion' && <EstacionPage rol={sesion.rol} sesion={sesion} />}
       {modulo === 'config' && <ConfigAdmin rol={sesion.rol} sesion={sesion} />}
       {modulo === 'super' && sesion.es_super && <SuperPage sesion={sesion} />}
     </div>

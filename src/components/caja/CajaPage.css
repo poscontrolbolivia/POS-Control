@@ -48,3 +48,9 @@
   .caja-dos{grid-template-columns:1fr 1fr;align-items:start}
   .caja-form input{min-width:160px}
 }
+
+.caja-usuarios{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.caja-user-chip{background:var(--card-2);border:1.5px solid var(--line-fuerte);border-radius:999px;padding:3px 12px;font-size:.85rem}
+.caja-traspaso{background:color-mix(in srgb,var(--btn-violet) 10%,var(--card));border:1.5px solid var(--btn-violet);border-radius:12px;padding:10px;margin-bottom:10px}
+.caja-traspaso ul{margin:6px 0;padding-left:18px}
+.caja-traspaso li{display:flex;justify-content:space-between;gap:10px;max-width:320px}

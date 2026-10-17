@@ -1,3 +1,5 @@
+> **Nota v0.7:** el backend vive en SOLO 2 archivos SQL: `supabase/setup.sql` (todo, idempotente) y `supabase/super-admin.sql`. Las menciones a "migraciones", `schema.sql` o `00x_*.sql` en este documento se refieren a lo que hoy está dentro de `setup.sql`.
+
 # GUÍA · POS Control (versión gratuita multiempresa)
 
 Guía de producto y decisiones de diseño. Referencia de inspiración: **Soft Restaurant** (simplicidad, configuración amplia, flujo mesa→comanda→cuenta→caja), corregido con lo aprendido de otros sistemas en los que trabajó el dueño.
@@ -98,8 +100,8 @@ La validación real va en la base (RLS/RPC); el mapa de permisos en el cliente e
 - Tablas de negocio/catálogo: `empresas, perfiles, membresias, zonas, mesas, secciones_menu, productos, cuentas, cuenta_mesas, cuenta_items, pagos, turnos_caja`.
 - **Tablas de plataforma OCULTAS** (migración 002): `limites` (cuota de artículos), `throttle` (anti-fuerza-bruta), `auditoria` (rastro de acciones privilegiadas). `force row level security` sin políticas + `revoke all` desde `public/anon/authenticated` ⇒ el tenant no las ve ni por REST (403); solo se escriben desde funciones `security definer` y se leen por RPC privativas del super. Convención asociada: toda función pública nueva lleva `revoke all … from public, anon` + `grant execute … to authenticated` (a `anon` solo en pre-login) + `set search_path = ''`.
 - RPCs atómicas de negocio: `abrir_cuenta, abrir_venta_directa, agregar_items, cambiar_qty_item, poner_nota, enviar_items, anular_item, unir_mesas, separar_mesa, mover_items, aplicar_extras, actualizar_comensales (003), cobrar_cuenta, abrir_turno, registrar_movimiento_caja, cerrar_turno`. RPCs de plataforma (solo super): `es_super, fijar_empresa, super_listar_empresas, super_exportar_empresa, super_importar_empresa, super_ajustar_empresa, super_ver_cuota, super_listar_auditoria, super_registrar_exporte`; pre-login: `empresa_por_codigo` (con throttle).
-- **Base de datos**: un solo archivo, `supabase/setup.sql` (idempotente, se pega completo en el SQL Editor). Para nombrar un super admin: `supabase/super-admin.sql`.
-- Ver `supabase/setup.sql` + `supabase/` y `docs/CONTRATO.md`. El cliente ya está cableado a Supabase (v0.3): `store.jsx` mantiene el modo demo y la capa `tiendaSupabase.js` traduce cada acción a su RPC/escritura 1:1.
+- **Orden de deploy de migraciones** (idempotentes, pegar en el SQL Editor; detalle en CONTRATO §8): `supabase/setup.sql` → `supabase/setup.sql` → `002_seguridad.sql` → `003_comensales.sql`. En el proyecto real las cuatro están aplicadas.
+- Ver `supabase/setup.sql` + `supabase/migraciones/` y `docs/CONTRATO.md`. El cliente ya está cableado a Supabase (v0.3): `store.jsx` mantiene el modo demo y la capa `tiendaSupabase.js` traduce cada acción a su RPC/escritura 1:1.
 
 ## 11. Versión gratuita → de pago (fogging de empresas)
 
@@ -152,7 +154,7 @@ Petición del dueño: "que el super admin pueda acceder a todas las empresas, qu
 - **Quién es**: una fila en `public.supers` (hoy solo el uid del dueño). No es un rol de negocio: admin/cajero/mesero siguen siendo los únicos roles dentro de una empresa.
 - **Puede**: listar todas las empresas con contadores (`super_listar_empresas`), **entrar y operar** cualquier empresa sin tener membresía (`fijar_empresa` + header `X-Session-Id`; desde 002 `private.fijar_empresa` acepta super y `private.mi_rol()` le da rol admin efectivo), leer sus datos, exportar/importar, ajustar la cuota de artículos (`super_ajustar_empresa`/`super_ver_cuota`) y leer la auditoría (`super_listar_auditoria`).
 - **No puede**: los RPCs de operación siguen validando empresa y rol para cualquiera; el super solo obtiene privilegios porque `public.supers` lo autoriza explícitamente, y cada "Entrar" queda auditado (`super_entro`).
-- **Migrar el schema**: `supabase/setup.sql` funciona sin la tabla `supers` gracias a `private.es_super_compat()`; las migraciones se aplican en orden (§10): 001 → 002 → 003.
+- **Migrar el schema**: `schema.sql` funciona sin la tabla `supers` gracias a `private.es_super_compat()`; las migraciones se aplican en orden (§10): 001 → 002 → 003.
 
 ### 15.1 Exportar / importar (del plan gratis al plan de pago)
 
@@ -166,7 +168,7 @@ Petición del dueño: "que el super admin pueda acceder a todas las empresas, qu
 
 `src/i18n/` con diccionarios `es/en/pt` de claves idénticas, hook `useIdioma()` y `t(clave, params)`; el idioma activo se guarda en `localStorage['pos-idioma-app']` y se refleja en `document.documentElement.lang`. El español es la fuente de verdad: si falta una clave, se muestra el texto español y, en último término, la propia clave (nunca un vacío). Ticket y comanda se imprimen en el idioma activo manteniendo las 32 columnas.
 
-### 15.3 Seguridad de plataforma (setup.sql) — paridad con Catering Control
+### 15.3 Seguridad de plataforma (002_seguridad.sql) — paridad con Catering Control
 
 - **Cuota oculta** (§11): vive en `public.limites`, tabla deny-all; el comercio no puede leerla ni editarla (REST 403). Se exige con trigger en `productos`, no por RPC, porque el catálogo se escribe por INSERT directo. El ajuste solo lo hace el super con `super_ajustar_empresa`/`super_ver_cuota`.
 - **Auditoría** (`public.auditoria`): registra entradas del super a empresas ajenas, ajustes de cuota, exportaciones (`super_registrar_exporte` tras descargar el .json), importaciones, agotamiento del throttle y cambios de comensales. Tabla oculta; única lectura: `super_listar_auditoria(empresa, límite≤1000)`.
@@ -199,7 +201,7 @@ Detalles, la tabla completa de equivalencias con la app vieja y "dónde está X"
 
 ## 18. Alta del negocio, equipo y claves olvidadas (v0.5)
 
-**Crear negocio desde el login** (`src/pages/LoginPage.jsx`, pantalla `alta`): botón "Crear mi negocio" → nombre del negocio, código, tu nombre, correo y clave. Llama a `sb.auth.signUp()` con `options.data = { alta_empresa: true, codigo_empresa, nombre_empresa, nombre, display_name }` y, como el proyecto tiene autoconfirmación desactivada, la respuesta ya trae sesión: se entra derecho al panel como `admin`. Quién hace el negocio es **la base**: el trigger `private.registrar_empresa_del_registrado()` (migración `setup.sql`) crea la empresa, la membresía de administrador, la zona **Salón con 8 mesas** de capacidad 4 y la cuota (`limites` lo siembra `trg_nueva_cuota` de 002).
+**Crear negocio desde el login** (`src/pages/LoginPage.jsx`, pantalla `alta`): botón "Crear mi negocio" → nombre del negocio, código, tu nombre, correo y clave. Llama a `sb.auth.signUp()` con `options.data = { alta_empresa: true, codigo_empresa, nombre_empresa, nombre, display_name }` y, como el proyecto tiene autoconfirmación desactivada, la respuesta ya trae sesión: se entra derecho al panel como `admin`. Quién hace el negocio es **la base**: el trigger `private.registrar_empresa_del_registrado()` (migración `004_altas.sql`) crea la empresa, la membresía de administrador, la zona **Salón con 8 mesas** de capacidad 4 y la cuota (`limites` lo siembra `trg_nueva_cuota` de 002).
 
 El código de negocio es lo que escribirán los empleados para entrar: 3-24 caracteres `a-z 0-9 . _ -` (el campo lo fuerza minúsculas y quita lo inválido mientras se escribe; el mismo regex valida en el cliente y en la base). Si está repetido, el aviso sale en el formulario (`alta.codigoTomado`), porque se consulta `empresa_por_codigo` antes de registrarse y el trigger además lo rechaza con `alta_codigo_tomado`.
 
@@ -209,7 +211,7 @@ El código de negocio es lo que escribirán los empleados para entrar: 3-24 cara
 - Si es **administrador** del negocio → botón que abre WhatsApp con el mensaje ya escrito a `SOPORTE_WHATSAPP` (`src/config.js`, `59177299692`) con negocio y correo. Como super se responde entrando al panel Super → "Entrar" en esa empresa → Configuración → Equipo → Nueva clave (002 le da rol `admin` efectivo dentro de la empresa); el atajo por API es `super_resetear_clave`, todavía sin pantalla propia.
 - Si es **cajero o mesero** → el texto le dice que pida clave a un administrador de su negocio, que se la da desde esa misma pantalla.
 
-**Y el super, ¿quién lo crea?** No sale de estas pantallas: se mintea desde el SQL Editor con la migración `super-admin.sql` ya aplicada ⇒ `select public.crear_super('tu@correo.com', 'ClaveSegura', 'Alex');`. Es re-pegable: si el correo existe, solo lo promove y no toca la clave (para cambiarla, el cuarto parámetro en `true`). `quitar_super('correo')` quita la marca sin borrar la cuenta. Detrás de `public.es_super()` solo hay una fila en `public.supers`, así que tampoco se puede "olvidar" el super: `select * from public.supers` lo muestra.
+**Y el super, ¿quién lo crea?** No sale de estas pantallas: se mintea desde el SQL Editor con la migración `005_super_usuario.sql` ya aplicada ⇒ `select public.crear_super('tu@correo.com', 'ClaveSegura', 'Alex');`. Es re-pegable: si el correo existe, solo lo promove y no toca la clave (para cambiarla, el cuarto parámetro en `true`). `quitar_super('correo')` quita la marca sin borrar la cuenta. Detrás de `public.es_super()` solo hay una fila en `public.supers`, así que tampoco se puede "olvidar" el super: `select * from public.supers` lo muestra.
 
 ## 19. Despliegue en Cloudflare Pages (pos-control.pages.dev)
 

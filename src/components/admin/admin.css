@@ -106,3 +106,26 @@
   .adm-prod button{flex:1;min-width:90px}
   .adm-card-cab .sp{display:none}
 }
+
+/* ── Impresoras por grupos ── */
+.imp-grupos{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.imp-grupo{display:flex;flex-direction:column;gap:10px;background:var(--card-2);border:1.5px solid var(--line-fuerte);border-radius:14px;padding:12px}
+.imp-grupo.tickets{border-style:dashed}
+.imp-grupo-cab{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.imp-nombre{flex:1 1 140px;min-width:0;font-weight:700;font-size:1rem}
+.imp-opciones{display:flex;gap:10px;flex-wrap:wrap}
+.imp-opciones .adm-campo{flex:1 1 130px}
+.imp-secciones{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.imp-seccion{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--card-2);border:1.5px solid var(--line);border-radius:10px;padding:6px 10px;font-weight:600}
+.imp-seccion select{min-width:110px}
+
+/* ── Menú: secciones plegables ── */
+.menu-barra{margin:-4px 0 0}
+.menu-grupo{display:inline-flex;align-items:center;gap:6px;font-size:.9rem;font-weight:600;border:1.5px solid var(--line-fuerte);border-radius:10px;padding:2px 8px;background:var(--card)}
+.menu-grupo select{border:0;background:transparent;min-height:38px;padding:4px}
+.menu-sec-cab{row-gap:8px}
+.menu-toggle{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;padding:4px 6px;min-height:40px;flex:0 1 auto;text-align:left}
+.menu-toggle:hover:not(:disabled){background:var(--card-2)}
+.menu-toggle h3{margin:0;font-size:1.1rem}
+.menu-flecha{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--ac);color:#fff;font-size:.8rem}
+.menu-chip-imp{background:color-mix(in srgb,var(--btn-orange) 18%,var(--card));color:var(--ink);border:1px solid color-mix(in srgb,var(--btn-orange) 60%,var(--line))}

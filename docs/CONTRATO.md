@@ -1,6 +1,8 @@
+> **Nota v0.7:** el backend vive en SOLO 2 archivos SQL: `supabase/setup.sql` (todo, idempotente) y `supabase/super-admin.sql`. Las menciones a "migraciones", `schema.sql` o `00x_*.sql` en este documento se refieren a lo que hoy está dentro de `setup.sql`.
+
 # CONTRATO · Supabase backend ↔ cliente POS
 
-**Estado:** v1.1 · IA-1 + hilo principal · Archivos de referencia: `supabase/setup.sql` + `supabase/setup.sql` → `setup.sql` → `setup.sql` (pegar en el SQL editor en ese orden; ver §8; idempotentes).
+**Estado:** v1.1 · IA-1 + hilo principal · Archivos de referencia: `supabase/setup.sql` + `supabase/setup.sql` → `002_seguridad.sql` → `003_comensales.sql` (pegar en el SQL editor en ese orden; ver §8; idempotentes).
 **Destinatarios:** IA-2 (Salón/operación), IA-3 (login/layout/gestión), y cualquier contribuidor futuro.
 Este documento define el modelo de datos, las RPCs con firma exacta, las convenciones y el mapeo 1:1 desde las acciones locales de `src/services/store.jsx` (hoy localStorage) hacia Supabase.
 
@@ -19,7 +21,7 @@ Este documento define el modelo de datos, las RPCs con firma exacta, las convenc
 
 ---
 
-## 1. Modelo de datos (resumen de `supabase/setup.sql`)
+## 1. Modelo de datos (resumen de `schema.sql`)
 
 ### Tablas maestro / catálogo (SELECT para todos; escritura directa solo rol admin vía RLS)
 
@@ -33,7 +35,7 @@ Este documento define el modelo de datos, las RPCs con firma exacta, las convenc
 | `secciones_menu` | `id`, `empresa_id`, `nombre`, `orden` | ← `s.secciones` |
 | `productos` | `id`, `empresa_id`, `seccion_id`, `nombre`, `precio numeric(10,2)`, `activo`, `imagen_path text NULL` | ← `s.productos`. Borrar = `activo=false` (histórico intacto). `imagen_path` (002): ruta de Storage con CHECK de forma `productos/{uuid-empresa}/{uuid}.{webp|jpg}`; el miniato se muestra a 45×45 px y se guarda a 90 px (2× retina) en el bucket público `pos-imagenes`. |
 
-### Tablas de plataforma (setup.sql) — OCULTAS para el tenant
+### Tablas de plataforma (002_seguridad.sql) — OCULTAS para el tenant
 
 | Tabla | Columnas clave | Notas |
 |---|---|---|
@@ -198,7 +200,7 @@ Todas empiezan con `if not public.es_super() then raise exception 'requiere supe
 
 Reglas de negocio de la cuota (trigger `private.controlar_cuota_productos` sobre `productos`): empresa nueva nace con 30 (trigger `trg_nueva_cuota` en `empresas`); dar de baja (`activo=false`) nunca se bloquea; editar precio/nombre/foto no consume; **reactivar un artículo inactivo sí consume**; `max_productos NULL` = ilimitado; los super están exentos.
 
-### 3.20 Altas y equipo — migración setup.sql
+### 3.20 Altas y equipo — migración 004_altas.sql
 Ninguna de estas funciones acepta `p_empresa_id`: usan `private.empresa_activa()`, así que el cliente las llama con `rpc(nombre, params, { conEmpresa: false })` (si se les manda `p_empresa_id`, PostgREST no encuentra la firma y devuelve 404 PGRST202).
 
 | Objeto | Firma y comportamiento |
@@ -212,7 +214,7 @@ Ninguna de estas funciones acepta `p_empresa_id`: usan `private.empresa_activa()
 
 **Claves olvidadas (decisión del dueño):** no hay reset por correo. Un administrador que no puede entrar escribe al WhatsApp de `SOPORTE_WHATSAPP` (`src/config.js`) y el super le fija clave — o bien entra en esa empresa desde el panel Super (002 le da rol `admin` efectivo) y usa **Configuración → Equipo → Nueva clave**. Un cajero/mesero recibe clave nueva de un administrador de su negocio desde esa misma pantalla.
 
-### 3.21 Quién es super — migración super-admin.sql
+### 3.21 Quién es super — migración 005_super_usuario.sql
 El super **no se crea desde la app**: el alta self-service (`004`) solo sabe dar de alta empresas y su admin. La marca de super es una fila en `public.supers`, y se mintea desde el SQL Editor con:
 
 ```sql
@@ -275,10 +277,10 @@ select public.crear_super('dueno@correo.com', 'SuClaveSegura', 'Alex');
 
 ## 7. Fuera de alcance en v1 (para coordinar)
 
-- Alta de empresas/miembros desde la app (hoy: dashboard/SQL; ver seed comentado al final de `supabase/setup.sql`). **Primer admin:** `update public.membresias set user_id = auth.uid() ...` funciona SOLO en sesión autenticada; en el SQL editor usar el insert por email (seed Opción A, comentado y listo).
+- Alta de empresas/miembros desde la app (hoy: dashboard/SQL; ver seed comentado al final de `schema.sql`). **Primer admin:** `update public.membresias set user_id = auth.uid() ...` funciona SOLO en sesión autenticada; en el SQL editor usar el insert por email (seed Opción A, comentado y listo).
 - `dividir_cuenta` (por ítems/partes/personas): se compone en el cliente con `separar_mesa` + `mover_items` + `cobrar_cuenta`; RPC dedicada queda para v2 si hace falta atomicidad extra.
 - Ticket impreso: IA-3 consume el jsonb de `cobrar_cuenta`; no toca la base.
-- ~~Backups/migraciones versionadas~~ → ya se usan: SQL numerado e idempotente en `supabase/` (pegar en el SQL Editor; el flujo con `supabase migration` de CLI queda para cuando haya proyecto local vinculado). Orden de deploy en §8.
+- ~~Backups/migraciones versionadas~~ → ya se usan: SQL numerado e idempotente en `supabase/migraciones/` (pegar en el SQL Editor; el flujo con `supabase migration` de CLI queda para cuando haya proyecto local vinculado). Orden de deploy en §8.
 
 ---
 
@@ -291,10 +293,10 @@ Idempotentes, cada una se pega completa en el SQL Editor del proyecto Supabase, 
 3. `supabase/setup.sql` — cuota oculta (`limites`), auditoría, storage de miniaturas, throttle, hardening, super-entrar, export/import **v2 con histórico**. **Requiere 001** (usa `public.es_super()`/`supers`).
 4. `supabase/setup.sql` — RPC `actualizar_comensales`. Degrada sin 002 (simplemente no audita), pero el orden correcto es aplicarla después.
 5. `supabase/setup.sql` — trigger de alta self-service de empresa + RPCs `equipo_*` y `super_resetear_clave`. **Requiere 001 y 002** (`es_super`, `auditar`, `exigir_rol`, `trg_nueva_cuota`).
-6. `supabase/super-admin.sql` — funciones `crear_super` / `quitar_super` para mintear el super desde el SQL Editor. **Requiere 001** (`public.supers`) y degrada sin 002 (no audita). Después de pegarla, una línea: `select public.crear_super('tu@correo.com', 'ClaveSegura', 'Alex');`
+6. `supabase/setup.sql` — funciones `crear_super` / `quitar_super` para mintear el super desde el SQL Editor. **Requiere 001** (`public.supers`) y degrada sin 002 (no audita). Después de pegarla, una línea: `select public.crear_super('tu@correo.com', 'ClaveSegura', 'Alex');`
 
 **Ajuste del dashboard que necesita el alta self-service:** Authentication → Sign In / Up ⇒ **Allow new signups ON** y **Confirm email OFF** (sin autoconfirmación el `signUp` no devuelve sesión y el negocio queda a medio crear hasta que el usuario abra el correo). Comprobado y dejado ON/OFF desde la API de gestión el 2026-10-16 (`mailer_autoconfirm: true`, `disable_signup: false`).
 
-**Estado en el proyecto Supabase real (`oeyrnenclklmczlfoxzy`):** setup.sql, setup.sql, **setup.sql** y **super-admin.sql ya están aplicadas** (2026-10-16; 004 dos veces: la primera aplicación falló en `equipo_listar` con 42804 y se re-aplicó con el `::text` corregido); schema y 001 lo estaban desde v0.3. Cada archivo termina con un `select` de verificación (en el SQL Editor `auth.uid()` es NULL ⇒ solo devuelve contados: filas de `limites`/`throttle`/`auditoria`, columna `imagen_path`, triggers, políticas de Storage, bucket). Para probar una RPC de negocio con sesión real desde el editor: `begin; select set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', true); select set_config('app.empresa_id','<uuid>', true); select * from <rpc>(); commit;`.
+**Estado en el proyecto Supabase real (`oeyrnenclklmczlfoxzy`):** 002_seguridad.sql, 003_comensales.sql, **004_altas.sql** y **005_super_usuario.sql ya están aplicadas** (2026-10-16; 004 dos veces: la primera aplicación falló en `equipo_listar` con 42804 y se re-aplicó con el `::text` corregido); schema y 001 lo estaban desde v0.3. Cada archivo termina con un `select` de verificación (en el SQL Editor `auth.uid()` es NULL ⇒ solo devuelve contados: filas de `limites`/`throttle`/`auditoria`, columna `imagen_path`, triggers, políticas de Storage, bucket). Para probar una RPC de negocio con sesión real desde el editor: `begin; select set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', true); select set_config('app.empresa_id','<uuid>', true); select * from <rpc>(); commit;`.
 
 **Prueba hecha de `crear_super` (2026-10-16, con cuenta desechable luego borrada):** la cuenta creada inicia sesión por `POST /auth/v1/token?grant_type=password` (200 con `access_token`; ojo, el parámetro es `grant_type`, no `grant`) y `POST /rest/v1/rpc/es_super` con ese token devuelve `true`. Re-pegar `crear_super` sin el flag devolvió el mismo uuid y mantuvo la clave vieja (login viejo 200, login con la clave nueva 400); con `p_reemplazar_clave := true` entró la clave nueva (200). `quitar_super` dejó `supers` en su valor anterior y la cuenta siguió pudiendo entrar. Borrar el usuario de prueba con `delete from auth.users` limpió en cascada `identities`, `perfiles` y `supers` (0 huérfanos).
