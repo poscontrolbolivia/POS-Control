@@ -3767,3 +3767,153 @@ revoke all on function public.gestionar_impresion(text, uuid, uuid) from public,
 grant execute on function public.gestionar_impresion(text, uuid, uuid) to authenticated;
 
 commit;
+
+-- ################################################################
+-- ## 008 · retención de datos (plan gratis = 6 meses), «mi plan» y exportar mis datos
+-- ################################################################
+-- · Plan gratis: cada noche se borran de verdad las ventas cerradas, turnos cerrados y registros
+--   de auditoría con más de `retencion_meses` (6 por defecto). Mesas, menú, imágenes y equipo
+--   NO se tocan. El plan 'pago' no se purga nunca.
+-- · Borrar un artículo/sección desde la app ya BORRA la fila (y la imagen en Storage); los items
+--   de ventas viejas conservan nombre y precio (snapshot), por eso no se rompe el historial.
+-- · El admin de cada empresa puede bajar una copia de sus datos (exportar_mi_empresa).
+alter table public.limites add column if not exists retencion_meses integer not null default 6;
+alter table public.limites drop constraint if exists limites_retencion_chk;
+alter table public.limites add constraint limites_retencion_chk check (retencion_meses between 1 and 120);
+
+create or replace function private.purgar_datos_antiguos()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_cuentas integer := 0; v_turnos integer := 0; v_aud integer := 0; v_thr integer := 0;
+begin
+  with b as (
+    delete from public.cuentas c using public.limites l
+     where l.empresa_id = c.empresa_id and l.plan = 'gratis'
+       and c.estado = 'cerrada'
+       and c.cerrada_en < now() - make_interval(months => l.retencion_meses)
+    returning 1)
+  select count(*) into v_cuentas from b;       -- cascada: cuenta_items, pagos, cuenta_mesas
+
+  with b as (
+    delete from public.turnos_caja t using public.limites l
+     where l.empresa_id = t.empresa_id and l.plan = 'gratis'
+       and t.cerrado_en is not null
+       and t.cerrado_en < now() - make_interval(months => l.retencion_meses)
+    returning 1)
+  select count(*) into v_turnos from b;
+
+  with b as (
+    delete from public.auditoria a
+     where (a.empresa_id is not null and exists (
+              select 1 from public.limites l
+               where l.empresa_id = a.empresa_id and l.plan = 'gratis'
+                 and a.en < now() - make_interval(months => l.retencion_meses)))
+        or (a.empresa_id is null and a.en < now() - interval '12 months')
+    returning 1)
+  select count(*) into v_aud from b;
+
+  with b as (delete from public.throttle where hasta < now() - interval '1 day' returning 1)
+  select count(*) into v_thr from b;
+
+  if v_cuentas + v_turnos + v_aud > 0 then
+    insert into public.auditoria (empresa_id, actor, accion, detalle)
+    values (null, null, 'purga_retencion',
+            jsonb_build_object('cuentas', v_cuentas, 'turnos', v_turnos, 'auditoria', v_aud));
+  end if;
+  return jsonb_build_object('cuentas', v_cuentas, 'turnos', v_turnos, 'auditoria', v_aud, 'throttle', v_thr);
+end $fn$;
+revoke all on function private.purgar_datos_antiguos() from public, anon, authenticated;
+
+-- Para probarla a mano desde el panel de super / SQL (solo super).
+create or replace function public.super_purgar_ahora()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+begin
+  if not public.es_super() then raise exception 'requiere super'; end if;
+  return private.purgar_datos_antiguos();
+end $fn$;
+revoke all on function public.super_purgar_ahora() from public, anon;
+grant execute on function public.super_purgar_ahora() to authenticated;
+
+-- Programación diaria (04:30 UTC ≈ 00:30 en Bolivia). Si pg_cron no está habilitado, avisa y
+-- sigue: se activa en Database → Extensions → pg_cron y se vuelve a pegar este archivo.
+do $do$
+begin
+  create extension if not exists pg_cron;
+  perform cron.schedule('pos-purga-retencion', '30 4 * * *', 'select private.purgar_datos_antiguos()');
+exception when others then
+  raise notice 'pg_cron no disponible (%): la purga automática NO está programada.', sqlerrm;
+end $do$;
+
+-- Plan y retención de la empresa activa (cualquier miembro).
+create or replace function public.mi_plan(p_empresa_id uuid default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare v_emp uuid; v jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
+  select jsonb_build_object(
+           'plan', l.plan,
+           'retencion_meses', case when l.plan = 'gratis' then l.retencion_meses end,
+           'max_productos', l.max_productos)
+    into v from public.limites l where l.empresa_id = v_emp;
+  return coalesce(v, jsonb_build_object('plan', 'gratis', 'retencion_meses', 6, 'max_productos', 30));
+end $fn$;
+revoke all on function public.mi_plan(uuid) from public, anon;
+grant execute on function public.mi_plan(uuid) to authenticated;
+
+-- Copia completa de MI empresa (admin): mismo formato que super_exportar_empresa, importable
+-- con super_importar_empresa en otro proyecto (plan de pago / migración).
+create or replace function public.exportar_mi_empresa(p_empresa_id uuid default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare v_emp uuid; v jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+  select jsonb_build_object(
+    'version', 2,
+    'exportado_en', now(),
+    'empresa', (select to_jsonb(e) from public.empresas e where e.id = v_emp),
+    'zonas',       coalesce((select jsonb_agg(to_jsonb(z) order by z.orden) from public.zonas z where z.empresa_id = v_emp), '[]'),
+    'mesas',       coalesce((select jsonb_agg(to_jsonb(m) || jsonb_build_object('zona_nombre',
+                                      (select z.nombre from public.zonas z where z.id = m.zona_id)))
+                                 from public.mesas m where m.empresa_id = v_emp), '[]'),
+    'secciones',   coalesce((select jsonb_agg(to_jsonb(s) order by s.orden) from public.secciones_menu s where s.empresa_id = v_emp), '[]'),
+    'productos',   coalesce((select jsonb_agg(to_jsonb(p) || jsonb_build_object('seccion_nombre', s.nombre)) from public.productos p
+                             left join public.secciones_menu s on s.id = p.seccion_id where p.empresa_id = v_emp), '[]'),
+    'cuentas',     coalesce((select jsonb_agg(to_jsonb(c)) from public.cuentas c where c.empresa_id = v_emp), '[]'),
+    'cuenta_mesas',coalesce((select jsonb_agg(to_jsonb(cm)) from public.cuenta_mesas cm
+                             join public.cuentas c on c.id = cm.cuenta_id where c.empresa_id = v_emp), '[]'),
+    'cuenta_items',coalesce((select jsonb_agg(to_jsonb(ci)) from public.cuenta_items ci
+                             join public.cuentas c on c.id = ci.cuenta_id where c.empresa_id = v_emp), '[]'),
+    'pagos',       coalesce((select jsonb_agg(to_jsonb(pg)) from public.pagos pg
+                             join public.cuentas c on c.id = pg.cuenta_id where c.empresa_id = v_emp), '[]'),
+    'turnos',      coalesce((select jsonb_agg(to_jsonb(t)) from public.turnos_caja t where t.empresa_id = v_emp), '[]'),
+    'equipo',      coalesce((select jsonb_agg(jsonb_build_object('user_id', m.user_id, 'correo', u.email,
+                                                                 'rol', m.rol, 'nombre', coalesce(p.display_name,'')))
+                             from public.membresias m
+                             join auth.users u on u.id = m.user_id
+                             left join public.perfiles p on p.user_id = m.user_id
+                             where m.empresa_id = v_emp), '[]')
+  ) into v;
+  perform private.auditar(v_emp, 'exportar_datos', '{}'::jsonb);
+  return v;
+end $fn$;
+revoke all on function public.exportar_mi_empresa(uuid) from public, anon;
+grant execute on function public.exportar_mi_empresa(uuid) to authenticated;
+

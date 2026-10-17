@@ -151,7 +151,7 @@ function reducer(s, a) {
 
     case 'seccion+': return { ...s, secciones: [...s.secciones, { id: uid(), orden: s.secciones.length + 1, ...a.seccion }] }
     case 'seccion~': return { ...s, secciones: s.secciones.map(x => (x.id === a.id ? { ...x, ...a.cambios } : x)) }
-    case 'seccion-': return { ...s, secciones: s.secciones.filter(x => x.id !== a.id), productos: s.productos.map(p => (p.seccionId === a.id ? { ...p, activo: false, huerfano: true } : p)) }
+    case 'seccion-': return { ...s, secciones: s.secciones.filter(x => x.id !== a.id), productos: s.productos.filter(p => p.seccionId !== a.id) }
     case 'producto+': return { ...s, productos: [...s.productos, { id: uid(), activo: true, ...a.producto }] }
     case 'producto~': return { ...s, productos: s.productos.map(p => (p.id === a.id ? { ...p, ...a.cambios } : p)) }
     case 'producto-': return { ...s, productos: s.productos.filter(p => p.id !== a.id) }

@@ -56,7 +56,10 @@ export function leerPreferenciaCruda() {
 
 /** Lee la preferencia persistida (con defecto en español). */
 export function leerPreferencia() {
-  return leerPreferenciaCruda() ?? IDIOMA_DEFECTO
+  if (leerPreferenciaCruda() !== null) return leerPreferenciaCruda()
+  // Sin elección guardada: el idioma del navegador si lo soportamos, si no el defecto.
+  const nav = (typeof navigator !== 'undefined' && navigator.language ? navigator.language : '').slice(0, 2).toLowerCase()
+  return IDIOMAS.includes(nav) ? nav : IDIOMA_DEFECTO
 }
 
 function escribirPreferencia(idioma) {

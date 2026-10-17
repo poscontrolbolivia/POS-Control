@@ -5,6 +5,8 @@ import SelectorIdioma from '../../i18n/SelectorIdioma.jsx'
 import ThemeSelect from '../login/ThemeSelect.jsx'
 import ImpresorasAdmin from './ImpresorasAdmin.jsx'
 import EquipoAdmin from './EquipoAdmin.jsx'
+import PlanDatos from './PlanDatos.jsx'
+import { USAR_SUPABASE } from '../../config.js'
 import './admin.css'
 
 // Configuración del negocio (solo rol admin): nombre, moneda, IVA y propina sugerida.
@@ -97,6 +99,7 @@ export default function ConfigAdmin({ rol, sesion }) {
       {/* El equipo solo se muestra al rol admin de la sesión (la base valida el permiso igual,
           pero un cajero no tiene nada que hacer aquí). */}
       {(sesion ? sesion.rol === 'admin' : rol === 'admin') && <EquipoAdmin rol={rol} sesion={sesion} />}
+      {USAR_SUPABASE && sesion?.supabase && <PlanDatos sesion={sesion} />}
     </div>
   )
 }

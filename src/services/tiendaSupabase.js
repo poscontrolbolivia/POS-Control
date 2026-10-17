@@ -4,6 +4,7 @@
 // las filas afectadas (cuentas/items/pagos/mesas/turno). Nunca deja estado corrupto:
 // ante error RPC, re-sincroniza desde la base y propaga el mensaje para el toast.
 import { sb, rpc, fijarEmpresa } from './supabase.js'
+import { borrarImagen } from './imagenProducto.js'
 
 const N = x => Number(x ?? 0)
 const ts = iso => (iso ? new Date(iso).getTime() : undefined)
@@ -365,10 +366,13 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       return E
     }
     case 'seccion-': {
-      // CONTRATO: productos de la sección → activo=false; luego delete de la sección.
-      const p1 = await sb.from('productos').update({ activo: false }).eq('seccion_id', rid(mapa, a.id))
+      // Borrar sección = borrar también sus artículos (filas + fotos), no dejarlos ocultos.
+      const secId = rid(mapa, a.id)
+      const { data: delSec } = await sb.from('productos').select('imagen_path').eq('seccion_id', secId)
+      const p1 = await sb.from('productos').delete().eq('seccion_id', secId)
       if (p1.error) throw new Error(p1.error.message)
-      const p2 = await sb.from('secciones_menu').delete().eq('id', rid(mapa, a.id))
+      for (const f of delSec || []) { if (f.imagen_path) { try { await borrarImagen(sb, f.imagen_path) } catch { /* foto ya borrada */ } } }
+      const p2 = await sb.from('secciones_menu').delete().eq('id', secId)
       if (p2.error) throw new Error(p2.error.message)
       const [productos, secciones] = await Promise.all([
         selectAll(sb.from('productos').select('*').eq('empresa_id', empresaId).order('nombre')),
@@ -390,9 +394,13 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       return E
     }
     case 'producto-': {
-      // Borrar = desactivar (los snapshots históricos se conservan).
-      const { error } = await sb.from('productos').update({ activo: false }).eq('id', rid(mapa, a.id))
+      // Borrar = BORRAR de verdad (fila + foto en Storage) para no llenar la base. Las ventas
+      // viejas conservan nombre y precio (snapshot) y producto_id queda en null (ON DELETE SET NULL).
+      const id = rid(mapa, a.id)
+      const { data: fila } = await sb.from('productos').select('imagen_path').eq('id', id).maybeSingle()
+      const { error } = await sb.from('productos').delete().eq('id', id)
       if (error) throw new Error(error.message)
+      if (fila?.imagen_path) { try { await borrarImagen(sb, fila.imagen_path) } catch { /* foto ya borrada */ } }
       return { ...E, productos: E.productos.filter(p => p.id !== a.id) }
     }
 

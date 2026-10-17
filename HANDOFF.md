@@ -1,3 +1,18 @@
+# v0.12.0 · Prueba de aislamiento, borrado real y retención de 6 meses (IA-2)
+- **`tests/aislamiento.mjs`** (`npm run test:aislamiento`): con 2 negocios de PRUEBA (A y B, creados con «Crear mi negocio»; variables A_EMAIL/A_PASS/B_EMAIL/B_PASS) intenta leer, insertar, modificar y borrar datos de la otra empresa en 11 tablas, llamar RPC con el id ajeno (incl. super_* y exportar), leer sin sesión, subir/listar/borrar imágenes de la carpeta ajena y escuchar Realtime. Sale con código 1 si algo falla. **No se pudo ejecutar contra el Supabase real desde aquí (sin cuentas de prueba): correrlo y repetirlo tras cada cambio del SQL.** Nota: el bucket `pos-imagenes` es público (URL exacta abre sin sesión; nombres UUID).
+- **Borrado real**: borrar un artículo ahora hace `DELETE` de la fila y borra su foto de Storage; borrar una sección borra sus artículos (filas + fotos). Las ventas viejas conservan `nombre_snapshot/precio_snapshot` (`producto_id` queda en null). Los artículos que ya estaban «desactivados» de antes NO se borran solos (no se distingue de «agotado»).
+- **Retención** (`setup.sql` §008): `limites.retencion_meses` (6) y `private.purgar_datos_antiguos()` borra cada noche (pg_cron, 04:30 UTC) cuentas cerradas (con items/pagos), turnos cerrados y auditoría con más de 6 meses, SOLO plan `gratis`; plan `pago` nunca. No toca mesas, menú, imágenes ni equipo. Si pg_cron no está habilitado el SQL avisa y no programa nada: activarlo en Database → Extensions y re-pegar. `super_purgar_ahora()` la ejecuta a mano (solo super).
+- **Mi plan / exportar**: `mi_plan()` y `exportar_mi_empresa()` (admin) + tarjeta «Plan y datos» en Configuración (aviso de retención y botón «Descargar mis datos (JSON)»). Mismo formato que `super_exportar_empresa`; se importa en otro proyecto con `super_importar_empresa`.
+- Pendiente: avisar con X días de antelación antes de que se borre lo más viejo; cambiar de plan desde la app (hoy lo hace el super); `setup.sql` §008 sin probar en una base real (solo revisado).
+
+---
+
+# v0.11.1 · Se restauran los ajustes de login perdidos (IA-2)
+Las IAs trabajaron sobre v0.6.1 y se pisaron los cambios de v0.6.2. Reaplicados sobre v0.11 sin tocar lo nuevo: empresa SOLO por selección con **Demo por defecto** (sin usuario/clave; se elige el rol; datos locales del navegador), idioma como desplegable (login, Configuración, super, legales) con idioma del navegador por defecto, botón compartir verde, «¿Olvidaste tu clave?» al final de la tarjeta, tipografías Figtree/Inter, `docs/GUÍA.md`→`GUIA.md` (NOMBRES.md se conserva: lo referencia la GUIA). 778 claves i18n coherentes, build verde.
+**Aviso para todas las IAs: trabajar siempre sobre el ÚLTIMO zip entregado y no sobre versiones anteriores.**
+
+---
+
 # v0.11 · Sesión que se mantiene al bloquear el teléfono
 - `services/sesionPersistente.js` (arranca en `App.jsx`): al desbloquear / volver a la app / recuperar internet (y cada 5 min) renueva el token si le quedan <10 min, vuelve a fijar la empresa en la conexión y dispara `pos-reanudar` (el store espera su cola y re-lee la base: no quedan mesas viejas). Solo manda al login si Supabase confirma que el refresh token ya no sirve (no por falta de red) y entonces lo explica («Tu sesión ya no es válida…»).
 - Cliente Supabase con `persistSession` + `autoRefreshToken` explícitos; se pide `navigator.storage.persist()`.
@@ -59,7 +74,7 @@ Configuración → Impresoras → «Dónde se imprime» → *En la estación de 
 - `supabase/setup.sql` — TODO el backend (esquema, RLS, RPCs, super admin, seguridad, comensales, altas/equipo, lista de empresas del login, regla "cajero anula enviados"). Idempotente y atómico: pegarlo COMPLETO en el SQL Editor, siempre que haya cambios.
 - `supabase/super-admin.sql` — crear/promover al super administrador (`select public.crear_super('correo','clave','Nombre');`), requiere setup.sql ya corrido.
 - NO crear migraciones sueltas ni seeds: todo cambio de base se edita DENTRO de setup.sql. (Las antiguas schema.sql, 001–007, seed-demo y verificar se fusionaron/eliminaron; las referencias a "migración 00x" en docs/HANDOFF antiguos ya no existen.)
-- docs/: solo quedan CONTRATO.md, GUÍA.md y NOMBRES.md (los PROMPT-IA*, HANDOFF-SUPER y HANDOFF-IDIOMAS se borraron; las menciones a ellos en secciones antiguas de este archivo son históricas).
+- docs/: solo quedan CONTRATO.md, GUIA.md y NOMBRES.md (los PROMPT-IA*, HANDOFF-SUPER y HANDOFF-IDIOMAS se borraron; las menciones a ellos en secciones antiguas de este archivo son históricas).
 
 HECHO: contraste de los 3 temas + botones de colores; bug impresoras en blanco (`abierta`); impresoras por GRUPOS Cocina/Barra/Caja
 (services/impresion.js, ImpresorasAdmin; se guardan en empresas.config, sin migrar); la comanda se reparte por grupo y sale directa;
@@ -164,7 +179,7 @@ Que un usuario **normal** con 2+ membresías no pueda saltar de empresa: hace fa
 
 # v0.3 · Seguridad + cuota + imágenes + comensales (2026-10-16)
 
-Trabajo de backend y capa de datos del hilo principal. Referencia canónica: `docs/CONTRATO.md` (§0 reglas 7-8, §1 tablas ocultas, §3.17-3.19, §8 deploy) y `docs/GUÍA.md` (§4, §10, §11, §15).
+Trabajo de backend y capa de datos del hilo principal. Referencia canónica: `docs/CONTRATO.md` (§0 reglas 7-8, §1 tablas ocultas, §3.17-3.19, §8 deploy) y `docs/GUIA.md` (§4, §10, §11, §15).
 
 ## Deploy de migraciones — ORDEN EXACTO
 1. `supabase/schema.sql`

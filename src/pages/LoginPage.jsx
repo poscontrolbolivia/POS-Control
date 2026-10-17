@@ -15,9 +15,10 @@ import '../styles/auth.css'
 import '../styles/login.css'
 
 // Login de una sola pantalla (misma apariencia que Catering Control):
-//  · EMPRESA: se ELIGE de la lista de empresas creadas (RPC public.empresas_para_login,
-//    migración 006). Si esa RPC aún no existe en la base, cae a escribir el código.
-//    La opción "Demo" prueba la app con datos locales sin cuenta.
+//  · EMPRESA: solo se ELIGE (no se escribe) de la lista de empresas creadas (RPC
+//    public.empresas_para_login, en setup.sql). "Demo" es la empresa de prueba por defecto:
+//    no pide usuario ni clave (se elige con qué rol entrar) y sus datos viven solo en este
+//    navegador. Si la lista no carga, queda solo la Demo.
 //  · Correo + clave (Supabase Auth). Tras 3 fallos seguidos el botón se bloquea 1 minuto con
 //    cuenta regresiva (bloqueo del lado del navegador; Supabase Auth además limita por su lado).
 //  · Pasos secundarios: 'empresas' (usuario con varias), 'alta' (crear negocio), 'recupera'.
@@ -47,8 +48,8 @@ export default function LoginPage({ onEntrar }) {
   const { t, tOr } = useIdioma()
   const [paso, setPaso] = useState('login') // 'login' | 'empresas' | 'alta' | 'recupera'
   const [lista, setLista] = useState(undefined) // undefined: cargando · null: sin RPC · []: sin empresas
-  const [sel, setSel] = useState('')            // id de empresa elegida, DEMO o ''
-  const [codigoTxt, setCodigoTxt] = useState('') // solo si no hay lista (RPC no instalada)
+  const [sel, setSel] = useState(DEMO)          // id de empresa elegida o DEMO (por defecto)
+  const [demoRol, setDemoRol] = useState('admin')
   const [usuario, setUsuario] = useState('')
   const [clave, setClave] = useState('')
   const [verClave, setVerClave] = useState(false)
@@ -64,7 +65,7 @@ export default function LoginPage({ onEntrar }) {
 
   const demo = !USAR_SUPABASE || sel === DEMO
   const empresaElegida = lista?.find(x => x.id === sel) || null
-  const nombreEmpresa = demo ? t('comun.miNegocio') : (empresaElegida?.nombre || codigoTxt.trim())
+  const nombreEmpresa = demo ? t('comun.miNegocio') : (empresaElegida?.nombre || '')
 
   // Carga la lista de empresas (solo código y nombre; nada de datos del negocio).
   useEffect(() => {
@@ -77,14 +78,14 @@ export default function LoginPage({ onEntrar }) {
         setLista(l)
         let previa = ''
         try { previa = localStorage.getItem(LK_EMP) || '' } catch { /* noop */ }
-        setSel(l.find(x => x.id === previa)?.id || (l.length === 1 ? l[0].id : ''))
+        setSel(l.find(x => x.id === previa)?.id || DEMO)
       })
       .catch(() => { if (vivo) setLista(null) })
     return () => { vivo = false }
   }, [])
 
   // Cuenta regresiva del bloqueo por intentos fallidos (clave = empresa + usuario).
-  const claveBloq = useMemo(() => `${demo ? DEMO : (sel || codigoTxt.trim().toLowerCase())}|${usuario.trim().toLowerCase()}`, [demo, sel, codigoTxt, usuario])
+  const claveBloq = useMemo(() => `${sel}|${usuario.trim().toLowerCase()}`, [sel, usuario])
   useEffect(() => {
     const tick = () => {
       const hasta = leerBloq()[claveBloq]?.hasta || 0
@@ -118,22 +119,14 @@ export default function LoginPage({ onEntrar }) {
     setError('')
     if (demo) {
       guardarSesionSup(null); fijarEmpresa(null)
-      const u = (s.usuariosDemo || []).find(x => x.usuario.toLowerCase() === usuario.trim().toLowerCase() && x.clave === clave)
-      if (!u) { setError(mensajeFallo(registrarFallo())); return }
-      limpiarFallos()
+      const u = (s.usuariosDemo || []).find(x => x.rol === demoRol) || { usuario: demoRol, rol: demoRol, nombre: tOr('rol.' + demoRol, demoRol) }
       onEntrar({ usuario: u.usuario, rol: u.rol, nombre: u.nombre, empresa: t('comun.miNegocio') })
       return
     }
-    if (!lista && !codigoTxt.trim()) { setError(t('login.faltaCodigo')); return }
-    if (lista && !sel) { setError(t('login.faltaEmpresa')); return }
+    const emp = empresaElegida
+    if (!emp) { setError(t('login.faltaEmpresa')); return }
     setBusy(true)
     try {
-      let emp = empresaElegida
-      if (!emp) { // sin lista: se resuelve el código escrito
-        const filas = await rpc('empresa_por_codigo', { p_codigo: codigoTxt.trim() }, { conEmpresa: false })
-        if (!filas?.length) { setError(t('login.codigoNoEncontrado')); return }
-        emp = filas[0]
-      }
       try { localStorage.setItem(LK_EMP, emp.id) } catch { /* noop */ }
       const { data, error: errSign } = await sb.auth.signInWithPassword({ email: usuario.trim(), password: clave })
       if (errSign) {
@@ -238,49 +231,56 @@ export default function LoginPage({ onEntrar }) {
           <div className="lg-mark"><BrandMark size={72} /></div>
           <div className="lg-info">
             <h1>POS Control</h1>
-            <div className="lg-tools"><ThemeSelect /><ShareAppButton /></div>
+            <div className="lg-tools"><ThemeSelect /><SelectorIdioma /><ShareAppButton /></div>
           </div>
         </div>
-        <div className="lg-idioma"><SelectorIdioma /></div>
 
         <form className="lg-form" onSubmit={e => (ENVIO[paso] ? ENVIO[paso](e) : e.preventDefault())}>
           {paso === 'login' && (
             <>
               <label className="lg-campo">
                 <span>{t('login.selEmpresa')}</span>
-                {lista === undefined ? (
-                  <select disabled><option>{t('login.cargandoEmpresas')}</option></select>
-                ) : lista ? (
-                  <select value={sel} onChange={e => { setSel(e.target.value); setError('') }}>
-                    <option value="">{t('login.elegirEmpresa')}</option>
-                    {lista.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-                    <option value={DEMO}>{t('login.empresaDemo')}</option>
-                  </select>
-                ) : USAR_SUPABASE ? (
-                  <input value={codigoTxt} onChange={e => setCodigoTxt(e.target.value)} placeholder={t('login.placeholderCodigo')} autoComplete="off" spellCheck={false} />
-                ) : (
-                  <select value={sel} disabled><option value={DEMO}>{t('login.empresaDemo')}</option></select>
-                )}
+                <select value={sel} onChange={e => { setSel(e.target.value); setError('') }} disabled={lista === undefined}>
+                  <option value={DEMO}>{t('login.empresaDemo')}</option>
+                  {(lista || []).map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                </select>
+                {USAR_SUPABASE && lista === null && <small className="auth-ayuda">{t('login.listaNoDisponible')}</small>}
               </label>
-              <label className="lg-campo">
-                <span>{demo ? t('login.labelUsuario') : t('login.labelCorreo')}</span>
-                <input value={usuario} onChange={e => setUsuario(e.target.value)} placeholder={demo ? 'admin' : t('login.placeholderCorreo')} autoComplete="username" required />
-              </label>
-              <label className="lg-campo">
-                <span>{t('login.labelClave')}</span>
-                <div className="lg-clave">
-                  <input type={verClave ? 'text' : 'password'} value={clave} onChange={e => setClave(e.target.value)} placeholder="••••" autoComplete="current-password" required />
-                  <button type="button" onClick={() => setVerClave(v => !v)} aria-label={verClave ? t('login.ocultarClave') : t('login.mostrarClave')}><Ojo off={verClave} /></button>
-                </div>
-              </label>
-              {restante > 0
+              {demo ? (
+                <>
+                  <label className="lg-campo">
+                    <span>{t('login.entrarComo')}</span>
+                    <select value={demoRol} onChange={e => setDemoRol(e.target.value)}>
+                      {['admin', 'cajero', 'mesero'].map(r => <option key={r} value={r}>{tOr('rol.' + r, r)}</option>)}
+                    </select>
+                  </label>
+                  <p className="lg-demo">{t('login.demoAviso')}</p>
+                </>
+              ) : (
+                <>
+                  <label className="lg-campo">
+                    <span>{t('login.labelCorreo')}</span>
+                    <input value={usuario} onChange={e => setUsuario(e.target.value)} placeholder={t('login.placeholderCorreo')} autoComplete="username" required />
+                  </label>
+                  <label className="lg-campo">
+                    <span>{t('login.labelClave')}</span>
+                    <div className="lg-clave">
+                      <input type={verClave ? 'text' : 'password'} value={clave} onChange={e => setClave(e.target.value)} placeholder="••••" autoComplete="current-password" required />
+                      <button type="button" onClick={() => setVerClave(v => !v)} aria-label={verClave ? t('login.ocultarClave') : t('login.mostrarClave')}><Ojo off={verClave} /></button>
+                    </div>
+                  </label>
+                </>
+              )}
+              {!demo && (restante > 0
                 ? <p className="lg-alerta lg-bloqueo" role="alert">{t('login.demasiadosIntentos', { segundos: restante })}</p>
-                : error && <p className="lg-alerta" role="alert">{error}</p>}
-              <button className="cc-btn cc-blue" type="submit" disabled={busy || restante > 0}>{busy ? t('login.entrando') : t('login.entrar')}</button>
-              {!demo && <button className="lg-link" type="button" onClick={irRecupera}>{t('login.olvidaste')}</button>}
-              {demo && <p className="lg-demo">{t('login.demoPrefijo')} {['admin', 'cajero', 'mesero'].map(u => <code key={u}>{u}/1234</code>)}</p>}
+                : error && <p className="lg-alerta" role="alert">{error}</p>)}
+              {demo && error && <p className="lg-alerta" role="alert">{error}</p>}
+              <button className="cc-btn cc-blue" type="submit" disabled={busy || (!demo && restante > 0)}>
+                {busy ? t('login.entrando') : demo ? t('login.entrarDemo') : t('login.entrar')}
+              </button>
               {USAR_SUPABASE && <button className="cc-btn cc-yellow" type="button" onClick={irAlta}>{t('login.nuevoAqui')}</button>}
               <a className="cc-btn cc-whatsapp" href={enlaceSoporte(t('login.mensajeSoporte'))} target="_blank" rel="noopener noreferrer">{t('login.soporte')}</a>
+              {!demo && <button className="lg-olvido" type="button" onClick={irRecupera}>{t('login.olvidaste')}</button>}
             </>
           )}
 
