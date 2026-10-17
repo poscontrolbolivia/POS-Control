@@ -1,5 +1,6 @@
 import { useIdioma } from '../../i18n/index.jsx'
 import SelectorIdioma from '../../i18n/SelectorIdioma.jsx'
+import ThemeSelect from '../login/ThemeSelect.jsx'
 import BrandMark from '../login/BrandMark.jsx'
 import '../../styles/auth.css'
 
@@ -51,6 +52,7 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
         Ver src/i18n/SelectorIdioma.jsx y docs/HANDOFF-IDIOMAS.md.
       */}
       <SelectorIdioma soloSuper={false} esSuper={Boolean(sesion?.es_super)} />
+      <ThemeSelect />
       <button type="button" className="topbar-salir" onClick={onSalir}>{t('topbar.salir')}</button>
       {aviso && (
         <div className="auth-error" role="alert" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, margin: 0, padding: '6px 16px' }}>

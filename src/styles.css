@@ -1,9 +1,10 @@
-:root{--bg:#f6f4ef;--card:#fff;--ink:#1d2320;--mut:#6b7570;--ac:#2f7d5b;--line:#dcd8cf;--libre:#e8efe9;--ocupada:#f4c76b;--enviada:#6fb3e0;--porcobrar:#e58a8a}
-@media (prefers-color-scheme:dark){:root{--bg:#141816;--card:#1f2522;--ink:#eef2ef;--mut:#99a39d;--ac:#4fb589;--line:#333b36;--libre:#26302a;--ocupada:#a47d1f;--enviada:#2f6d96;--porcobrar:#a14848}}
+:root{--bg:#f5f7fb;--card:#fff;--ink:#1d2320;--mut:#6b7570;--ac:#3867f4;--line:#dcd8cf;--libre:#e8efe9;--ocupada:#f4c76b;--enviada:#6fb3e0;--porcobrar:#e58a8a;--btn-blue:#3867f4;--btn-red:#e4002b;--btn-yellow:#f0a020;--btn-green:#1f9d5c;--btn-violet:#8a5cf6;--btn-whatsapp:#25d366;--btn-slate:#64748b}
+[data-theme="night"]{--bg:#121824;--card:#1a2130;--ink:#e7ecf5;--mut:#9aa7bd;--ac:#7296ff;--line:#2b3648;--libre:#222c3f;--ocupada:#a47d1f;--enviada:#2f6d96;--porcobrar:#a14848}
+[data-theme="forest"]{--bg:#dcefdc;--card:#eef7ee;--ink:#163821;--mut:#4f7259;--ac:#1f7a4d;--line:#a9d2ab;--libre:#d4ead4}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink)}
 button,select,input{font:inherit;color:inherit}
 button{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 12px;cursor:pointer;min-height:40px}
-button.primary{background:var(--ac);border-color:var(--ac);color:#fff}button.danger{color:#c0392b}button.big{width:100%;padding:16px;font-size:1.1rem}
+button.primary{border:0;border-radius:999px;color:#fff;font-weight:650;background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,0)),var(--ac);box-shadow:0 4px 14px color-mix(in srgb,var(--ac) 38%,transparent);text-shadow:0 1px 1px rgba(0,0,0,.22)}button.primary:hover:not(:disabled){filter:brightness(.95)}button.danger{color:#c0392b}button.big{width:100%;padding:16px;font-size:1.1rem}
 button:disabled{opacity:.5}input,select{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px;min-height:40px}
 .top{display:flex;gap:12px;align-items:center;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}.demo{color:var(--mut);font-size:.85rem;flex:1}
 .salon{display:grid;grid-template-columns:1fr 380px;gap:12px;padding:12px}@media(max-width:900px){.salon{grid-template-columns:1fr}}

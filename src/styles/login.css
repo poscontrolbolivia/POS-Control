@@ -1,0 +1,53 @@
+/* Login de POS Control: misma apariencia que el de Catering Control (tarjeta redondeada,
+   botones píldora con degradado, selector de tema, pie legal). Sin Bootstrap: todo cuelga de
+   .lg-* y de las variables de styles.css, así los 3 temas (claro/nocturno/bosque) funcionan. */
+body{background:radial-gradient(circle at 20% 20%,color-mix(in srgb,var(--ac) 22%,transparent),transparent 34%),var(--bg);min-height:100vh}
+.lg-page{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 14px;gap:0}
+.lg-card{width:100%;max-width:420px;background:var(--card);color:var(--ink);border-radius:1.5rem;padding:32px 28px;box-shadow:0 18px 50px rgba(0,0,0,.14)}
+.lg-brand{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:22px}
+.lg-mark{width:72px;height:72px;flex:none;border-radius:1rem;overflow:hidden;background:var(--ac);display:grid;place-items:center}
+.lg-mark .brand-mark{width:100%;height:100%;border-radius:0;object-fit:contain}
+.lg-info{min-width:0;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+.lg-info h1{margin:0;font-size:1.25rem;font-weight:700}
+.lg-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center}
+.lg-tema{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--mut)}
+.lg-tema select{min-height:32px;padding:2px 8px;font-size:.85rem;border-radius:8px}
+.lg-share{position:relative;display:inline-flex}
+.lg-share .lg-share-btn{width:36px;height:36px;min-height:36px;padding:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--mut)}
+.lg-share-toast{position:absolute;top:50%;right:calc(100% + 8px);transform:translateY(-50%);white-space:nowrap;font-size:.72rem;font-weight:650;padding:4px 10px;border-radius:999px;background:color-mix(in srgb,var(--ac) 14%,var(--card));color:var(--ac);box-shadow:0 2px 8px rgba(0,0,0,.12);pointer-events:none;z-index:5}
+.lg-share-toast.err{background:#fdeaea;color:#c62828}
+@media(max-width:420px){.lg-share-toast{top:calc(100% + 6px);right:0;transform:none}}
+.lg-idioma{display:flex;justify-content:center;margin:-8px 0 14px}
+.lg-form{display:flex;flex-direction:column;gap:14px}
+.lg-form h2{margin:0;text-align:center;font-size:1.2rem}
+.lg-campo{display:flex;flex-direction:column;gap:6px}
+.lg-campo>span{font-size:.85rem;color:var(--mut);font-weight:600}
+.lg-form input,.lg-form select{width:100%;min-height:46px;font-size:16px;padding:9px 13px;border-radius:12px;background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+.lg-form input:focus-visible,.lg-form select:focus-visible,.lg-share-btn:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.lg-clave{display:flex;gap:6px}
+.lg-clave input{flex:1;min-width:0}
+.lg-clave button{width:46px;min-height:46px;padding:0;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;color:var(--mut)}
+.lg-alerta{margin:0;padding:10px 14px;border-radius:12px;background:#fdeaea;color:#a61b1b;font-size:.9rem;text-align:center}
+.lg-bloqueo{background:#fff4e0;color:#8a5a00;font-weight:650}
+[data-theme="night"] .lg-alerta{background:#3a1d22;color:#ffb4b4}
+[data-theme="night"] .lg-bloqueo{background:#3a2e12;color:#ffd27a}
+.lg-demo{margin:0;text-align:center;font-size:.8rem;color:var(--mut);display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.lg-demo code{background:var(--libre);border-radius:6px;padding:2px 6px}
+.lg-link{border:0;background:none;color:var(--ac);text-decoration:underline;min-height:0;padding:0;font-size:.86rem;cursor:pointer;align-self:center}
+
+/* Botones píldora con degradado (los mismos .cc-btn de Catering Control) */
+.cc-btn{--cc:var(--btn-blue);display:inline-flex;align-items:center;justify-content:center;gap:.5rem;width:100%;min-height:2.8rem;padding:.55rem 1.2rem;border:0;border-radius:999px;font-size:1rem;font-weight:650;line-height:1.2;text-align:center;text-decoration:none;cursor:pointer;color:#fff;background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,0)),var(--cc);box-shadow:0 4px 14px color-mix(in srgb,var(--cc) 38%,transparent);text-shadow:0 1px 1px rgba(0,0,0,.22),0 0 10px rgba(255,255,255,.2);transition:transform .15s ease,box-shadow .15s ease,filter .15s ease}
+a.cc-btn,a.cc-btn:hover{color:#fff;text-decoration:none}
+.cc-btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(.95);box-shadow:0 8px 22px color-mix(in srgb,var(--cc) 42%,transparent)}
+.cc-btn:active{transform:translateY(0) scale(.98)}
+.cc-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
+.cc-blue{--cc:var(--btn-blue)}.cc-yellow{--cc:var(--btn-yellow)}.cc-green{--cc:var(--btn-green)}.cc-whatsapp{--cc:var(--btn-whatsapp)}.cc-slate{--cc:var(--btn-slate)}
+[data-theme="night"] .cc-blue{--cc:#4f7bff}
+
+/* Pie legal */
+.lg-footer{width:100%;max-width:420px;margin-top:22px;padding-top:16px;border-top:1px solid color-mix(in srgb,var(--ink) 12%,transparent);text-align:center;color:var(--mut)}
+.lg-footer-marca{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.9rem;color:var(--ink)}
+.lg-footer-badge{display:inline-flex;align-items:center;gap:3px;font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--ac) 14%,transparent);color:var(--ac)}
+.lg-footer-links{margin-top:6px;font-size:.78rem}
+.lg-footer-links a{color:inherit;text-decoration:none}.lg-footer-links a:hover{text-decoration:underline;color:var(--ac)}
+.lg-footer-copy{margin-top:3px;font-size:.72rem}

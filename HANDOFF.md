@@ -1,3 +1,16 @@
+# v0.6 · Login estilo Catering Control (IA-2, a pedido del dueño)
+
+- `pages/LoginPage.jsx` reescrito en UNA pantalla: **Empresa (lista desplegable de las ya creadas)** + correo + clave (con ojo) + Entrar. Opción "Demo" dentro de la lista. Si la RPC de lista no existe aún, cae a escribir el código.
+- **Requiere correr `supabase/migraciones/006_empresas_login.sql`** (RPC `empresas_para_login`, solo id/código/nombre, ejecutable por anon).
+- Con empresa elegida, el usuario debe pertenecer a ella (si no: "no pertenece a la empresa elegida"); el super entra igual.
+- **Bloqueo por intentos**: 3 fallos seguidos → botón bloqueado 1 min con cuenta regresiva (por empresa+usuario). Es del lado del navegador (localStorage `pos-login-bloqueo`); falta el equivalente en servidor (petición a IA-1: tabla de intentos + RPC, como `login_staff` de Catering).
+- **Temas claro/nocturno/bosque**: `services/tema.js` (llave `pos-ui-theme-v1`, `data-theme` en `<html>`), variables en `styles.css` (se quitó `prefers-color-scheme`), selector en login y en Topbar.
+- Botón **Compartir esta app** (`ShareAppButton`), pie legal `AppFooter` ("POS Control™ · Software verificado · Términos · Privacidad · © año Todos los derechos reservados"), botones píldora `.cc-btn` (`styles/login.css`), botón WhatsApp de soporte, `.primary` global ahora es píldora con degradado.
+- 633 claves i18n coherentes (`npm run idiomas`), `npm run build` sin errores. No se pudo revisar visualmente en un navegador real: el dueño debe confirmar el aspecto.
+- Pendiente de apariencia: el resto del panel (salón, caja, menú) sigue con su diseño propio; solo hereda colores del tema y botones primarios.
+
+---
+
 # HANDOFF · POS Control · v0.2 (2026-10-16)
 
 App Vite + React 19, modo demo con datos locales (localStorage). `npm install && npm run dev`.

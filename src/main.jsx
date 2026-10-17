@@ -4,6 +4,8 @@ import { IdiomaProvider } from './i18n/index.jsx'
 import App from './App.jsx'
 import PwaBridge from './components/pwa/PwaBridge.jsx'
 import './styles.css'
+import { aplicarTema, leerTema } from './services/tema.js'
+aplicarTema(leerTema())
 createRoot(document.getElementById('root')).render(
   // IdiomaProvider por fuera de todo: LoginPage, Topbar, App y PwaBridge leen useIdioma().
   <IdiomaProvider>

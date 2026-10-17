@@ -157,9 +157,7 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
   padding: 1px 7px;
   pointer-events: none;
 }
-@media (prefers-color-scheme: dark) {
-  .salon .mesa .etiqueta-zona { background: rgba(0, 0, 0, .28); }
-}
+[data-theme="night"] .salon .mesa .etiqueta-zona { background: rgba(0, 0, 0, .28); }
 
 /* leyenda: los dos chips nuevos (comensales y mesas unidas) */
 .salon .leyenda .pt.pax { background: var(--ac); }
