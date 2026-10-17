@@ -1,3 +1,20 @@
+# v0.11 · Sesión que se mantiene al bloquear el teléfono
+- `services/sesionPersistente.js` (arranca en `App.jsx`): al desbloquear / volver a la app / recuperar internet (y cada 5 min) renueva el token si le quedan <10 min, vuelve a fijar la empresa en la conexión y dispara `pos-reanudar` (el store espera su cola y re-lee la base: no quedan mesas viejas). Solo manda al login si Supabase confirma que el refresh token ya no sirve (no por falta de red) y entonces lo explica («Tu sesión ya no es válida…»).
+- Cliente Supabase con `persistSession` + `autoRefreshToken` explícitos; se pide `navigator.storage.persist()`.
+- Detecta el caso «hay pos-sesion pero Supabase perdió el token» (antes quedaba la app a medias con errores) y vuelve al login con aviso.
+- Para que dure SIEMPRE: en Supabase → Authentication → Sessions NO activar «Time-box user sessions» ni «Inactivity timeout» (planes Pro); el JWT de 1 h se renueva solo. En iPhone, instalar la PWA (Safari sin instalar borra datos del sitio tras ~7 días sin uso).
+- No probado con un teléfono real bloqueado: probar bloquear 1–2 h y reabrir.
+
+---
+
+# v0.10 · Instalar y actualizar la PWA (como Catering Control)
+- `components/pwa/PwaBanners.jsx` (montado en `App.jsx`, se ve en login y panel): barra «Instalar» (Android/PC con `beforeinstallprompt`; iPhone/iPad con instrucción de Compartir → Agregar a inicio; no sale si ya está instalada) y barra «Hay una versión nueva → Actualizar ahora / Ahora no».
+- Actualización: `vite.config.js` define `__BUILD_ID__` y publica `/version.json` en cada build; la app lo compara al abrir, cada 10 min, al volver a la pestaña y al reconectar. Recién abierta (15 s) o tras 30 min en segundo plano se actualiza sola; si no, avisa. «Actualizar» da de baja el service worker, borra cachés y recarga (no toca la sesión).
+- Solo funciona en el build desplegado (en `npm run dev` no se muestra el aviso de versión). Textos `install.*` en es/en/pt (774 claves).
+- No probado en un dispositivo real: confirmar en Android/Chrome tras desplegar en Vercel (HTTPS).
+
+---
+
 # v0.9 · Ajustes de interfaz pedidos por el dueño (iguales a Catering Control)
 - **Idioma y tema** salieron de la barra superior: ahora están en **Configuración → «Idioma y tema»**. Configuración es visible para TODOS los roles (cajero/mesero solo ven esa tarjeta; el resto sigue siendo solo admin).
 - **Menú plegable**: botón ☰ (amarillo, como en Catering) que pliega/despliega las pestañas de módulos; en móvil arranca cerrado y se cierra al elegir módulo.

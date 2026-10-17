@@ -838,4 +838,14 @@ export default {
   'salon.vistaLista': 'Lista',
   'pedido.atras': 'Salir',
   'pedido.atrasTitulo': 'Volver al salón sin comandar',
+  // ── v0.10: avisos de instalar y actualizar la PWA ──
+  'install.text': 'Instala POS Control en tu dispositivo para abrirlo como una app.',
+  'install.installBtn': 'Instalar',
+  'install.later': 'Ahora no',
+  'install.understood': 'Entendido',
+  'install.iosText': 'Para instalar: toca el botón Compartir y luego «Agregar a pantalla de inicio».',
+  'install.updateText': 'Hay una versión nueva de POS Control.',
+  'install.updateBtn': 'Actualizar ahora',
+  // ── v0.11: sesión persistente ──
+  'login.sesionVencida': 'Tu sesión ya no es válida (pasó demasiado tiempo o se cambió la clave). Entra de nuevo.',
 }

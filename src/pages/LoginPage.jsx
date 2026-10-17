@@ -1,3 +1,4 @@
+import { leerAvisoLogin } from '../services/sesionPersistente.js'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore, guardarSesionSup } from '../services/store.jsx'
@@ -52,6 +53,8 @@ export default function LoginPage({ onEntrar }) {
   const [clave, setClave] = useState('')
   const [verClave, setVerClave] = useState(false)
   const [error, setError] = useState('')
+  // Si el guardia detectó que la sesión ya no sirve (token vencido/revocado), se explica aquí.
+  useEffect(() => { if (leerAvisoLogin()) setError(t('login.sesionVencida')) }, []) // eslint-disable-line
   const [busy, setBusy] = useState(false)
   const [restante, setRestante] = useState(0)
   const [empresasUsuario, setEmpresasUsuario] = useState([])

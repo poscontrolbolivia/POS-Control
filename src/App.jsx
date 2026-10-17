@@ -4,6 +4,8 @@ import { useStore, leerSesionSup, guardarSesionSup } from './services/store.jsx'
 import { USAR_SUPABASE } from './config.js'
 import { sb, fijarEmpresa, fijarEmpresaSesion } from './services/supabase.js'
 import { salirDeEmpresa } from './services/super/superApi.js'
+import { iniciarGuardiaSesion } from './services/sesionPersistente.js'
+import PwaBanners from './components/pwa/PwaBanners.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import PanelPage from './pages/PanelPage.jsx'
 import TerminosPage from './pages/TerminosPage.jsx'
@@ -56,6 +58,19 @@ function Rutas() {
     }
   }, [sesion?.supabase, sesion?.operando, sesion?.empresaId])
 
+  // Guardia de sesión: renueva el token al desbloquear el teléfono y solo pide entrar de nuevo si
+  // Supabase confirma que la sesión ya no sirve.
+  useEffect(() => {
+    if (!USAR_SUPABASE) return undefined
+    return iniciarGuardiaSesion(() => {
+      guardarSesionSup(null)
+      fijarEmpresa(null)
+      try { sb?.auth.signOut({ scope: 'local' }) } catch { /* noop */ }
+      setSesion(null)
+      navegar('/')
+    })
+  }, []) // eslint-disable-line
+
   const volverDeEmpresa = async () => {
     // "volver a mi empresa": restaura la sesión real del super, fija su empresa en la conexión
     // anclada y recarga para que todo el árbol de React arranque con los datos correctos.
@@ -75,6 +90,8 @@ function Rutas() {
   }
 
   return (
+    <>
+    <PwaBanners />
     <Routes>
       <Route path="/terminos" element={<TerminosPage />} />
       <Route path="/privacidad" element={<PrivacidadPage />} />
@@ -89,5 +106,6 @@ function Rutas() {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }

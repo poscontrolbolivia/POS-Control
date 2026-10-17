@@ -19,7 +19,11 @@ const sessionId = (() => {
 })()
 
 export const sb = USAR_SUPABASE
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { 'X-Session-Id': sessionId } } })
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    // La sesión se guarda en el equipo y se renueva sola: el personal no vuelve a entrar al bloquear el teléfono.
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    global: { headers: { 'X-Session-Id': sessionId } },
+  })
   : null
 
 const KEY_EMPRESA = 'pos-empresa-activa-id'

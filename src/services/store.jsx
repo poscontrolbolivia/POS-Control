@@ -190,6 +190,27 @@ function useSupabaseStore(empresaId) {
     return () => { vivo = false }
   }, [empresaId])
 
+  // Al desbloquear / volver a la app (sesionPersistente.js dispara 'pos-reanudar'): se espera a que la
+  // cola de cambios termine y se vuelve a leer la base, para no mostrar mesas/cuentas viejas.
+  useEffect(() => {
+    if (!empresaId) return undefined
+    let vivo = true
+    const alReanudar = () => {
+      colaRef.current = colaRef.current.then(async () => {
+        if (!vivo || !estadoRef.current) return
+        try {
+          const fresco = await cargarEstadoInicial(empresaId)
+          if (!vivo) return
+          estadoRef.current = { ...fresco, _empresaId: empresaId }
+          setS(estadoRef.current)
+          setError('')
+        } catch { /* sin red todavía: se reintenta en la siguiente reanudación */ }
+      })
+    }
+    window.addEventListener('pos-reanudar', alReanudar)
+    return () => { vivo = false; window.removeEventListener('pos-reanudar', alReanudar) }
+  }, [empresaId])
+
   // d() en modo Supabase: aplica el reducer demo de forma OPTIMISTA (los componentes
   // dependen del encadenamiento síncrono de ids/efectos, p. ej. VentaDirecta) y encola
   // la RPC correspondiente en serie. Ante error: aviso visible + re-sincronía total.
