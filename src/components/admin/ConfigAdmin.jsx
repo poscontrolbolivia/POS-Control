@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { useStore } from '../../services/store.jsx'
 import { useIdioma } from '../../i18n/index.jsx'
 import ImpresorasAdmin from './ImpresorasAdmin.jsx'
+import EquipoAdmin from './EquipoAdmin.jsx'
 import './admin.css'
 
 // Configuración del negocio (solo rol admin): nombre, moneda, IVA y propina sugerida.
 // Props: { rol, sesion }
 export default function ConfigAdmin({ rol, sesion }) {
   const { s, d } = useStore()
-  const { t } = useIdioma()
+  const { t, tOr } = useIdioma()
   const [form, setForm] = useState({
     nombre: s.config?.nombre ?? '',
     moneda: s.config?.moneda ?? 'Bs',
@@ -79,6 +80,9 @@ export default function ConfigAdmin({ rol, sesion }) {
         {s.config?.impresion === 'silenciosa' && !verImpresoras && <span className="adm-chip">{t('config.modoSilenciosoActivo')}</span>}
       </div>
       {verImpresoras && <ImpresorasAdmin rol={rol} sesion={sesion} />}
+      {/* El equipo solo se muestra al rol admin de la sesión (la base valida el permiso igual,
+          pero un cajero no tiene nada que hacer aquí). */}
+      {(sesion ? sesion.rol === 'admin' : rol === 'admin') && <EquipoAdmin rol={rol} sesion={sesion} />}
     </div>
   )
 }

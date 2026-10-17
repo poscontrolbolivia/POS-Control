@@ -42,6 +42,22 @@
 }
 .auth-demo code{background:var(--libre);border-radius:6px;padding:2px 6px}
 
+/* Pie de la pantalla 1: "Crear mi negocio" y "Probar el demo" van lado a lado. */
+.auth-pie{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.auth-ayuda{margin:0;font-size:.78rem;color:var(--mut);text-align:left}
+/* Un <a> no hereda los estilos de botón: styles.css limita .primary/.big a <button>,
+   así que el enlace de WhatsApp reproduce aquí el aspecto del botón primario. */
+a.auth-btn{
+  display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;
+  background:var(--ac);border:1px solid var(--ac);color:#fff;
+}
+/* Opciones de la pantalla de recuperación: cada rol con su propio bloque. */
+.auth-bloque{
+  display:flex;flex-direction:column;gap:8px;padding:12px;
+  background:var(--libre);border:1px solid var(--line);border-radius:12px;
+}
+.auth-bloque-titulo{margin:0;font-weight:700;font-size:.92rem}
+
 /* Topbar */
 .topbar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;

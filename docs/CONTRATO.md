@@ -198,6 +198,32 @@ Todas empiezan con `if not public.es_super() then raise exception 'requiere supe
 
 Reglas de negocio de la cuota (trigger `private.controlar_cuota_productos` sobre `productos`): empresa nueva nace con 30 (trigger `trg_nueva_cuota` en `empresas`); dar de baja (`activo=false`) nunca se bloquea; editar precio/nombre/foto no consume; **reactivar un artículo inactivo sí consume**; `max_productos NULL` = ilimitado; los super están exentos.
 
+### 3.20 Altas y equipo — migración 004_altas.sql
+Ninguna de estas funciones acepta `p_empresa_id`: usan `private.empresa_activa()`, así que el cliente las llama con `rpc(nombre, params, { conEmpresa: false })` (si se les manda `p_empresa_id`, PostgREST no encuentra la firma y devuelve 404 PGRST202).
+
+| Objeto | Firma y comportamiento |
+|---|---|
+| trigger `trg_alta_empresa_registrado` → `private.registrar_empresa_del_registrado()` | AFTER INSERT en `auth.users`. Solo actúa si `raw_user_meta_data->>'alta_empresa' = 'true'` (el resto de los registros, incluido `equipo_invitar`, pasa de largo). Valida código (`^[a-z0-9][a-z0-9._-]*$`, 3..24 ⇒ 23514 `alta_codigo_invalido`) y nombre (1..80). Código repetido ⇒ 23505 `alta_codigo_tomado` y el `signUp` completo se revierte. Crea `empresas(nombre, codigo)` + `membresias(rol='admin')` + zona `Salón` con 8 mesas `1..8` (capacidad 4, rejilla 4×2 en el lienzo 1000×600) y audita `alta_empresa`. `limites` lo siembra `trg_nueva_cuota` (002) y `perfiles` lo crea `handle_new_user`; la metadata `display_name` es la que lee ese trigger, por eso el login manda también `display_name`. |
+| `equipo_listar() → table(usuario_id uuid, nombre text, correo text, rol text, creado_en timestamptz)` | admin de la empresa activa. `auth.users.email` es `varchar`: se funde a `text` con `::text` en el `RETURN QUERY` o plpgsql aborta con 42804. |
+| `equipo_invitar(p_nombre, p_correo, p_rol, p_clave) → uuid` | admin. Alta directa en `auth.users` (espejo de `super_importar_empresa`: bcrypt 10, `email_confirmed_at = now()`, columnas de token en `''` nunca NULL, `auth.identities`, `perfiles`, `membresias`). Rechaza rol fuera de `admin|cajero|mesero`, clave < 4 y correo repetido (23505 `equipo_correo_tomado`). Audita `equipo_invito`. |
+| `equipo_restablecer(p_usuario_id uuid, p_clave text) → boolean` | admin. Solo sobre miembros de la empresa activa (no se fía del uuid). Audita `equipo_restablecio_clave`. |
+| `equipo_revocar(p_usuario_id uuid) → boolean` | admin. No a sí mismo, no a un super, no al último admin de la empresa. Quita la membresía y, si la persona queda sin empresa, borra su `auth.users`; si tiene histórico de negocio (FK `ON DELETE NO ACTION`) captura `foreign_key_violation` y deja la cuenta viva sin accesos. Audita `equipo_revoco`. |
+| `super_resetear_clave(p_usuario_id uuid, p_clave text) → boolean` | `public.es_super()`; cross-tenant, sin acotar a la empresa activa. Existe como atajo por API: hoy no tiene pantalla (el super puede entrar en la empresa y usar el Equipo de `ConfigAdmin`). |
+
+**Claves olvidadas (decisión del dueño):** no hay reset por correo. Un administrador que no puede entrar escribe al WhatsApp de `SOPORTE_WHATSAPP` (`src/config.js`) y el super le fija clave — o bien entra en esa empresa desde el panel Super (002 le da rol `admin` efectivo) y usa **Configuración → Equipo → Nueva clave**. Un cajero/mesero recibe clave nueva de un administrador de su negocio desde esa misma pantalla.
+
+### 3.21 Quién es super — migración 005_super_usuario.sql
+El super **no se crea desde la app**: el alta self-service (`004`) solo sabe dar de alta empresas y su admin. La marca de super es una fila en `public.supers`, y se mintea desde el SQL Editor con:
+
+```sql
+select public.crear_super('dueno@correo.com', 'SuClaveSegura', 'Alex');
+```
+
+- `crear_super(p_correo, p_clave, p_nombre default 'Super', p_reemplazar_clave default false) → uuid`. Crea la cuenta en GoTrue (espejo de `equipo_invitar`: bcrypt 10, `email_confirmed_at = now()`, columnas de token en `''`, `auth.identities`) y mete la fila en `supers`. **Re-pegable**: si el correo ya existe, promove sin tocar la clave; solo cambia la clave si se pasa `p_reemplazar_clave := true`. Rechaza correo sin dominio y clave de menos de 8. Audita `super_alta` con `empresa_id NULL` (es evento de plataforma, no de negocio).
+- `quitar_super(p_correo) → boolean`: borra solo la fila de `supers`; la cuenta y sus datos siguen intactos y puede seguir entrando como usuario normal.
+- Ambas están **revocadas a `anon` y `authenticated`** (medido: llamar `POST /rest/v1/rpc/crear_super` con la publishable key ⇒ 42501 `permission denied`; `has_function_privilege` da `false` para esos dos roles y `true` para `service_role`). Nadie con cuenta de negocio puede crearse super.
+- La clave queda escrita en el historial de consultas del SQL Editor: si molesta, borrar esa consulta después, o fijar la clave luego con `super_resetear_clave` (004).
+
 ---
 
 ## 4. Mapeo 1:1 · acción de `store.jsx` → llamada Supabase
@@ -264,5 +290,11 @@ Idempotentes, cada una se pega completa en el SQL Editor del proyecto Supabase, 
 2. `supabase/migraciones/001_super.sql` — `supers`, `es_super()`, `fijar_empresa`, export/import (v1).
 3. `supabase/migraciones/002_seguridad.sql` — cuota oculta (`limites`), auditoría, storage de miniaturas, throttle, hardening, super-entrar, export/import **v2 con histórico**. **Requiere 001** (usa `public.es_super()`/`supers`).
 4. `supabase/migraciones/003_comensales.sql` — RPC `actualizar_comensales`. Degrada sin 002 (simplemente no audita), pero el orden correcto es aplicarla después.
+5. `supabase/migraciones/004_altas.sql` — trigger de alta self-service de empresa + RPCs `equipo_*` y `super_resetear_clave`. **Requiere 001 y 002** (`es_super`, `auditar`, `exigir_rol`, `trg_nueva_cuota`).
+6. `supabase/migraciones/005_super_usuario.sql` — funciones `crear_super` / `quitar_super` para mintear el super desde el SQL Editor. **Requiere 001** (`public.supers`) y degrada sin 002 (no audita). Después de pegarla, una línea: `select public.crear_super('tu@correo.com', 'ClaveSegura', 'Alex');`
 
-**Estado en el proyecto Supabase real (`oeyrnenclklmczlfoxzy`):** 002_seguridad.sql y 003_comensales.sql **ya están aplicadas** (2026-10-16); schema y 001 lo estaban desde v0.3. Cada archivo termina con un `select` de verificación (en el SQL Editor `auth.uid()` es NULL ⇒ solo devuelve contados: filas de `limites`/`throttle`/`auditoria`, columna `imagen_path`, triggers, políticas de Storage, bucket).
+**Ajuste del dashboard que necesita el alta self-service:** Authentication → Sign In / Up ⇒ **Allow new signups ON** y **Confirm email OFF** (sin autoconfirmación el `signUp` no devuelve sesión y el negocio queda a medio crear hasta que el usuario abra el correo). Comprobado y dejado ON/OFF desde la API de gestión el 2026-10-16 (`mailer_autoconfirm: true`, `disable_signup: false`).
+
+**Estado en el proyecto Supabase real (`oeyrnenclklmczlfoxzy`):** 002_seguridad.sql, 003_comensales.sql, **004_altas.sql** y **005_super_usuario.sql ya están aplicadas** (2026-10-16; 004 dos veces: la primera aplicación falló en `equipo_listar` con 42804 y se re-aplicó con el `::text` corregido); schema y 001 lo estaban desde v0.3. Cada archivo termina con un `select` de verificación (en el SQL Editor `auth.uid()` es NULL ⇒ solo devuelve contados: filas de `limites`/`throttle`/`auditoria`, columna `imagen_path`, triggers, políticas de Storage, bucket). Para probar una RPC de negocio con sesión real desde el editor: `begin; select set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', true); select set_config('app.empresa_id','<uuid>', true); select * from <rpc>(); commit;`.
+
+**Prueba hecha de `crear_super` (2026-10-16, con cuenta desechable luego borrada):** la cuenta creada inicia sesión por `POST /auth/v1/token?grant_type=password` (200 con `access_token`; ojo, el parámetro es `grant_type`, no `grant`) y `POST /rest/v1/rpc/es_super` con ese token devuelve `true`. Re-pegar `crear_super` sin el flag devolvió el mismo uuid y mantuvo la clave vieja (login viejo 200, login con la clave nueva 400); con `p_reemplazar_clave := true` entró la clave nueva (200). `quitar_super` dejó `supers` en su valor anterior y la cuenta siguió pudiendo entrar. Borrar el usuario de prueba con `delete from auth.users` limpió en cascada `identities`, `perfiles` y `supers` (0 huérfanos).

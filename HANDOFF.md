@@ -174,3 +174,65 @@ Era la duda pendiente del dueño; se respondió con código y se alineó al proy
 
 ## Comportamiento conocido (no es bug de esta versión)
 La sesión del sandbox demo vive **solo en memoria**: recargar `/panel` en demo devuelve al login (en Supabase la sesión sí persiste en `localStorage`). Se dejó así a propósito desde v0.3; si molesta, es un cambio de una línea en `App.jsx` (guardar la sesión demo bajo otra clave).
+
+---
+
+# v0.5 · Alta self-service del negocio, gestión de equipo y claves olvidadas (2026-10-16)
+
+## Qué decide esta versión
+Hasta ahora un comercio no podía entrar sin que el dueño de la plataforma le creara el usuario desde el dashboard. Ahora **el primero se lo crea solo desde el login**, y el equipo lo gestiona el propio negocio. Las claves olvidadas siguen un reparto explícito pedido por el dueño: administrador → WhatsApp de soporte (él, como super, fija la clave); cajero/mesero → un administrador de su negocio, desde la pantalla de Equipo.
+
+## Migración `supabase/migraciones/004_altas.sql` (aplicada en el proyecto real)
+- Trigger `trg_alta_empresa_registrado` → `private.registrar_empresa_del_registrado()` sobre `auth.users`: solo cuando `raw_user_meta_data->>'alta_empresa' = 'true'`. Valida código y nombre, rechaza código repetido con 23505 `alta_codigo_tomado` (el `signUp` se revierte entero) y crea **empresa + membresía admin + zona "Salón" con 8 mesas de capacidad 4** en rejilla 4×2 del lienzo 1000×600. `limites` y `perfiles` los siguen sembrando sus triggers de 002 y `schema.sql`.
+- RPCs `equipo_listar`, `equipo_invitar` (alta directa en `auth.users`, espejo de `super_importar_empresa`: bcrypt 10, tokens en `''`, `auth.identities`), `equipo_restablecer`, `equipo_revocar` (no a uno mismo, no a un super, no deja la empresa sin admin; si la persona queda sin empresa borra su cuenta y, si tiene histórico, la deja sin accesos capturando `foreign_key_violation`) y `super_resetear_clave`. Las cinco **no aceptan `p_empresa_id`**: el cliente las llama con `{ conEmpresa: false }` (las cuatro de equipo ya se llaman así en `EquipoAdmin.jsx`).
+- **Ajuste del dashboard necesario y hecho**: Authentication ⇒ `disable_signup: false` y `mailer_autoconfirm: true` (PATCH por la API de gestión). Sin autoconfirmación el `signUp` no devuelve sesión y el negocio quedaría a medio crear.
+- **Bug encontrado y corregido durante la verificación**: `equipo_listar` reventaba con `42804 structure of query does not match function result type / Returned type character varying does not match expected type text in column 3` porque `auth.users.email` es `varchar(255)`. Se funde con `u.email::text` y el archivo se re-aplicó completo (19 069 B, sha256 `7975bbe1…`).
+
+## Cliente
+- `src/pages/LoginPage.jsx`: el estado `paso` pasa de `1|2|3` a `'codigo' | 'clave' | 'empresas' | 'alta' | 'recupera'`. La pantalla `alta` manda `signUp` con `{ alta_empresa, codigo_empresa, nombre_empresa, nombre, display_name }` (`display_name` es la clave que lee `handle_new_user`) y reutiliza el mismo cierre de login (`trasLogin` → `listo`), así que el fundador entra como `admin` en el mismo intento. Antes de registrar consulta `empresa_por_codigo` para dar el aviso en el formulario, y si la base responde `alta_codigo_tomado` lo traduce igual.
+- `recupera`: dos bloques. El de administrador es un `<a class="auth-btn" target="_blank" rel="noopener noreferrer">` a `https://wa.me/<SOPORTE_WHATSAPP>?text=…` con el negocio y el correo ya escritos (`a.auth-btn` reproduce en `styles/auth.css` el aspecto del botón primario, porque `.primary`/`.big` de `styles.css` solo aplican a `<button>`).
+- `src/config.js`: nueva `SOPORTE_WHATSAPP = '59177299692'` (formato internacional, sin `+`).
+- `src/components/admin/EquipoAdmin.jsx` + `EquipoAdmin.css` (nuevos) y su bloque al final de `ConfigAdmin.jsx`, con gate `sesion.rol === 'admin'`. Lista, alta con clave silábica generable, "Nueva clave" inline y "Quitar" en dos toques con expiración; **sin `alert`/`confirm`/`prompt`** (regla del proyecto). De paso se arregló `ConfigAdmin.jsx`, que usaba `tOr` sin destructurarlo: cualquier apertura de Configuración con sesión de Supabase daba ReferenceError.
+- Textos: **+81 claves** (34 de `login`/`alta`/`recupera` y 46 de `equipo`, más el par de enlaces nuevos del login) → **608 claves en los 3 diccionarios**, `npm run idiomas` en verde y 0 claves sin traducir en la pantalla probada.
+
+## Probado end-to-end contra Supabase (build de producción, `vite preview` en :4173)
+1. "Crear mi negocio" → **La Cancha de Prueba** / código `lacanchaprueba` → entra directo a `/panel` con chip `admin`, **1 zona "Salón" y 8 mesas de capacidad 4** (semilla del trigger).
+2. Configuración → Equipo: "1 persona" con el admin; invitar a `maria.mesera@dominiotest.com` como `mesero` con `mes1234` → aviso de éxito y **2 personas**.
+3. Salir → entrar con el código de empresa y el correo de la mesera → `/panel` con rol `mesero` y solo las pestañas **Salón / Caja / Venta directa** (permisos correctos).
+4. Como admin: "Nueva clave" de la mesera → `nueva1234` → salir → **la mesera entra con la clave nueva**.
+5. Como admin: "Quitar" (dos toques) → vuelve a **1 persona**, y su fila de `auth.users` desaparece (no tenía histórico).
+6. "Crear mi negocio" con el código ya usado → **el formulario muestra "Ese código ya lo usa otro negocio. Prueba con otro."** y no se crea el usuario.
+7. Enlace de recuperación verificado en el DOM: `https://wa.me/59177299692?text=Hola, no puedo entrar a POS Control. Negocio: La Cancha de Prueba. Correo: maria.mesera@dominiotest.com. Necesito una clave nueva, por favor.`
+8. Limpieza verificada por SQL: `empresas_test 0`, `usuarios_test 0`, `zonas_huerfanas 0`, `mesas_huerfanas 0`, `empresas_totales 1`, `limites 1`.
+9. `npm run build` en verde: **740.33 kB** de JS (216.29 kB gzip) y **33.06 kB** de CSS. `sharp` sigue sin ser dependencia (0 coincidencias en `package.json`).
+
+## Cómo responder un "olvidé mi clave" (SOP del super)
+Entrar al panel Super → "Entrar" en la empresa del que escribe (002 le da rol `admin` efectivo dentro de cualquier empresa) → Configuración → Equipo → "Nueva clave" → mandar la clave por WhatsApp. `super_resetear_clave(usuario, clave)` existe en la base como atajo por API, **sin pantalla todavía**.
+
+## Migración `005_super_usuario.sql` (aplicada en el proyecto real, 2026-10-16)
+El alta self-service crea empresas y admins, pero **el super no se puede crear desde la app**. `005` añade dos funciones y se pega una sola vez:
+
+```sql
+select public.crear_super('dueno@correo.com', 'SuClaveSegura', 'Alex');
+select public.quitar_super('dueno@correo.com');
+```
+
+- `crear_super` crea la cuenta en GoTrue (mismo patrón que `equipo_invitar`: bcrypt 10, `email_confirmed_at = now()`, tokens en `''`, `auth.identities`, `perfiles`) y mete la fila en `public.supers`. **Re-pegable**: si el correo ya existe, promove sin tocar la clave; la cambia solo con el 4º parámetro en `true`. Clave mínima 8, correo validado.
+- `quitar_super` borra únicamente la fila de `supers` (la cuenta sigue viva y entrando).
+- Revocadas a `anon`/`authenticated`: `POST /rest/v1/rpc/crear_super` con la publishable key ⇒ **42501 permission denied**; `has_function_privilege` = `false` para esos roles, `true` para `service_role`. Medido.
+- Estado actual de la base: **1 usuario** (`85201957-…`, confirmado, ya en `supers`), **1 empresa**, `crear_super`/`quitar_super` existen.
+- Probado con cuenta desechable y luego borrada: login `POST /auth/v1/token?grant_type=password` ⇒ 200 + token; `es_super()` ⇒ `true`; re-pegar `crear_super` devolvió el mismo uuid y **mantuvo la clave vieja** (vieja 200 / nueva 400); con `true` entró la nueva (200); `quitar_super` dejó `supers = 1` y la cuenta siguió entrando; el `delete from auth.users` limpió en cascada identidades/perfiles/supers (**0 huérfanos**).
+- Ojo: `grant_type=password`, no `grant=password` (con `grant` GoTrue responde `invalid_credentials` y parece que la clave está mal).
+
+## Deploy: `pos-control.pages.dev` estaba publicando el repo sin compilar
+Medido el 2026-10-16 sobre el sitio vivo: `/` devuelve el `index.html` **fuente** (termina en `<script type="module" src="/src/main.jsx">`) y `/src/main.jsx` responde con `content-type: text/jsx` ⇒ el navegador no ejecuta el módulo y `#root` queda vacío. Prueba adicional de que no se corrió el build: `/public/manifest.json`, `/vite.config.js`, `/package.json`, `/supabase/schema.sql` y `/docs/CONTRATO.md` responden **200 con su contenido real** (en un `dist` compilado nada de eso existe). Es decir: Cloudflare Pages está publicando el checkout del repo, no el resultado de `npm run build`.
+
+- **El repo no está roto ni mal ordenada**: `package.json` e `index.html` ya están en la raíz de `main` (listado de la API de GitHub + diff del árbol remoto contra `HEAD`: mismos 76 archivos, cero carpetas `pos/`). La raíz local del git **es** la carpeta `pos`, así que "subir los archivos un nivel" los dejaría fuera del repo.
+- Arreglo en el panel (Settings → Build & deploy → Production build): Root directory `/`, Build command `npm run build`, Build output directory `dist`, y *Retry deployment*. Detalle en GUÍA §19.
+- Efecto secundario bueno: con el build corregido dejan de estar expuestos los `.sql` y los `docs/` (hoy cualquiera los descarga).
+- Descartado por medición: `npm ci` **no** rompió nada — con `package.json` 0.4.0 y `package-lock.json` 0.3.0 (que era el estado de `main`) el `npm ci --dry-run` terminó en 0 con 32 paquetes. Aun así se sincronizó el lock a 0.5.0.
+
+## Pendientes que esta versión NO toca
+- `super_resetear_clave` sin UI y el listado de usuarios de una empresa dentro del panel Super.
+- Correo de bienvenida real (el alta funciona sin SMTP porque no se envía nada: la clave inicial la escribe el fundador y la del equipo la genera el admin).
+- La cuota de 30 artículos sigue oculta: la pantalla de alta no la menciona.

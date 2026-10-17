@@ -30,6 +30,9 @@ y el service worker responde cualquier ruta con `/index.html`.
 |---|---|---|
 | `src/App.jsx` | `src/App.jsx` | el enrutador; aquí se ven las rutas |
 | `src/pages/LoginPage.jsx` | `src/pages/LoginPage.jsx` | pantalla de entrada |
+| `src/components/login/ClientForm.jsx` (`mode = 'login' \| 'signup'`) | pantallas `alta` y `recupera` dentro de `src/pages/LoginPage.jsx` (estado `paso`) | registro propio y recuperación de clave; POS no separa el formulario en otro archivo porque comparte tarjeta y estilos |
+| `src/components/login/WhatsappSupportButton.jsx` + `useBranding().whatsappNumber` | `a.auth-btn` de la pantalla `recupera` + `SOPORTE_WHATSAPP` en `src/config.js` | el mismo enlace `wa.me/<número>?text=…`; en POS el número es fijo (una sola marca), no por empresa |
+| `src/components/panel/users/UsersPage.jsx` | `src/components/admin/EquipoAdmin.jsx` | gestión del equipo (invitar, cambiar clave, quitar); en POS vive dentro de Configuración, no como página aparte |
 | `src/pages/LoginPage.css` | `src/styles/auth.css` | estilos del login + barra superior |
 | `src/pages/PanelPage.jsx` | `src/pages/PanelPage.jsx` | carcasa del panel: decide qué módulo mostrar |
 | `src/pages/TerminosPage.jsx` | `src/pages/TerminosPage.jsx` | términos |
@@ -91,4 +94,5 @@ y el service worker responde cualquier ruta con `/index.html`.
 - Una consulta o llamada RPC a Supabase → `src/services/tiendaSupabase.js` y `supabase/schema.sql`.
 - Qué se puede exportar/importar de una empresa → `src/services/super/superApi.js` + `src/components/super/`.
 - Impresión (comanda, ticket) → `src/services/impresora.js` + `src/components/ticket/Ticket.jsx`.
+- Crear un negocio nuevo, invitar personal o cambiar una clave → `src/pages/LoginPage.jsx` (pantallas `alta`/`recupera`) + `src/components/admin/EquipoAdmin.jsx`; del lado de la base, `supabase/migraciones/004_altas.sql`.
 - PWA (icono, caché, notificaciones) → `public/manifest.json`, `public/sw.js`, `src/components/pwa/PwaBridge.jsx`.

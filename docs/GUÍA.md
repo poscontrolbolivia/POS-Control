@@ -196,3 +196,35 @@ Detalles, la tabla completa de equivalencias con la app vieja y "dónde está X"
 - **Ruta de pantalla** → `src/pages/`; **piezas** (pedido, ticket, tablas, topbar) → `src/components/<dominio>/`; **lógica sin React** → `src/services/`; **hoja de estilo** con el mismo tallo que su componente (`SalonPage.jsx` ↔ `SalonPage.css`); si un CSS sirve a varios componentes de la carpeta, lleva el nombre de la carpeta (`admin.css`, `super.css`).
 - **Textos**: `src/i18n/es.js` es la fuente de verdad; `en.js` y `pt.js` son su espejo (mismas claves planas con puntos). Verificar con `npm run idiomas` antes de commitear.
 - **Logo / iconos**: `npm run iconos -- "ruta-del-logo.png"` regenera los 7 PNG de `public/icons/` (requiere `npm i --no-save sharp`, que NO es dependencia del proyecto). Después de cambiar iconos: actualizar `background_color` en `public/manifest.json` con el fondo que imprime el script y subir `VERSION` en `public/sw.js` para que la caché vieja se borre.
+
+## 18. Alta del negocio, equipo y claves olvidadas (v0.5)
+
+**Crear negocio desde el login** (`src/pages/LoginPage.jsx`, pantalla `alta`): botón "Crear mi negocio" → nombre del negocio, código, tu nombre, correo y clave. Llama a `sb.auth.signUp()` con `options.data = { alta_empresa: true, codigo_empresa, nombre_empresa, nombre, display_name }` y, como el proyecto tiene autoconfirmación desactivada, la respuesta ya trae sesión: se entra derecho al panel como `admin`. Quién hace el negocio es **la base**: el trigger `private.registrar_empresa_del_registrado()` (migración `004_altas.sql`) crea la empresa, la membresía de administrador, la zona **Salón con 8 mesas** de capacidad 4 y la cuota (`limites` lo siembra `trg_nueva_cuota` de 002).
+
+El código de negocio es lo que escribirán los empleados para entrar: 3-24 caracteres `a-z 0-9 . _ -` (el campo lo fuerza minúsculas y quita lo inválido mientras se escribe; el mismo regex valida en el cliente y en la base). Si está repetido, el aviso sale en el formulario (`alta.codigoTomado`), porque se consulta `empresa_por_codigo` antes de registrarse y el trigger además lo rechaza con `alta_codigo_tomado`.
+
+**Equipo** (`src/components/admin/EquipoAdmin.jsx`, al final de Configuración, solo rol `admin`): lista de las personas del negocio con `equipo_listar`, alta con `equipo_invitar` (nombre, correo, rol, clave inicial + botón "Generar" de clave silábica), "Nueva clave" con `equipo_restablecer` y "Quitar" con `equipo_revocar` (dos toques, sin `confirm()` del navegador). En modo demo el bloque muestra un aviso: no hay usuarios reales que invitar.
+
+**Clave olvidada** (pantalla `recupera`, enlace "¿Olvidaste tu clave?" del paso 2): no hay reset por correo a propósito.
+- Si es **administrador** del negocio → botón que abre WhatsApp con el mensaje ya escrito a `SOPORTE_WHATSAPP` (`src/config.js`, `59177299692`) con negocio y correo. Como super se responde entrando al panel Super → "Entrar" en esa empresa → Configuración → Equipo → Nueva clave (002 le da rol `admin` efectivo dentro de la empresa); el atajo por API es `super_resetear_clave`, todavía sin pantalla propia.
+- Si es **cajero o mesero** → el texto le dice que pida clave a un administrador de su negocio, que se la da desde esa misma pantalla.
+
+**Y el super, ¿quién lo crea?** No sale de estas pantallas: se mintea desde el SQL Editor con la migración `005_super_usuario.sql` ya aplicada ⇒ `select public.crear_super('tu@correo.com', 'ClaveSegura', 'Alex');`. Es re-pegable: si el correo existe, solo lo promove y no toca la clave (para cambiarla, el cuarto parámetro en `true`). `quitar_super('correo')` quita la marca sin borrar la cuenta. Detrás de `public.es_super()` solo hay una fila en `public.supers`, así que tampoco se puede "olvidar" el super: `select * from public.supers` lo muestra.
+
+## 19. Despliegue en Cloudflare Pages (pos-control.pages.dev)
+
+Es una SPA compilada por Vite: **Pages tiene que ejecutar el build y publicar `dist`**, no el repositorio. Los tres campos están en *Workers & Pages → tu proyecto → Settings → Build & deploy → Production build → Edit settings*:
+
+| Campo | Valor |
+|---|---|
+| Root directory | `/` (la raíz del repo **ya** tiene `package.json` e `index.html`; no hay que mover nada) |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+
+Con "Save and Deploy" (o "Retry deployment" en el último deploy) se recompila. También vale el preset *Framework = React/Vite*, que rellena esos campos.
+
+**Cómo saber si está mal, sin abrir el panel:** `curl -s https://<dominio>/ | tail -c 200`. Si el HTML termina en `<script type="module" src="/src/main.jsx">`, está sirviendo el **código fuente sin compilar** (el navegador no entiende JSX y la pantalla queda blanca, `#root` vacío, sin errores en el build). Si está bien, dirá `<script ... src="/assets/index-<hash>.js">`. Prueba extra: si `/vite.config.js` o `/package.json` responden 200, Pages está publicando el repo tal cual, lo que además expone los `.sql` y los `docs/` en internet. Un `dist` compilado solo contiene `index.html`, `/assets/*`, `sw.js`, `manifest.json` e `icons/`.
+
+**RAMAS / vistas previas:** cada push de rama genera un alias `HASH.proyecto.pages.dev`; la producción es el branch de producción (`main`). Para que el dominio propio apunte, *Custom domains* dentro del proyecto.
+
+**Después de cambiar iconos o el manifiesto**, subir `VERSION` en `public/sw.js` (ver §17) o el PWA vieja seguirá sirviendo la caché anterior.
