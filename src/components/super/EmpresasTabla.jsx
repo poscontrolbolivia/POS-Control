@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ajustarCuota, verCuota } from '../../services/super/superApi.js'
+import { MONEDA } from '../../config.js'
+import { ajustarCuota, cambiarPlan, verCuota } from '../../services/super/superApi.js'
 import { mensajeError } from '../../services/super/cliente.js'
 import { useIdioma } from '../../i18n/index.jsx'
 import './super.css'
@@ -9,7 +10,7 @@ import './super.css'
 // "Entrar" se confirma en pantalla (sin diálogos nativos) porque cambia la empresa con la que
 // opera TODA la app, no solo este panel.
 // El bloque "Cuota" (solo visible aquí, en el panel de super) limita los artículos que el
-// comercio puede tener a la venta: gratis = tope (p. ej. 30), pago = sin límite.
+// comercio puede tener a la venta: Básico = 20 artículos y 3 personas, Premium = sin límite.
 export default function EmpresasTabla({ empresas = [], cargando = false, error = '', ocupado = false, onExportar, onEntrar, onRefrescar }) {
   const { tOr } = useIdioma()
   const [confirmando, setConfirmando] = useState(null)
@@ -17,7 +18,7 @@ export default function EmpresasTabla({ empresas = [], cargando = false, error =
   // Estado del editor de cuota (una empresa abierta a la vez).
   const [cuotaEmpresa, setCuotaEmpresa] = useState(null)
   const [cuota, setCuota] = useState(null)          // { max_productos, plan, productos_actuales }
-  const [form, setForm] = useState({ max: '', plan: 'gratis', notas: '' })
+  const [form, setForm] = useState({ max: '', maxM: '', plan: 'gratis', notas: '' })
   const [cuotaCargando, setCuotaCargando] = useState(false)
   const [cuotaGuardando, setCuotaGuardando] = useState(false)
   const [cuotaError, setCuotaError] = useState('')
@@ -32,6 +33,7 @@ export default function EmpresasTabla({ empresas = [], cargando = false, error =
       setCuota(datos)
       setForm({
         max: datos.max_productos === null || datos.max_productos === undefined ? '' : String(datos.max_productos),
+        maxM: datos.max_miembros === null || datos.max_miembros === undefined ? '' : String(datos.max_miembros),
         plan: datos.plan === 'pago' ? 'pago' : 'gratis',
         notas: '', // la nota privada no la devuelve super_ver_cuota: la reescribe quien la conozca
       })
@@ -44,17 +46,39 @@ export default function EmpresasTabla({ empresas = [], cargando = false, error =
     if (!cuotaEmpresa) return
     setCuotaError(''); setCuotaOk(''); setCuotaGuardando(true)
     try {
-      await ajustarCuota(cuotaEmpresa.id, { maxProductos: form.max.trim(), plan: form.plan, notas: form.notas })
-      const nuevos = { max: form.max.trim() === '' || form.plan === 'pago' ? null : Number(form.max), plan: form.plan }
-      setCuota(c => (c ? { ...c, max_productos: nuevos.max, plan: nuevos.plan } : c))
+      await ajustarCuota(cuotaEmpresa.id, { maxProductos: form.max.trim(), maxMiembros: form.maxM.trim(), plan: form.plan, notas: form.notas })
+      const nuevos = {
+        max: form.max.trim() === '' || form.plan === 'pago' ? null : Number(form.max),
+        maxM: form.maxM.trim() === '' || form.plan === 'pago' ? null : Number(form.maxM),
+        plan: form.plan,
+      }
+      setCuota(c => (c ? { ...c, max_productos: nuevos.max, max_miembros: nuevos.maxM, plan: nuevos.plan } : c))
       setCuotaOk(tOr('super.cuota.guardado', 'Cuota guardada en la base.'))
     } catch (err) { setCuotaError(mensajeError(err)) } finally { setCuotaGuardando(false) }
   }
 
+  // Un clic: Básico ⇄ Premium con los valores por defecto del plan (recarga la cuota después).
+  const alternarPlan = async () => {
+    if (!cuotaEmpresa || !cuota) return
+    setCuotaError(''); setCuotaOk(''); setCuotaGuardando(true)
+    try {
+      await cambiarPlan(cuotaEmpresa.id, cuota.plan === 'pago' ? 'gratis' : 'pago')
+      const datos = await verCuota(cuotaEmpresa.id)
+      setCuota(datos)
+      setForm(f => ({
+        ...f,
+        max: datos.max_productos == null ? '' : String(datos.max_productos),
+        maxM: datos.max_miembros == null ? '' : String(datos.max_miembros),
+        plan: datos.plan === 'pago' ? 'pago' : 'gratis',
+      }))
+      setCuotaOk(tOr('super.cuota.planCambiado', 'Plan cambiado.'))
+    } catch (err) { setCuotaError(mensajeError(err)) } finally { setCuotaGuardando(false) }
+  }
+
   const ocupadoCuota = cuotaCargando || cuotaGuardando || ocupado
-  const limiteVisto = cuota && (cuota.plan === 'pago' || cuota.max_productos === null || cuota.max_productos === undefined)
-    ? tOr('super.cuota.sinLimite', 'sin límite')
-    : cuota ? `${cuota.max_productos}` : null
+  const sinLim = tOr('super.cuota.sinLimite', 'sin límite')
+  const limiteVisto = cuota && (cuota.plan === 'pago' || cuota.max_productos == null) ? sinLim : cuota ? `${cuota.max_productos}` : null
+  const limiteEquipo = cuota && (cuota.plan === 'pago' || cuota.max_miembros == null) ? sinLim : cuota ? `${cuota.max_miembros}` : null
 
   return (
     <section className="panel super-bloque">
@@ -94,7 +118,7 @@ export default function EmpresasTabla({ empresas = [], cargando = false, error =
                     <tr key={e.id}>
                       <td className="super-nombre">{e.nombre}</td>
                       <td>{e.codigo || <span className="super-chip">{tOr('super.tabla.sinCodigo', 'sin código')}</span>}</td>
-                      <td>{e.moneda || 'Bs'}</td>
+                      <td>{e.moneda || MONEDA}</td>
                       <td className="super-num">{Number(e.usuarios || 0)}</td>
                       <td className="super-num">{Number(e.mesas || 0)}</td>
                       <td className="super-num">{Number(e.productos || 0)}</td>
@@ -121,10 +145,16 @@ export default function EmpresasTabla({ empresas = [], cargando = false, error =
       {cuotaEmpresa && (
         <div className="super-bloque super-cuota-caja">
           <div className="super-titulo-bloque">
-            <b>{tOr('super.cuota.titulo', 'Cuota de artículos')} — {cuotaEmpresa.nombre}</b>
+            <b>{tOr('super.cuota.titulo', 'Plan y cuotas')} — {cuotaEmpresa.nombre}</b>
             <span className="sp" />
             {cuota && <span className="super-chip">{tOr('super.cuota.plan', 'plan')}: {cuota.plan}</span>}
             {cuota && <span className="super-chip">{cuota.productos_actuales} / {limiteVisto} {tOr('super.cuota.uso', 'artículos en venta')}</span>}
+            {cuota && <span className="super-chip">{cuota.miembros_actuales} / {limiteEquipo} {tOr('super.cuota.usoEquipo', 'personas en el equipo')}</span>}
+            {cuota && (
+              <button type="button" className="primary" disabled={ocupadoCuota} onClick={alternarPlan}>
+                {cuota.plan === 'pago' ? tOr('super.cuota.aBasico', 'Volver a Básico') : tOr('super.cuota.aPremium', 'Pasar a Premium')}
+              </button>
+            )}
           </div>
 
           {cuotaCargando && <div className="super-cargando" role="status">{tOr('super.cuota.cargando', 'Consultando la cuota…')}</div>}
@@ -137,8 +167,17 @@ export default function EmpresasTabla({ empresas = [], cargando = false, error =
                   <input
                     type="number" min="1" step="1" inputMode="numeric" value={form.max}
                     disabled={ocupadoCuota || form.plan === 'pago'}
-                    placeholder={form.plan === 'pago' ? tOr('super.cuota.noAplicaPago', 'no aplica: plan de pago') : tOr('super.cuota.ejemplo30', 'p. ej. 30')}
+                    placeholder={form.plan === 'pago' ? tOr('super.cuota.noAplicaPago', 'no aplica: plan de pago') : tOr('super.cuota.ejemplo30', 'p. ej. 20')}
                     onChange={ev => { setForm(f => ({ ...f, max: ev.target.value })); setCuotaOk('') }}
+                  />
+                </label>
+                <label className="super-campo">
+                  <span>{tOr('super.cuota.maxMiembros', 'Máximo de personas en el equipo (vacío = sin límite)')}</span>
+                  <input
+                    type="number" min="1" step="1" inputMode="numeric" value={form.maxM}
+                    disabled={ocupadoCuota || form.plan === 'pago'}
+                    placeholder={form.plan === 'pago' ? tOr('super.cuota.noAplicaPago', 'no aplica: plan de pago') : tOr('super.cuota.ejemplo3', 'p. ej. 3')}
+                    onChange={ev => { setForm(f => ({ ...f, maxM: ev.target.value })); setCuotaOk('') }}
                   />
                 </label>
                 <label className="super-campo">

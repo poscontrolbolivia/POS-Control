@@ -9,7 +9,7 @@
 import { MONEDA } from '../../config'
 import { totalCuenta, totalFinal, pagadoCuenta } from '../../services/store.jsx'
 import { imprimirSilencioso, estadoImpresora } from '../../services/impresora.js'
-import { gruposDe, grupoTickets, repartirPorGrupo } from '../../services/impresion.js'
+import { gruposDe, grupoTickets, repartirPorGrupo, areasDelItem } from '../../services/impresion.js'
 import { modoImpresion, encolarImpresion } from '../../services/colaImpresion.js'
 import { tGlobal, existeClave, idiomaActivo } from '../../i18n/index.jsx'
 
@@ -30,6 +30,19 @@ export const precalcularCambio = (pagos = [], total = 0) => {
 
 // Método de pago impreso: etiqueta traducida si existe clave, si no la palabra tal cual.
 const nombreMetodo = m => (existeClave('metodo.' + m) ? tGlobal('metodo.' + m) : cap(String(m || tGlobal('metodo.otro'))))
+
+// Áreas de un ítem en la línea de comanda: prefijo `[COCINA+BARRA]` solo cuando va a VARIOS
+// grupos (un combo se imprime a la vez en cocina y barra). Los nombres salen de los grupos de
+// la empresa si existen; si no, se traducen con la clave 'areas.<id>' (tGlobal + fallback).
+const nombreArea = (id, config) => {
+  const g = gruposDe(config).find(x => x.id === id)
+  if (g) return String(g.nombre).toUpperCase() // nombre de grupo = dato del negocio: no se traduce
+  return (existeClave('areas.' + id) ? tGlobal('areas.' + id) : cap(String(id))).toUpperCase()
+}
+const prefijoAreas = (i, config) => {
+  const areas = Array.isArray(i.areas) ? i.areas : []
+  return areas.length > 1 ? `[${areas.map(a => nombreArea(a, config)).join('+')}] ` : ''
+}
 
 // cuenta: {tipo, numero, mesaIds, items, pagos, descuento, propina, cerradaEn...}
 // comanda=true → solo ítems pendientes/enviados con sus notas, sin totales ni pagos (para cocina).
@@ -55,9 +68,9 @@ export function imprimirTicket({ cuenta, config = {}, titulo, ancho = 58, comand
   let cuerpo = ''
 
   if (comanda) {
-    // Comanda de cocina: cantidad, nombre y notas destacadas.
+    // Comanda de cocina/barra: cantidad, nombre (con prefijo de área si va a varios grupos) y notas.
     cuerpo += itemsCocina.length
-      ? itemsCocina.map(i => `<div class="f"><span><b>${i.qty}x ${esc(i.nombre)}</b></span></div>`
+      ? itemsCocina.map(i => `<div class="f"><span><b>${esc(prefijoAreas(i, config))}${i.qty}x ${esc(i.nombre)}</b></span></div>`
         + (i.nota ? `<div class="notax">** ${esc(i.nota)} **</div>` : '')).join('')
       : `<div class="c">${tGlobal('ticket.sinPedidos')}</div>`
     cuerpo += `${sep()}` + fila(tGlobal('ticket.emitido'), fecha)
@@ -162,7 +175,7 @@ function lineasPlanas({ cuenta, config = {}, titulo, comanda = false, ancho = 32
     const cocina = itemsVivos.filter(i => i.estado === 'pendiente' || i.estado === 'enviado')
     if (!cocina.length) L.push({ texto: tGlobal('ticket.sinPedidos'), centrado: true })
     cocina.forEach(i => {
-      L.push({ texto: `${i.qty} x ${i.nombre}`, negrita: true })
+      L.push({ texto: `${prefijoAreas(i, config)}${i.qty} x ${i.nombre}`, negrita: true })
       if (i.nota) L.push({ texto: `    ** ${i.nota} **`, negrita: true })
     })
     L.push(sep)
@@ -254,9 +267,16 @@ export async function imprimirCuenta({ cuenta, config = {}, titulo, comanda = fa
 }
 
 // Envía la comanda REPARTIDA por grupo (bebida → Barra, comida → Cocina…) sin preguntar nada.
+// Un ítem con `areas` múltiples (combo cocina+barra) se imprime en TODOS sus grupos.
 // `items`: los ítems pendientes que se están enviando. Devuelve [{ grupo, resultado, n }].
 export async function imprimirComandas({ cuenta, items, productos = [], config = {}, titulo }) {
-  const reparto = repartirPorGrupo(items, productos, config)
+  // Copias con el snapshot de áreas (ítem.areas de Supabase, o producto.areas en demo) para
+  // que el reparto y el prefijo [COCINA+BARRA] de la línea térmica funcionen igual.
+  const itemsAreas = items.map(i => {
+    const a = areasDelItem(i, productos)
+    return a && !i.areas ? { ...i, areas: a } : i
+  })
+  const reparto = repartirPorGrupo(itemsAreas, productos, config)
   const salida = []
   if (modoImpresion(config) === 'estacion') {
     // Un solo envío con todas las partes (Cocina, Barra…): o llegan todas a la cola o ninguna.

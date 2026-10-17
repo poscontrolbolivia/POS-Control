@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { useStore, guardarSesionSup } from '../services/store.jsx'
 import { USAR_SUPABASE, SOPORTE_WHATSAPP } from '../config.js'
 import { sb, rpc, fijarEmpresa, mensajeError } from '../services/supabase.js'
-import { esSuper } from '../services/super/superApi.js'
+import { esSuper, entrarEnEmpresa } from '../services/super/superApi.js'
 import { useIdioma } from '../i18n/index.jsx'
 import SelectorIdioma from '../i18n/SelectorIdioma.jsx'
 import BrandMark from '../components/login/BrandMark.jsx'
@@ -161,6 +161,9 @@ export default function LoginPage({ onEntrar }) {
       const superUsuario = await esSuper().catch(() => false)
       if (!superUsuario) throw new Error(t('login.noPerteneceEmpresa'))
       await listo(null, 'super', user)
+      // El super eligió una empresa en la lista: entra directo (sin pasar por el botón «Entrar»
+      // del panel). Si algo falla se queda en el panel Super y desde ahí puede reintentar.
+      try { await entrarEnEmpresa({ id: elegida.id, nombre: elegida.nombre }) } catch { /* se queda en el panel */ }
       return
     }
     if (!filas.length) {
@@ -251,7 +254,7 @@ export default function LoginPage({ onEntrar }) {
                   <label className="lg-campo">
                     <span>{t('login.entrarComo')}</span>
                     <select value={demoRol} onChange={e => setDemoRol(e.target.value)}>
-                      {['admin', 'cajero', 'mesero'].map(r => <option key={r} value={r}>{tOr('rol.' + r, r)}</option>)}
+                      {['admin', 'cajero', 'mesero', 'cocina', 'barra'].map(r => <option key={r} value={r}>{tOr('rol.' + r, r)}</option>)}
                     </select>
                   </label>
                   <p className="lg-demo">{t('login.demoAviso')}</p>

@@ -3,7 +3,7 @@
 // `despacharSupabase`: traduce cada acción del reducer demo a su RPC y re-sincroniza
 // las filas afectadas (cuentas/items/pagos/mesas/turno). Nunca deja estado corrupto:
 // ante error RPC, re-sincroniza desde la base y propaga el mensaje para el toast.
-import { sb, rpc, fijarEmpresa } from './supabase.js'
+import { sb, rpc, fijarEmpresaSesion } from './supabase.js'
 import { borrarImagen } from './imagenProducto.js'
 
 const N = x => Number(x ?? 0)
@@ -15,12 +15,22 @@ const hoyISO = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.to
 const mapZona = z => ({ id: z.id, nombre: z.nombre })
 const mapMesa = m => ({ id: m.id, zona: m.zona_id, nombre: m.nombre, x: N(m.x), y: N(m.y), w: N(m.w), h: N(m.h), forma: m.forma, cap: N(m.capacidad) })
 const mapSeccion = s => ({ id: s.id, nombre: s.nombre, orden: N(s.orden) })
-const mapProducto = p => ({ id: p.id, nombre: p.nombre, seccionId: p.seccion_id, precio: N(p.precio), activo: p.activo, imagen_path: p.imagen_path ?? null })
+const mapProducto = p => ({
+  id: p.id, nombre: p.nombre, seccionId: p.seccion_id, precio: N(p.precio), activo: p.activo, imagen_path: p.imagen_path ?? null,
+  // Áreas de impresión (text[] 'cocina'|'barra'): si la fila vieja no trae, default de la columna.
+  areas: Array.isArray(p.areas) && p.areas.length ? p.areas : ['cocina'],
+})
 
 const mapItem = i => ({
   id: i.id, productoId: i.producto_id, nombre: i.nombre_snapshot, precio: N(i.precio_snapshot),
-  qty: N(i.qty), estado: i.estado, nota: i.nota || '', motivo: i.motivo_anulacion,
+  qty: N(i.qty), estado: i.estado, nota: i.nota || '', motivo: i.anulacion_motivo ?? i.motivo_anulacion,
+  areas: Array.isArray(i.areas) && i.areas.length ? i.areas : undefined, // snapshot cocina/barra
   enviadoEn: ts(i.enviado_en), creadaEn: ts(i.creada_en),
+  // Flujo de salida/anulación (estados 'listo' | 'anulacion'): el reducer optimista ignora
+  // estas claves y la re-sincronización las restaura desde la base, así sobreviven el round-trip.
+  ...(i.listo_en ? { listoEn: ts(i.listo_en) } : {}),
+  ...(i.anulacion_pedida_en ? { anulacionPedidaEn: ts(i.anulacion_pedida_en), anulacionPor: i.anulacion_por, anulacionEstadoPrevio: i.anulacion_estado_previo } : {}),
+  ...(i.anulacion_resuelta_en ? { anulacionResueltaEn: ts(i.anulacion_resuelta_en), anulacionResueltaPor: i.anulacion_resuelta_por } : {}),
 })
 
 // Pagos: el detalle jsonb (recibido/cambio/referencia/tarjeta/ultimos4) se aplana en la línea,
@@ -125,7 +135,10 @@ const armarCaja = (abierto, historial, nombres, siguienteTurno, cajaPrev) => ({
 
 export async function cargarEstadoInicial(empresaId) {
   if (!sb) throw new Error('Supabase no está configurado')
-  fijarEmpresa(empresaId)
+  // La empresa activa se guarda como FILA en la base (setup.sql 009), no en la conexión:
+  // hay que fijarla aquí, antes de la tanda de SELECT, o las consultas irían con la
+  // empresa que tocaba en la última visita (menú/salon medio vacíos, alta de sección 403).
+  await fijarEmpresaSesion(empresaId)
   const nombres = await fetchNombres()
   // `cajaP` se consulta una sola vez y se encadena: fetchCuentas necesita el turno ya
   // mapeado, y nombrar `cajaT` dentro del mismo Promise.all que lo declara lanza
@@ -232,6 +245,8 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       return refrescarNegocio(E)
     }
     case 'item+': {
+      // El snapshot de `areas` (cocina/barra) en cuenta_items lo hace la RPC agregar_items
+      // leyendo productos.areas; el adaptador solo lo mapea de vuelta (mapItem).
       const itemsDb = await rpc('agregar_items', { p_cuenta_id: rid(mapa, a.cuentaId), p_items: [{ producto_id: a.p.id, qty: 1 }] })
       const c = cuentaRecien(estado.cuentas, x => x.id === a.cuentaId || x.id === rid(mapa, a.cuentaId))
       if (c) remapItems(mapa, c.items, itemsDb)
@@ -382,12 +397,12 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     }
     case 'producto+': {
       const locId = (a._nuevos?.productos || [])[0] || E.productos[E.productos.length - 1]?.id
-      const { error } = await sb.from('productos').insert({ id: locId, empresa_id: empresaId, nombre: a.producto.nombre, seccion_id: a.producto.seccionId ?? null, precio: a.producto.precio, activo: true, imagen_path: a.producto.imagen_path ?? null })
+      const { error } = await sb.from('productos').insert({ id: locId, empresa_id: empresaId, nombre: a.producto.nombre, seccion_id: a.producto.seccionId ?? null, precio: a.producto.precio, activo: true, imagen_path: a.producto.imagen_path ?? null, areas: Array.isArray(a.producto.areas) && a.producto.areas.length ? a.producto.areas : ['cocina'] })
       if (error) throw new Error(error.message)
       return E
     }
     case 'producto~': {
-      const row = { nombre: a.cambios.nombre, precio: a.cambios.precio, activo: a.cambios.activo, seccion_id: a.cambios.seccionId, imagen_path: a.cambios.imagen_path }
+      const row = { nombre: a.cambios.nombre, precio: a.cambios.precio, activo: a.cambios.activo, seccion_id: a.cambios.seccionId, imagen_path: a.cambios.imagen_path, areas: a.cambios.areas }
       Object.keys(row).forEach(k => { if (row[k] === undefined) delete row[k] })
       const { error } = await sb.from('productos').update(row).eq('id', rid(mapa, a.id))
       if (error) throw new Error(error.message)

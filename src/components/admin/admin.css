@@ -22,6 +22,12 @@
   border-radius:999px;padding:3px 10px;white-space:nowrap;
 }
 .sp{flex:1}
+/* Grupo de acciones de una cabecera: va al borde derecho SIEMPRE, también cuando la
+   cabecera se partió en varias líneas (móvil). Con los botones sueltos, el
+   margin-left:auto de `.sp+*` sólo arrastra al primero de cada línea y el resto queda
+   colgado a la izquierda (medido 17-10-2026 en 390 px: «Eliminar» de una sección de la
+   carta terminaba a 231 px del borde derecho). */
+.cab-acciones{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
 
 .adm-fila{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .adm-fila input{min-height:46px;flex:1;min-width:140px}
@@ -66,7 +72,7 @@
 /* Controles de foto por producto */
 .adm-prod-img{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:2px}
 .adm-btn-foto{
-  min-height:44px;padding:8px 14px;border:1px solid var(--line);border-radius:10px;
+  min-height:44px;padding:8px 16px;border:1px solid var(--line);border-radius:999px;
   background:var(--card);color:var(--ink);font-weight:600;cursor:pointer;
   display:inline-flex;align-items:center;font-size:.9rem;
 }

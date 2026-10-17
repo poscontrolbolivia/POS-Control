@@ -1,8 +1,8 @@
-> **Nota v0.7:** el backend vive en SOLO 2 archivos SQL: `supabase/setup.sql` (todo, idempotente) y `supabase/super-admin.sql`. Las menciones a "migraciones", `schema.sql` o `00x_*.sql` en este documento se refieren a lo que hoy está dentro de `setup.sql`.
+> **Nota v0.13:** TODO el backend vive en UN solo archivo idempotente: `supabase/setup.sql`. El antiguo archivo suelto del super y la carpeta de migraciones numeradas (001–007) **ya no existen**: todo está fusionado dentro de `setup.sql` (se pega COMPLETO en el SQL Editor y admite re-pegadas sin romper nada). Las menciones a `schema.sql`, `00x_*.sql` o «migración 00x» en este documento son históricas (antes/ex-archivos sueltos) y hoy corresponden a **secciones internas** de `setup.sql`.
 
 # CONTRATO · Supabase backend ↔ cliente POS
 
-**Estado:** v1.1 · IA-1 + hilo principal · Archivos de referencia: `supabase/setup.sql` + `supabase/setup.sql` → `002_seguridad.sql` → `003_comensales.sql` (pegar en el SQL editor en ese orden; ver §8; idempotentes).
+**Estado:** v1.3 (v0.13 de la app) · Archivo de referencia: `supabase/setup.sql` (único SQL del proyecto; idempotente, envuelto en `begin;` … `commit;`; ver §8).
 **Destinatarios:** IA-2 (Salón/operación), IA-3 (login/layout/gestión), y cualquier contribuidor futuro.
 Este documento define el modelo de datos, las RPCs con firma exacta, las convenciones y el mapeo 1:1 desde las acciones locales de `src/services/store.jsx` (hoy localStorage) hacia Supabase.
 
@@ -13,15 +13,15 @@ Este documento define el modelo de datos, las RPCs con firma exacta, las convenc
 1. **Nunca mutar tablas de negocio directamente.** `cuentas`, `cuenta_mesas`, `cuenta_items`, `pagos`, `turnos_caja` son **solo SELECT** para el cliente; toda escritura va por RPC (transaccionales y con validación de rol en la base). El cliente NO tiene permisos de INSERT/UPDATE/DELETE sobre ellas aunque las pida: fallará con `permission denied`.
 2. **`empresa_id` nunca se envía en el payload de datos**: la empresa activa la fija la base (`private.fijar_empresa`) al inicio de cada RPC a partir de `p_empresa_id` + membresía real del `auth.uid()`. Un uuid de empresa ajeno ⇒ error, y el RLS devuelve 0 filas.
 3. **IDs `uuid` generados en la base** (`gen_random_uuid()`). El cliente no inventa ids; usa los que devuelven las RPCs.
-4. **Dinero = `numeric(10,2)`, moneda Bs.** Nunca float en la capa de datos. Redondeos/validaciones de importes: en la base.
+4. **Dinero = `numeric(10,2)`; la moneda es de cada empresa (`empresas.moneda`, por defecto Bs, se cambia en Configuración).** Nunca float en la capa de datos. Redondeos/validaciones de importes: en la base.
 5. **Snapshot en items:** al agregar un producto se congelan `nombre_snapshot` y `precio_snapshot` en `cuenta_items`. El ticket/cobro SIEMPRE usa el snapshot, nunca `productos` actual.
 6. **Coordenadas del mapa de mesas: lienzo normalizado 1000 × 600** (x,w ∈ [0,1000]; y,h ∈ [0,600]), idéntico al canvas actual de `SalonPage.jsx` y `store.jsx`. La base lo valida con CHECKs.
-7. **Tablas de plataforma ocultas** (`limites`, `throttle`, `auditoria`, migración 002): `force row level security` SIN políticas + `revoke all` desde `public/anon/authenticated` — el tenant no las ve ni por REST (403); solo se escriben desde funciones `security definer` y se leen por RPC privativas del super. La cuota de artículos es invisible para el cliente: la UI nunca muestra "plan gratuito", solo recibe el mensaje de la base al exceder el límite.
+7. **Tablas de plataforma ocultas** (`limites`, `throttle`, `auditoria`, migración 002): `force row level security` SIN políticas + `revoke all` desde `public/anon/authenticated` — el tenant no las ve ni por REST (403); solo se escriben desde funciones `security definer` y se leen por RPC privativas del super. Las cuotas (artículos y personas) son invisibles para el cliente: la UI nunca muestra números, solo recibe el aviso genérico de la base al llegar al tope.
 8. **Hardening obligatorio en toda función pública nueva**: `revoke all on function … from public, anon;` + `grant execute … to authenticated;` (a `anon` solo si es pre-login, como `empresa_por_codigo`) y `set search_path = ''`.
 
 ---
 
-## 1. Modelo de datos (resumen de `schema.sql`)
+## 1. Modelo de datos (resumen de `supabase/setup.sql`)
 
 ### Tablas maestro / catálogo (SELECT para todos; escritura directa solo rol admin vía RLS)
 
@@ -29,21 +29,31 @@ Este documento define el modelo de datos, las RPCs con firma exacta, las convenc
 |---|---|---|
 | `empresas` | `id`, `nombre`, `moneda='Bs'`, `iva_pct`, `propina_pct`, `config jsonb` | El tenant. Config de negocio (← `s.config` del store). |
 | `perfiles` | `user_id` (PK = auth.users), `display_name` | Creada por trigger al sign up. Nombres para tickets. |
-| `membresias` | `empresa_id`, `user_id`, `rol ∈ {admin,cajero,mesero}`, `pin_descuento_hash` | Usuario↔empresa. Alta de miembros: SQL/dashboard (ver §7). `unique(empresa_id,user_id)`. |
+| `membresias` | `empresa_id`, `user_id`, `rol ∈ {admin,cajero,mesero,cocina,barra}`, `pin_descuento_hash` | Usuario↔empresa. Desde v0.13 los roles `cocina` y `barra` operan solo su pantalla de cola (§3.22); nunca tocan dinero ni catálogo. Alta de miembros: pantalla Equipo (admin) o super (ver §7). `unique(empresa_id,user_id)`. |
 | `zonas` | `id`, `empresa_id`, `nombre`, `orden` | |
 | `mesas` | `id`, `empresa_id`, `zona_id`, `nombre`, `x,y,w,h`, `forma ∈ {cuadrada,redonda,rect}`, `capacidad`, `activa` | x/y/w/h en escala 1000×600. `activa=false` en vez de borrar. |
 | `secciones_menu` | `id`, `empresa_id`, `nombre`, `orden` | ← `s.secciones` |
-| `productos` | `id`, `empresa_id`, `seccion_id`, `nombre`, `precio numeric(10,2)`, `activo`, `imagen_path text NULL` | ← `s.productos`. Borrar = `activo=false` (histórico intacto). `imagen_path` (002): ruta de Storage con CHECK de forma `productos/{uuid-empresa}/{uuid}.{webp|jpg}`; el miniato se muestra a 45×45 px y se guarda a 90 px (2× retina) en el bucket público `pos-imagenes`. |
+| `productos` | `id`, `empresa_id`, `seccion_id`, `nombre`, `precio numeric(10,2)`, `activo`, `imagen_path text NULL`, `areas text[]` | ← `s.productos`. Borrar = `activo=false` (histórico intacto). `imagen_path` (sección 002): ruta de Storage con CHECK de forma `productos/{uuid-empresa}/{uuid}.{webp|jpg}`; el miniato se muestra a 45×45 px y se guarda a 90 px (2× retina) en el bucket público `pos-imagenes`. `areas` (v0.13): áreas de impresión del artículo, `text[] not null default array['cocina']` con CHECK `areas <@ array['cocina','barra']` y mínimo 1 valor ⇒ un combo puede ir a cocina Y barra a la vez; su snapshot viaja a `cuenta_items.areas`. |
 
-### Tablas de plataforma (002_seguridad.sql) — OCULTAS para el tenant
+### Tablas de plataforma (sección 002 de `supabase/setup.sql`) — OCULTAS para el tenant
 
 | Tabla | Columnas clave | Notas |
 |---|---|---|
-| `auditoria` | `id bigint`, `empresa_id`, `actor`, `accion`, `detalle jsonb`, `en` | Force RLS sin políticas + `revoke all`. Escrita solo por `private.auditar()` (security definer). Lectura solo por `super_listar_auditoria()`. |
-| `limites` | `empresa_id` (PK), `max_productos int` (NULL = ilimitado), `plan 'gratis'\|'pago'`, `notas`, `actualizado_en`, `actualizado_por` | Force RLS deny-all ⇒ por REST devuelve **403**; el comercio no puede leer ni cambiar su cuota. Escrita solo por RPCs del super y por el trigger `trg_nueva_cuota`. Ver §3.19. |
+| `auditoria` | `id bigint`, `empresa_id`, `actor`, `accion`, `detalle jsonb`, `en`, `actor_nombre`, `actor_rol`, `entity_type`, `entity_label` | Force RLS sin políticas + `revoke all`. Escrita solo por `private.auditar()` (security definer). Lectura: antes solo por `super_listar_auditoria()`; desde v0.13 el admin del negocio también lee la SUYA por RPC (`auditoria_listar`, §3.22) — la tabla sigue sin acceso REST directo. Las columnas legibles (v0.13, todas NULL-ables) se rellenan desde `perfiles`/`membresias`: quién, con qué rol y sobre qué entidad (p. ej. `cuenta_item`/nombre del plato, `insumo`/nombre). |
+| `limites` | `empresa_id` (PK), `max_productos int` (NULL = ilimitado), `max_miembros int` (NULL = ilimitado), `plan 'gratis'\|'pago'` (Básico 20/3 · Premium sin límite, ver `private.plan_defaults`), `notas`, `actualizado_en`, `actualizado_por` | Force RLS deny-all ⇒ por REST devuelve **403**; el comercio no puede leer ni cambiar su cuota. Escrita solo por RPCs del super y por el trigger `trg_nueva_cuota`. Ver §3.19. |
 | `throttle` | `clave text` (PK: prefijo+IP), `intentos`, `hasta` | Force RLS sin políticas + `revoke all`. Solo lo toca `private.throttle_ok()` desde `empresa_por_codigo`. Ver §3.18. |
 
-`public.productos` además lleva el trigger `trg_controlar_cuota` (002) que exige la cuota de `limites` en el INSERT/UPDATE ⇒ la cuota se cumple en el servidor aunque se edite la app (detalles en §3.19).
+`public.membresias` lleva `trg_cuota_miembros` (BEFORE INSERT, errcode 22000) y `public.productos` lleva `trg_controlar_cuota` (sección 002) que exigen la cuota de `limites` en el INSERT/UPDATE ⇒ la cuota se cumple en el servidor aunque se edite la app (detalles en §3.19).
+
+### Tablas de inventario (v0.13) — SOLO rol admin
+
+Las tres tablas nacen en la sección 009 de `supabase/setup.sql`. RLS con el mismo patrón que `trabajos_impresion`: el cliente tiene **solo SELECT** (y encima filtrado `private.es_admin()`); toda escritura real la hacen las RPCs `security definer` (§3.23). Con `force row level security` ⇒ un anon/authenticated no-admin no ve filas ni puede insertar por REST.
+
+| Tabla | Columnas clave | Notas |
+|---|---|---|
+| `insumos` | `id`, `empresa_id`, `nombre`, `unidad` (default `'unidad'`), `stock numeric(12,3)`, `stock_min numeric(12,3)`, `costo numeric(12,2)`, `activo`, `creada_en`, `actualizado_en` | Índice único `unique(empresa_id, lower(nombre))` ⇒ `insumo_guardar` puede upsertear por nombre. El stock **puede quedar negativo** (no hay CHECK): las salidas por venta nunca bloquean el cobro. |
+| `recetas` | `id`, `empresa_id`, `producto_id → productos`, `insumo_id → insumos`, `cantidad numeric(12,3) > 0`, `creada_en` | `unique(producto_id, insumo_id)`. FKs `on delete cascade` (borrar un plato o un insumo limpia sus recetas). Es la receta de cuánto consume cada plato; no guarda proporciones de costo. |
+| `insumos_movimientos` | `id`, `empresa_id`, `insumo_id → insumos`, `tipo ∈ {entrada,salida,venta,ajuste}`, `cantidad numeric(12,3)`, `stock_after`, `nota`, `usuario`, `usuario_nombre`, `en` | Historial de stock. `venta` lo escribe `cobrar_cuenta` automáticamente (§3.13); `entrada/salida/ajuste` salen de `insumo_movimiento`. `usuario_nombre` es snapshot de `perfiles.display_name`. |
 
 ### Tablas de negocio (SELECT directo; MUTACIÓN solo por RPC)
 
@@ -51,7 +61,7 @@ Este documento define el modelo de datos, las RPCs con firma exacta, las convenc
 |---|---|---|
 | `cuentas` | `id`, `empresa_id`, `tipo ∈ {mesa,directa}`, `numero` (directa), `estado ∈ {abierta,precuenta,cerrada}`, `comensales`, `propina`, `descuento`, `nota`, `abierta_por/abierta_en`, `cerrada_por/cerrada_en` | ← `s.cuentas`. Los `items`/`pagos` viven en tablas propias. |
 | `cuenta_mesas` | PK `(cuenta_id, mesa_id)`, `empresa_id` | n:m: una cuenta puede abarcar varias mesas (unión). |
-| `cuenta_items` | `id`, `empresa_id`, `cuenta_id`, `producto_id`, `nombre_snapshot`, `precio_snapshot`, `qty ≥ 1`, `estado ∈ {pendiente,enviado,anulado}`, `nota`, `motivo_anulacion`, `enviado_en`, `creada_en` | Anular CONSERVA la fila (auditoría). qty≤0 en `cambiar_qty_item` elimina la fila (igual que el reducer). |
+| `cuenta_items` | `id`, `empresa_id`, `cuenta_id`, `producto_id`, `nombre_snapshot`, `precio_snapshot`, `qty ≥ 1`, `estado ∈ {pendiente,enviado,listo,anulacion,anulado}`, `nota`, `motivo_anulacion`, `enviado_en`, `creada_en`, `areas text[]` (snapshot del producto), `listo_en`, `anulacion_motivo`, `anulacion_por`, `anulacion_pedida_en`, `anulacion_estado_previo`, `anulacion_resuelta_por`, `anulacion_resuelta_en` | Anular CONSERVA la fila (auditoría). qty≤0 en `cambiar_qty_item` elimina la fila (igual que el reducer). Estados (v0.13): `enviado→listo` por salida de cocina/barra; `anulacion` = anulación PEDIDA aún no aprobada (guarda el estado previo para poder rechazar); `anulado` = excluido de totales. |
 | `pagos` | `id`, `empresa_id`, `cuenta_id`, `metodo ∈ {efectivo,qr,tarjeta,mixed}`, `monto`, `detalle jsonb`, `creada_por/creada_en` | `detalle` p.ej. `{"recibido":100,"cambio":23}` (efectivo), `{"referencia":"..."}` (QR). El `monto` es lo que se imputa a la cuenta (el cambio NO se suma). |
 | `turnos_caja` | `id`, `empresa_id`, `abierto_por/abierto_en`, `fondo`, `cerrado_en/cerrado_por`, `contado`, `esperado`, `movimientos jsonb` | `movimientos = {"movimientos":[{id,tipo,monto,motivo,creada_en,usuario}], "cierre":{...}}`. Un turno abierto por empresa. |
 
@@ -114,10 +124,14 @@ Roles mínimos por RPC (validados en la base; el `permisos.js` del cliente es so
 | RPC | Roles | 
 |---|---|
 | abrir/venta/items/qty/nota/enviar/anular(pendiente)/unir/separar/mover/extras/pre-cuenta/reabrir | admin, cajero, mesero |
-| anular ítem **enviado** | admin (+motivo obligatorio) |
+| anular ítem **enviado/listo** (corte directo `anular_item`) | admin, cajero (+motivo obligatorio; regla añadida en v0.13: antes era solo admin) |
 | aplicar_extras / cobrar **con descuento** (rol ≠ admin) | + PIN correcto |
 | cobrar_cuenta, abrir_turno, registrar_movimiento_caja, cerrar_turno | admin, cajero |
-| actualizar_comensales (003) | admin, cajero, mesero |
+| actualizar_comensales (sección 003) | admin, cajero, mesero |
+| `cola_de_area`, `pedir_anulacion` (v0.13) | admin, cajero, mesero, cocina, barra |
+| `marcar_salida`, `deshacer_salida` (v0.13) | admin, cajero, cocina, barra |
+| `resolver_anulacion` (v0.13) | admin, cajero |
+| `auditoria_listar`, `inventario_listar`, `insumo_guardar`, `insumo_borrar`, `insumo_movimiento`, `receta_reemplazar`, `movimientos_listar` (v0.13) | solo admin |
 | super_* (cuota, auditoría, export/import) · fijar_empresa a empresa ajena | solo super (vía `public.supers`) |
 
 ### 3.1 `abrir_cuenta(p_empresa_id uuid, p_mesa_id uuid, p_comensales integer = 1) → uuid`
@@ -141,7 +155,7 @@ Solo pendiente. `p_nota` NULL ⇒ `''`.
 `NULL` ⇒ todos los `pendiente`; si no, array de uuids. Pasa a `enviado` + `enviado_en=now()`. Devuelve nº de items enviados. Cuenta `abierta`.
 
 ### 3.7 `anular_item(p_item_id uuid, p_motivo text, p_empresa_id uuid = null) → void`
-Pendiente: cualquier miembro. **Enviado: solo admin y `p_motivo` no vacío** (guardado en `motivo_anulacion`). El ítem NO se borra, queda `anulado` (excluido de totales).
+Pendiente: cualquier miembro (admin/cajero/mesero). **Enviado/listo/anulacion: solo admin o cajero y `p_motivo` no vacío** (guardado en `motivo_anulacion`; desde v0.13 el cajero se sumó al corte directo). El ítem NO se borra, queda `anulado` (excluido de totales). Para que cocina/barra puedan solicitar sin ejecutar existe el flujo de aprobación §3.22.
 
 ### 3.8 `unir_mesas(p_cuenta_id uuid, p_mesa_ids jsonb, p_empresa_id uuid = null) → jsonb`
 Suma mesas a la cuenta (las ya unidas se ignoran). Si una mesa tenía cuenta activa propia, **se absorbe**: sus items pasan a la cuenta destino y su cuenta se cierra (`estado=cerrada`, `nota='unida a otra cuenta'`, igual que el reducer). Devuelve `{ cuenta_id, absorbidas: [uuid...] }`.
@@ -160,6 +174,7 @@ Cuenta `abierta` o `precuenta`. NULL = no toca ese campo. Descuento > 0 con rol 
 
 ### 3.13 `cobrar_cuenta(p_cuenta_id uuid, p_pagos jsonb, p_propina numeric = null, p_descuento numeric = null, p_pin text = null, p_empresa_id uuid = null) → jsonb`
 Roles caja (admin/cajero). Atómico: aplica extras opcionales (misma regla de PIN), valida `Σ pagos ≥ total`, inserta `pagos`, cierra cuenta (`cerrada_por/cerrada_en`), **libera mesas** (`delete cuenta_mesas`), acumula el efectivo del turno (`movimientos.venta_efectivo`, `cuentas_cerradas++`) si hay turno abierto.
+**Inventario (v0.13):** al cerrar, descuenta el stock por receta (`Σ qty × recetas.cantidad` por insumo de los ítems no anulados) y deja la baja como movimiento `tipo='venta'` en `insumos_movimientos`. Es **best-effort dentro de la misma RPC**: un fallo de inventario se atraga (`exception when others → null`) y NUNCA impide el cobro; el stock puede quedar negativo y se corrige a mano desde la pantalla Inventario.
 `p_pagos = [{ metodo: 'efectivo'|'qr'|'tarjeta'|'mixed', monto: number, detalle?: object }]` (efectivo: `detalle={recibido, cambio}`, `monto` = imputado a la cuenta).
 Devuelve **ticket listo para imprimir** (IA-3 usa esto para plantillas):
 ```json
@@ -178,19 +193,21 @@ Roles caja. Un turno abierto por empresa (error si ya hay uno). Devuelve `turno_
 ### 3.16 `cerrar_turno(p_contado numeric, p_turno_id uuid = null, p_empresa_id uuid = null) → jsonb`
 Calcula esperado = `fondo + pagos efectivo (cuentas cerradas en la ventana del turno) + Σ ingresos − Σ egresos`; escribe `esperado/contado/cerrado_en/cerrado_por` y snapshot en `movimientos.cierre`. Devuelve `{ turno_id, fondo, venta_efectivo, ingresos, egresos, esperado, contado, diferencia }`.
 
-### 3.17 `actualizar_comensales(p_cuenta_id uuid, p_comensales integer, p_empresa_id uuid = null) → integer` (migración 003)
+### 3.17 `actualizar_comensales(p_cuenta_id uuid, p_comensales integer, p_empresa_id uuid = null) → integer` (sección 003)
 Corregir el número de comensales **después** de abrir la cuenta (mesa o grupo). `security definer`, exige rol admin/cajero/mesero y valida contra la empresa activa. Rechaza fuera de 1..99 con «El número de comensales debe estar entre 1 y 99» (mismo rango que el CHECK de `cuentas.comensales`; se antepone para devolver mensaje en español y no un 23514). NO deja tocar una cuenta ya `cerrada` ni de otra empresa («No se pudo cambiar los comensales: la cuenta no está abierta en esta empresa»). Audita `comensales` en `public.auditoria` si 002 está aplicada. Devuelve el número fijado. Cliente: acción `comensales~` (`store.jsx` → `tiendaSupabase.js`, usado por `SalonPage.jsx`).
 
-### 3.18 `empresa_por_codigo(p_codigo text) → table(id uuid, nombre text, moneda text)` (redefinida en 002)
+### 3.18 `empresa_por_codigo(p_codigo text) → table(id uuid, nombre text, moneda text)` (definida una sola vez, con throttle)
 Endpoint **pre-login** (ejecutable por `anon`): paso 1 del login. Con la migración 002 lleva throttle anti-fuerza-bruta: **30 consultas por IP en 10 minutos** (`private.throttle_ok('cod', 30)`); al agotar devuelve **0 filas** — indistinguible de un código inexistente, en vez de lanzar excepción (la excepción abortaría la transacción y el contador nunca se guardaría, además de delatar la existencia de empresas). Código con menos de 3 caracteres ⇒ también 0 filas sin ruido. El cliente muestra "código no encontrado" en ambos casos.
 
-### 3.19 RPCs de plataforma (super) — migraciones 001 + 002
+### 3.19 RPCs de plataforma (super) — secciones 001 + 002 de `supabase/setup.sql`
 Todas empiezan con `if not public.es_super() then raise exception 'requiere super'` y siguen la regla 8 (§0). El comercio normal recibe 403/`requiere super`:
 
 | RPC | Qué hace |
 |---|---|
 | `super_listar_empresas() → jsonb` (001) | Todas las empresas con contadores. |
-| `super_ajustar_empresa(p_empresa uuid, p_max_productos integer, p_plan text, p_notas text) → jsonb` (002) | Fija la cuota (`NULL` = sin límite ⇒ plan pago implícito) y el plan `'gratis'|'pago'` en `limites`; audita `super_ajustar_cuota`. |
+| `super_ajustar_empresa(p_empresa uuid, p_max_productos integer, p_plan text, p_notas text, p_max_miembros integer) → jsonb` (v0.14) | Ajuste fino de cuotas; plan `'pago'` ⇒ ambos NULL; Básico sin valor ⇒ defaults. Audita `super_ajustar_cuota`. |
+| `super_cambiar_plan(p_empresa uuid, p_plan text) → jsonb` (v0.14) | Un clic Básico ⇄ Premium con los defaults del plan; solo super; audita `super_cambio_plan`. |
+| `mi_plan(p_empresa_id uuid) → jsonb` | `{plan, retencion_meses}` para cualquier miembro (desde v0.14 sin `max_productos`). |
 | `super_ver_cuota(p_empresa uuid) → jsonb` (002) | Lee `{max_productos, plan, notas, productos_actuales}` solo para el panel del super. |
 | `super_listar_auditoria(p_empresa uuid = null, p_limite integer = 200) → table(en, actor, accion, detalle, empresa_id)` (002) | Única lectura posible de `auditoria` (tope duro 1000). |
 | `super_registrar_exporte(p_empresa uuid) → void` (002) | El panel la llama tras descargar el .json: deja prueba de qué empresa salió de la plataforma y cuándo. |
@@ -200,7 +217,7 @@ Todas empiezan con `if not public.es_super() then raise exception 'requiere supe
 
 Reglas de negocio de la cuota (trigger `private.controlar_cuota_productos` sobre `productos`): empresa nueva nace con 30 (trigger `trg_nueva_cuota` en `empresas`); dar de baja (`activo=false`) nunca se bloquea; editar precio/nombre/foto no consume; **reactivar un artículo inactivo sí consume**; `max_productos NULL` = ilimitado; los super están exentos.
 
-### 3.20 Altas y equipo — migración 004_altas.sql
+### 3.20 Altas y equipo — sección 004 de `supabase/setup.sql`
 Ninguna de estas funciones acepta `p_empresa_id`: usan `private.empresa_activa()`, así que el cliente las llama con `rpc(nombre, params, { conEmpresa: false })` (si se les manda `p_empresa_id`, PostgREST no encuentra la firma y devuelve 404 PGRST202).
 
 | Objeto | Firma y comportamiento |
@@ -214,17 +231,46 @@ Ninguna de estas funciones acepta `p_empresa_id`: usan `private.empresa_activa()
 
 **Claves olvidadas (decisión del dueño):** no hay reset por correo. Un administrador que no puede entrar escribe al WhatsApp de `SOPORTE_WHATSAPP` (`src/config.js`) y el super le fija clave — o bien entra en esa empresa desde el panel Super (002 le da rol `admin` efectivo) y usa **Configuración → Equipo → Nueva clave**. Un cajero/mesero recibe clave nueva de un administrador de su negocio desde esa misma pantalla.
 
-### 3.21 Quién es super — migración 005_super_usuario.sql
-El super **no se crea desde la app**: el alta self-service (`004`) solo sabe dar de alta empresas y su admin. La marca de super es una fila en `public.supers`, y se mintea desde el SQL Editor con:
+### 3.21 Quién es super — `crear_super` / `quitar_super` (sección «super fusionado» de `supabase/setup.sql`)
+El super **no se crea desde la app**: el alta self-service (§3.20) solo sabe dar de alta empresas y su admin. La marca de super es una fila en `public.supers`, y se mintea desde el SQL Editor. Hoy estas funciones viven DENTRO de `setup.sql` (el archivo suelto del super ya no existe); al final del archivo hay un bloque «★ PASO OPCIONAL ★» listo para promocionarse:
 
 ```sql
-select public.crear_super('dueno@correo.com', 'SuClaveSegura', 'Alex');
+select public.crear_super('tu@correo.com', 'ClaveMin8Caracteres', 'Tu nombre', true)
+where false;   -- ← quita el `where false` y pega el archivo completo para que se ejecute
 ```
 
 - `crear_super(p_correo, p_clave, p_nombre default 'Super', p_reemplazar_clave default false) → uuid`. Crea la cuenta en GoTrue (espejo de `equipo_invitar`: bcrypt 10, `email_confirmed_at = now()`, columnas de token en `''`, `auth.identities`) y mete la fila en `supers`. **Re-pegable**: si el correo ya existe, promove sin tocar la clave; solo cambia la clave si se pasa `p_reemplazar_clave := true`. Rechaza correo sin dominio y clave de menos de 8. Audita `super_alta` con `empresa_id NULL` (es evento de plataforma, no de negocio).
 - `quitar_super(p_correo) → boolean`: borra solo la fila de `supers`; la cuenta y sus datos siguen intactos y puede seguir entrando como usuario normal.
 - Ambas están **revocadas a `anon` y `authenticated`** (medido: llamar `POST /rest/v1/rpc/crear_super` con la publishable key ⇒ 42501 `permission denied`; `has_function_privilege` da `false` para esos dos roles y `true` para `service_role`). Nadie con cuenta de negocio puede crearse super.
-- La clave queda escrita en el historial de consultas del SQL Editor: si molesta, borrar esa consulta después, o fijar la clave luego con `super_resetear_clave` (004).
+- La clave queda escrita en el historial de consultas del SQL Editor: si molesta, borrar esa consulta después, o fijar la clave luego con `super_resetear_clave` (§3.20).
+
+### 3.22 Cocina/barra · salida y anulación con aprobación — v0.13 (sección 009 de `supabase/setup.sql`)
+Todas `security definer`, `set search_path = ''`, revocadas a `public/anon` y otorgadas a `authenticated`; el gate de rol lo ejecuta `private.exigir_rol(...)` en la base (el mapa `permisos.js` del cliente es solo UX). A diferencia de las RPCs de equipo (§3.20), estas SÍ aceptan `p_empresa_id`, así que el cliente las llama con la convención normal de `rpc()` (se inyecta `p_empresa_id` automáticamente, CONTRATO §2).
+
+| RPC | Firma exacta (setup.sql) | Roles | Qué hace |
+|---|---|---|---|
+| `cola_de_area` | `public.cola_de_area(p_area text default 'cocina', p_empresa_id uuid default null) → jsonb` | admin, cajero, mesero, cocina, barra | La cola digital del área. Rechaza `p_area ∉ {cocina,barra}` con «El área debe ser cocina o barra». Devuelve un array de objetos-cuenta (cuentas NO cerradas con ítems vivos del área: estados `enviado/listo/anulacion` con `i.areas @> array[p_area]`, ordenados por `enviada_en`): `{ cuenta_id, mesa (nombres unidos o 'Mostrador'), canal: 'mesa'|'mostrador', comensales, abierta_en, enviada_en, items: [{ id, nombre, qty, nota, estado, areas, enviada_en, listo_en, anulacion_motivo }] }`. Un combo con 2 áreas aparece en las dos colas. |
+| `marcar_salida` | `public.marcar_salida(p_item_ids jsonb, p_empresa_id uuid default null) → integer` | admin, cajero, cocina, barra | Pasa los ítems `enviado` → `listo` (+`listo_en=now()`); ignora los que no estén en `enviado`. `p_item_ids` = array jsonb de uuid (no-array ⇒ «Debe enviar una lista de ítems»). Devuelve nº de ítems marcados y audita `item_salida` con las etiquetas de los nombres. |
+| `deshacer_salida` | `public.deshacer_salida(p_item_ids jsonb, p_empresa_id uuid default null) → integer` | admin, cajero, cocina, barra | Arrepentimiento: `listo` → `enviado` (limpia `listo_en`). Mismas validaciones y auditoría (`item_salida_deshacer`) que `marcar_salida`. |
+| `pedir_anulacion` | `public.pedir_anulacion(p_item_id uuid, p_motivo text, p_empresa_id uuid = null) → boolean` | admin, cajero, mesero, cocina, barra | El cocinero/barra (o cualquiera con acceso) SOLICITA anular un ítem `enviado` o `listo`. Motivo obligatorio («El motivo es obligatorio»). La cuenta debe estar `abierta` o `precuenta`. El ítem pasa a `anulacion` guardando `anulacion_estado_previo` (para poder rechazar), `anulacion_motivo`, `anulacion_por=auth.uid()`, `anulacion_pedida_en`. Audita `item_anulacion_pedida`. |
+| `resolver_anulacion` | `public.resolver_anulacion(p_item_id uuid, p_aprobar boolean, p_motivo text default null, p_empresa_id uuid = null) → boolean` | admin, cajero | resuelve la solicitud pendiente (error «Ese ítem no tiene una anulación pendiente» si el ítem no está en `anulacion`). **Aprueba** ⇒ `anulado` con `motivo_anulacion` = el motivo pasado o el pedido (fallback 'sin motivo') + `anulacion_resuelta_por/en`. **Rechaza** ⇒ vuelve al `anulacion_estado_previo` (o `enviado`) y limpia todos los campos `anulacion_*`. Audita `item_anulacion_resuelta`. |
+
+Nota: el corte directo `anular_item` (§3.7) sigue existiendo para admin/cajero (con motivo obligatorio en ítems `enviado/listo/anulacion`); el flujo nuevo es para que cocina/barra **pidan** sin poder ejecutar.
+
+### 3.23 Inventario — v0.13 (sección 009 de `supabase/setup.sql`) — SOLO rol admin
+Siete RPCs nuevas en la tabla de abajo, más el descuento automático de stock que vive dentro de `cobrar_cuenta` (§3.13). Todas `security definer`, con gate `private.exigir_rol(array['admin'])`, y siguen la regla 8 (§0). El cliente las usa en `src/components/inventario/InventarioPage.jsx` (y `AuditoriaPage.jsx` para `auditoria_listar`); en modo demo no hay inventario.
+
+| RPC | Firma exacta (setup.sql) | Qué hace |
+|---|---|---|
+| `inventario_listar` | `public.inventario_listar(p_empresa_id uuid default null) → jsonb` | Todo lo que necesita la pantalla de una sola vez: `{ insumos: [{id,nombre,unidad,stock,stock_min,costo,activo}] (ordenado por nombre), productos: [{id,nombre,recetas:[{insumo_id,cantidad}]}] (solo activos) }`. Es la lectura de recetas: **no existe** una `receta_listar` aparte. |
+| `insumo_guardar` | `public.insumo_guardar(p_insumo jsonb, p_empresa_id uuid default null) → uuid` | Upsert. `p_insumo = { id?, nombre, unidad?, stock?, stock_min?, costo?, activo? }`. Con `id` ⇒ actualiza esa fila (de la empresa activa, si no «El insumo no existe en la empresa activa»); sin `id` ⇒ inserta o actualiza por nombre normalizado (`on conflict (empresa_id, lower(nombre))`). Nombre vacío ⇒ error; duplicado ⇒ «Ya existe otro insumo con ese nombre en la empresa». Devuelve el uuid del insumo. |
+| `insumo_borrar` | `public.insumo_borrar(p_insumo_id uuid, p_empresa_id uuid default null) → boolean` | Borrado **real** (las recetas y los movimientos caen en cascada por FK). Audita `insumo_borrar`. |
+| `insumo_movimiento` | `public.insumo_movimiento(p_insumo_id uuid, p_tipo text, p_cantidad numeric, p_nota text default null, p_empresa_id uuid default null) → numeric` | Movimiento manual: `p_tipo ∈ {entrada,salida,ajuste}` (otro ⇒ error), `p_cantidad > 0` obligatorio. `ajuste` **fija** el stock al valor pasado (no lo suma). Inserta el movimiento con `stock_after` y `usuario_nombre` snapshot. Devuelve el stock nuevo. Ojo: la base NO rechaza salidas que dejen stock negativo (el comentario del cliente que sugiere lo contrario es impreciso). Audita `insumo_movimiento`. |
+| `receta_reemplazar` | `public.receta_reemplazar(p_producto_id uuid, p_lineas jsonb, p_empresa_id uuid default null) → integer` | Guarda la receta COMPLETA de un plato (borra y reinserta; reemplazo total, no parche). `p_lineas = [{ insumo_id, cantidad }]` con `cantidad > 0` y insumo de la empresa activa (faltantes ⇒ error en español). `p_lineas = []` ⇒ deja el plato sin receta. Devuelve el nº de líneas. Audita `receta_guardar`. |
+| `movimientos_listar` | `public.movimientos_listar(p_dias integer default 7, p_limite integer default 200, p_empresa_id uuid default null) → jsonb` | Historial de `insumos_movimientos` (tipo `entrada/salida/venta/ajuste`) de la empresa: `[{ en, insumo_nombre ('(insumo eliminado)' si ya no existe), tipo, cantidad, stock_after, nota, usuario_nombre }]`. `p_dias` recortado a 1..90, `p_limite` a 1..500. |
+| `auditoria_listar` | `public.auditoria_listar(p_dias integer default 7, p_accion text default null, p_actor uuid default null, p_limite integer default 300, p_empresa_id uuid default null) → jsonb` | **Auditoría local**: el admin del negocio lee la suya sin depender del super. Filtros opcionales por acción y por actor; `p_dias` 1..90, `p_limite` 1..500. Devuelve `[{ en, actor, actor_nombre, actor_rol, accion, detalle, entity_type, entity_label }]` (los NULL salen como '—'). `super_listar_auditoria` (§3.19) sigue intacta para el panel del super. |
+
+Las funciones de inventario se apoyan en `private.auditar(empresa, accion, detalle, entity_type, entity_label)`: la firma histórica de 3 argumentos fue **reemplazada** por una de 5 con los dos últimos `default null` (antes de crearla se hace `drop` de la de 3, porque `create or replace` con más args crearía una función distinta y ambigua). Las ~40 llamadas viejas de 3 argumentos siguen válidas.
 
 ---
 
@@ -263,6 +309,8 @@ select public.crear_super('dueno@correo.com', 'SuClaveSegura', 'Alex');
 
 **Refresh de estado:** tras cada RPC, recargar `v_estado_mesas` (y `cuentas/cuenta_items` de la cuenta abierta) o suscribirse por Realtime a `cuentas`/`mesas` (ver checklist del schema). Las RPCs devuelven payloads actualizados: re-serializar desde la respuesta cuando exista (agregar_items, cobrar, cerrar_turno).
 
+**Pantallas nuevas de v0.13 (fuera del reducer):** `CocinaPage`, `InventarioPage` y `AuditoriaPage` NO son acciones del store: llaman sus RPCs (§3.22/§3.23) directamente con `rpc()` y se refrescan por poll + Realtime (`cuenta_items` en cocina). No tienen simulación demo: `CocinaPage` y `InventarioPage` muestran un aviso explícito sin conexión, y `AuditoriaPage` depende de datos que solo existen en la base real.
+
 ---
 
 ## 5. Errores
@@ -271,32 +319,38 @@ select public.crear_super('dueno@correo.com', 'SuClaveSegura', 'Alex');
 
 ## 6. Permisos por rol (la base manda; `src/services/permisos.js` es solo UX)
 
-- **mesero:** abrir/crear cuentas, items, enviar, anular pendientes, unir/separar/mover, extras sin descuento, pre-cuenta/reabrir. NO cobra, NO anula enviados, NO caja, NO toca catálogo.
-- **cajero:** todo lo del mesero + cobrar + turnos/movimientos de caja. Descuento ⇒ necesita PIN propio.
-- **admin:** todo + anular enviados + descuentos sin PIN + CRUD catálogo/config + alta de miembros (vía SQL por ahora).
+- **mesero:** abrir/crear cuentas, items, enviar, anular pendientes, unir/separar/mover, extras sin descuento, pre-cuenta/reabrir, ver la cola de cocina/barra y pedir anulación de enviados (la aprueba cajero/admin). NO cobra, NO anula enviados por corte directo, NO caja, NO toca catálogo.
+- **cajero:** todo lo del mesero + cobrar + turnos/movimientos de caja + anular enviados/listos con motivo + aprobar/rechazar anulaciones. Descuento ⇒ necesita PIN propio.
+- **admin:** todo lo anterior + descuentos sin PIN + CRUD catálogo/config + pantalla Equipo + **inventario y auditoría local (roles exclusivos)**.
+- **cocina / barra (v0.13):** ÚNICAMENTE su pantalla de área: `cola_de_area`, `marcar_salida`/`deshacer_salida` y `pedir_anulacion` (solicitud; nunca `resolver_anulacion`). No ven salón ni caja ni catálogo, no cobran, no autorizan nada hacia arriba. No pueden anular por corte directo (`anular_item` los rechaza).
 
 ## 7. Fuera de alcance en v1 (para coordinar)
 
-- Alta de empresas/miembros desde la app (hoy: dashboard/SQL; ver seed comentado al final de `schema.sql`). **Primer admin:** `update public.membresias set user_id = auth.uid() ...` funciona SOLO en sesión autenticada; en el SQL editor usar el insert por email (seed Opción A, comentado y listo).
+- Alta de empresas/miembros desde la app: **resuelto en v0.5** (alta self-service + pantalla Equipo). El seed comentado que existía al final del antiguo esquema hoy vive al final de la sección base de `supabase/setup.sql`. **Primer admin:** `update public.membresias set user_id = auth.uid() ...` funciona SOLO en sesión autenticada; en el SQL editor usar el insert por email (seed Opción A, comentado y listo).
 - `dividir_cuenta` (por ítems/partes/personas): se compone en el cliente con `separar_mesa` + `mover_items` + `cobrar_cuenta`; RPC dedicada queda para v2 si hace falta atomicidad extra.
 - Ticket impreso: IA-3 consume el jsonb de `cobrar_cuenta`; no toca la base.
-- ~~Backups/migraciones versionadas~~ → ya se usan: SQL numerado e idempotente en `supabase/migraciones/` (pegar en el SQL Editor; el flujo con `supabase migration` de CLI queda para cuando haya proyecto local vinculado). Orden de deploy en §8.
+- ~~Backups/migraciones versionadas~~ → hoy: TODO el backend en un único archivo idempotente `supabase/setup.sql` (pegar COMPLETO en el SQL Editor tras cada cambio; el flujo con `supabase migration` de CLI queda para cuando haya proyecto local vinculado). Orden interno y despliegue en §8.
 
 ---
 
-## 8. Despliegue de migraciones — ORDEN EXACTO
+## 8. Despliegue del backend — UN solo archivo, UN solo pegado
 
-Idempotentes, cada una se pega completa en el SQL Editor del proyecto Supabase, SIEMPRE en este orden (las siguientes dependen de las anteriores):
+`supabase/setup.sql` es el **único SQL del proyecto** (~4.900 líneas, envuelto en `begin;` … `commit;`): se pega COMPLETO en el SQL Editor de Supabase. Es idempotente y atómico — se puede re-pegar todas veces que haga falta (base nueva o ya instalada) sin duplicar ni romper nada; si algo falla, el `rollback` no deja nada a medias. **Regla: tras cada cambio en el backend, volver a pegar el archivo completo.** El antiguo archivo suelto del super y las migraciones numeradas como archivos (001–007) fueron fusionados dentro; hoy son secciones internas que ya corren en el orden correcto dentro del propio archivo:
 
-1. `supabase/setup.sql` — base: tablas, RLS multi-tenant, RPCs de negocio, `private.es_super_compat()`.
-2. `supabase/setup.sql` — `supers`, `es_super()`, `fijar_empresa`, export/import (v1).
-3. `supabase/setup.sql` — cuota oculta (`limites`), auditoría, storage de miniaturas, throttle, hardening, super-entrar, export/import **v2 con histórico**. **Requiere 001** (usa `public.es_super()`/`supers`).
-4. `supabase/setup.sql` — RPC `actualizar_comensales`. Degrada sin 002 (simplemente no audita), pero el orden correcto es aplicarla después.
-5. `supabase/setup.sql` — trigger de alta self-service de empresa + RPCs `equipo_*` y `super_resetear_clave`. **Requiere 001 y 002** (`es_super`, `auditar`, `exigir_rol`, `trg_nueva_cuota`).
-6. `supabase/setup.sql` — funciones `crear_super` / `quitar_super` para mintear el super desde el SQL Editor. **Requiere 001** (`public.supers`) y degrada sin 002 (no audita). Después de pegarla, una línea: `select public.crear_super('tu@correo.com', 'ClaveSegura', 'Alex');`
+1. Esquema base: tablas, RLS multi-tenant, RPCs de negocio, `public.es_super()`.
+2. Sección 001 — `supers`, `es_super()`, `fijar_empresa`, export/import (v1).
+3. Sección 002 — cuota oculta (`limites`), auditoría, storage de miniaturas, throttle, hardening, super-entrar, export/import **v2 con histórico**.
+4. Sección 003 — RPC `actualizar_comensales`.
+5. Sección 004 — trigger de alta self-service de empresa + RPCs `equipo_*` y `super_resetear_clave`.
+6. Sección 006 — RPC `empresas_para_login` (lista de empresas del login, ejecutable por `anon`).
+7. Sección 007 — cola de impresión (estación del local): `trabajos_impresion` + RPCs `encolar_impresion`/`reclamar_impresion`/`finalizar_impresion`/`listar_impresion`/`gestionar_impresion` + Realtime.
+8. Sección 008 — retención de datos (purga nocturna pg_cron, solo plan gratis), `mi_plan`, `exportar_mi_empresa`.
+9. Sección 009 (v0.13) — roles `cocina`/`barra`, `areas text[]` en productos/cuenta_items, estados `listo`/`anulacion`, RPCs de cola/salida/anulación (§3.22), `auditoria_listar` local y columnas legibles de auditoría (§1, §3.23), tablas y RPCs de inventario (§3.23) y **super fusionado** (`crear_super`/`quitar_super`, que antes vivían en el archivo suelto ya eliminado).
+
+Al final del archivo, bloque «★ PASO OPCIONAL ★»: `select public.crear_super('tu@correo.com', 'ClaveMin8Caracteres', 'Tu nombre', true) where false;` — se editan las comillas, se quita el `where false` y el mismo pegado completo promociona al dueño a super. Sin tocarlo, el resto del archivo funciona igual.
 
 **Ajuste del dashboard que necesita el alta self-service:** Authentication → Sign In / Up ⇒ **Allow new signups ON** y **Confirm email OFF** (sin autoconfirmación el `signUp` no devuelve sesión y el negocio queda a medio crear hasta que el usuario abra el correo). Comprobado y dejado ON/OFF desde la API de gestión el 2026-10-16 (`mailer_autoconfirm: true`, `disable_signup: false`).
 
-**Estado en el proyecto Supabase real (`oeyrnenclklmczlfoxzy`):** 002_seguridad.sql, 003_comensales.sql, **004_altas.sql** y **005_super_usuario.sql ya están aplicadas** (2026-10-16; 004 dos veces: la primera aplicación falló en `equipo_listar` con 42804 y se re-aplicó con el `::text` corregido); schema y 001 lo estaban desde v0.3. Cada archivo termina con un `select` de verificación (en el SQL Editor `auth.uid()` es NULL ⇒ solo devuelve contados: filas de `limites`/`throttle`/`auditoria`, columna `imagen_path`, triggers, políticas de Storage, bucket). Para probar una RPC de negocio con sesión real desde el editor: `begin; select set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', true); select set_config('app.empresa_id','<uuid>', true); select * from <rpc>(); commit;`.
+**Estado en el proyecto Supabase real (`oeyrnenclklmczlfoxzy`):** las secciones 002, 003, 004 y 005 (2026-10-16; 004 dos veces: la primera aplicación falló en `equipo_listar` con 42804 y se re-aplicó con el `::text` corregido) quedaron aplicadas cuando aún eran archivos sueltos; el esquema y la 001 lo estaban desde v0.3. Con la fusión, la única verificación que vale hoy es **re-pegar `supabase/setup.sql` completo** (las 008/009 — retención y v0.13 — no se han probado contra la base real). Cada sección termina con un `select` de verificación (en el SQL Editor `auth.uid()` es NULL ⇒ solo devuelve contados: filas de `limites`/`throttle`/`auditoria`, columna `imagen_path`, triggers, políticas de Storage, bucket). Para probar una RPC de negocio con sesión real desde el editor: `begin; select set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', true); select set_config('app.empresa_id','<uuid>', true); select * from <rpc>(); commit;`.
 
 **Prueba hecha de `crear_super` (2026-10-16, con cuenta desechable luego borrada):** la cuenta creada inicia sesión por `POST /auth/v1/token?grant_type=password` (200 con `access_token`; ojo, el parámetro es `grant_type`, no `grant`) y `POST /rest/v1/rpc/es_super` con ese token devuelve `true`. Re-pegar `crear_super` sin el flag devolvió el mismo uuid y mantuvo la clave vieja (login viejo 200, login con la clave nueva 400); con `p_reemplazar_clave := true` entró la clave nueva (200). `quitar_super` dejó `supers` en su valor anterior y la cuenta siguió pudiendo entrar. Borrar el usuario de prueba con `delete from auth.users` limpió en cascada `identities`, `perfiles` y `supers` (0 huérfanos).

@@ -1,7 +1,7 @@
 {
   "name": "pos-control",
   "private": true,
-  "version": "0.12.0",
+  "version": "0.14.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "iconos": "node scripts/gen-iconos.mjs",
     "idiomas": "node scripts/check-i18n.mjs",
-    "test:aislamiento": "node tests/aislamiento.mjs"
+    "test:aislamiento": "node tests/aislamiento.mjs",
+    "test:cuotas": "node tests/cuotas.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

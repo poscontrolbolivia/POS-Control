@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore, cuentaActiva, totalCuenta, totalFinal, pagadoCuenta } from '../../services/store.jsx'
 import { puede } from '../../services/permisos'
-import { MONEDA } from '../../config'
+import { useMoneda } from '../../services/moneda.js'
 import { LADO_VISUAL_PX, urlImagenProducto } from '../../services/imagenProducto.js'
 import { useIdioma } from '../../i18n/index.jsx'
 import { imprimirCuenta, imprimirComandas } from '../ticket/Ticket.jsx'
 import './PedidoPanel.css'
 
-const money = n => `${MONEDA} ${(Number(n) || 0).toFixed(2)}`
+const cap = x => (x ? String(x).charAt(0).toUpperCase() + String(x).slice(1) : '')
+// Etiqueta legible de un área de impresión (chips en la fila del ítem).
+const nombreArea = (id, tOr) => tOr('areas.' + id, id === 'barra' ? 'Barra' : cap(id))
 
 // Miniato 45×45 (hueco siempre reservado con la inicial → ninguna fila/til se desplaza
 // cuando falta la imagen). Estilos en línea: styles.css está fuera del alcance de este carril.
@@ -57,6 +59,7 @@ function Ventana({ titulo, onClose, children }) {
 
 export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloqueado }) {
   const { s, d } = useStore()
+  const { money } = useMoneda()
   const { t, tOr } = useIdioma()
   const usuario = sesion?.usuario || sesion?.nombre || rol
   const secciones = [...(s.secciones || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0))
@@ -142,8 +145,10 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
   }
 
   // ---------- borrar producto (con motivo) ----------
+  // 'enviado' Y 'listo' (ya salió en la impresora) exigen el permiso fuerte anular_enviado:
+  // admin/cajero. Cocina/barra NO borran aquí: piden anulación en su pantalla (pedir_anulacion).
   const pedirBorrar = i => {
-    const enviado = i.estado === 'enviado'
+    const enviado = i.estado === 'enviado' || i.estado === 'listo'
     if (!puede(rol, enviado ? 'anular_enviado' : 'anular_pendiente')) return avisar(enviado ? t('pedido.needAdmin') : t('pedido.sinPermisoAnular'))
     if (!enviado && !puedeBorrar) { // mesero: quita un pendiente sin papeleo
       d({ t: 'anular', cuentaId: c.id, itemId: i.id, motivo: 'pendiente' })
@@ -155,7 +160,7 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
   const confirmarBorrar = i => {
     const base = borrando.motivo ? t('pedido.motivo.' + borrando.motivo) : ''
     const motivo = [base, borrando.texto.trim()].filter(Boolean).join(': ')
-    if (i.estado === 'enviado' && !motivo) return avisar(t('pedido.motivoOblig'))
+    if ((i.estado === 'enviado' || i.estado === 'listo') && !motivo) return avisar(t('pedido.motivoOblig'))
     d({ t: 'anular', cuentaId: c.id, itemId: i.id, motivo: motivo || 'pendiente' })
     setMarcados(m => m.filter(x => x !== i.id))
     setBorrando(null)
@@ -313,12 +318,25 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
               <li key={i.id} className={i.estado + ' pm-item'}>
                 <Thumb producto={s.productos.find(x => x.id === i.productoId)} nombreFallback={i.nombre} />
                 {puedeMover && editable && i.estado !== 'anulado' && <input type="checkbox" checked={marcados.includes(i.id)} onChange={() => toggle(i.id)} aria-label={t('pedido.moverTitle')} />}
-                <span className="n">{i.nombre}{i.estado === 'anulado' && t('pedido.anuladoTag')}{i.nota && <em> · {i.nota}</em>}{i.motivo && i.estado === 'anulado' && <em> · {i.motivo}</em>}</span>
+                <span className="n">
+                  {i.nombre}
+                  {i.estado === 'anulado' && t('pedido.anuladoTag')}
+                  {i.estado === 'listo' && <em> · {tOr('estadoItem.listo', 'Listo')}</em>}
+                  {i.estado === 'anulacion' && <em> · {tOr('estadoItem.anulacion', 'Anulación pedida')}</em>}
+                  {i.nota && <em> · {i.nota}</em>}
+                  {i.motivo && (i.estado === 'anulado' || i.estado === 'anulacion') && <em> · {i.motivo}</em>}
+                  {/* Áreas del ítem (snapshot cuenta_items.areas): combo → Cocina + Barra a la vez. */}
+                  {Array.isArray(i.areas) && i.areas.length > 0 && (
+                    <span className="pm-chip" style={{ marginLeft: 6, fontSize: '.72rem' }} title={tOr('areas.title', 'Áreas donde se imprime este artículo')}>
+                      🖨 {i.areas.map(a => nombreArea(a, tOr)).join(' + ')}
+                    </span>
+                  )}
+                </span>
                 {editable && i.estado === 'pendiente' ? (
                   <span className="qty"><button onClick={() => d({ t: 'qty', cuentaId: c.id, itemId: i.id, d: -1 })}>−</button>{i.qty}<button onClick={() => d({ t: 'qty', cuentaId: c.id, itemId: i.id, d: 1 })}>+</button></span>
                 ) : <span>×{i.qty}</span>}
                 <span className="pr">{money(i.precio * i.qty)}</span>
-                {editable && i.estado !== 'anulado' && <button className="x danger solid" title={t('pedido.borrarProducto')} aria-label={t('pedido.borrarProducto')} onClick={() => pedirBorrar(i)}>🗑</button>}
+                {editable && i.estado !== 'anulado' && i.estado !== 'anulacion' && <button className="x danger solid" title={t('pedido.borrarProducto')} aria-label={t('pedido.borrarProducto')} onClick={() => pedirBorrar(i)}>🗑</button>}
                 {editable && i.estado === 'pendiente' && <button className="x" title={t('pedido.notaTitle')} onClick={() => setNota(n => (n?.id === i.id ? null : { id: i.id, texto: i.nota || '' }))}>✎</button>}
 
                 {nota?.id === i.id && (
@@ -337,12 +355,12 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
                           onClick={() => setBorrando({ ...borrando, motivo: borrando.motivo === k ? '' : k })}>{t('pedido.motivo.' + k)}</button>
                       ))}
                     </div>
-                    <input value={borrando.texto} maxLength={80} placeholder={i.estado === 'enviado' ? t('pedido.motivoEscribe') : t('pedido.motivoOpcional')}
+                    <input value={borrando.texto} maxLength={80} placeholder={i.estado !== 'pendiente' ? t('pedido.motivoEscribe') : t('pedido.motivoOpcional')}
                       onChange={e => setBorrando({ ...borrando, texto: e.target.value })} />
                     <div className="barra" style={{ margin: 0 }}>
                       <button type="button" className="danger solid" onClick={() => confirmarBorrar(i)}>{t('pedido.confirmarBorrar')}</button>
                       <button type="button" className="ghost" onClick={() => setBorrando(null)}>{t('comun.cancelar')}</button>
-                      {i.estado === 'enviado' && <small style={{ color: 'var(--mut)' }}>{t('pedido.motivoOblig')}</small>}
+                      {i.estado !== 'pendiente' && <small style={{ color: 'var(--mut)' }}>{t('pedido.motivoOblig')}</small>}
                     </div>
                   </div>
                 )}

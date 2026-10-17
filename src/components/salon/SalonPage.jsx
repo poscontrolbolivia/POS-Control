@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, cuentaActiva, totalCuenta, totalFinal, nuevoId } from '../../services/store.jsx'
 import { puede } from '../../services/permisos'
-import { MONEDA } from '../../config'
+import { useMoneda } from '../../services/moneda.js'
 import { useIdioma } from '../../i18n/index.jsx'
 import PedidoPanel from '../pedido/PedidoPanel.jsx'
 import './SalonPage.css'
@@ -77,7 +77,8 @@ export const capacidadCuenta = (c, mesas) => {
 
 export default function SalonPage({ rol, sesion }) {
   const { s, d, modo } = useStore()
-  const { t } = useIdioma()
+  const { money } = useMoneda()
+  const { t, tOr } = useIdioma()
   const admin = puede(rol, 'editar_mapa') // único permiso de salón en permisos.js (solo admin)
 
   const [zona, setZona] = useState(() => s.zonas[0]?.id ?? TODAS)
@@ -224,7 +225,9 @@ export default function SalonPage({ rol, sesion }) {
 
   return (
     <div className="salon">
-      <section className="mapa-col">
+      {/* .editando (solo con edit && admin) activa en SalonPage.css el orden móvil
+          mapa-arriba / formulario-abajo y el descuento extra de alto en PC. */}
+      <section className={'mapa-col' + (edit ? ' editando' : '')}>
         {/* ── franja de salones: filtro + administración inline ── */}
         <div className="zona-strip">
           <div className="zonas-scroll" role="group" aria-label={t('salon.salones')}>
@@ -331,11 +334,14 @@ export default function SalonPage({ rol, sesion }) {
                 </select>
               </label>
               <div className="me-campo me-ancho2"><span>{t('salon.forma')}</span>
+                {/* Solo la figura: el nombre de la forma vive en title/aria-label (patrón
+                    tOr para no depender de que i18n tenga ya la clave). */}
                 <div className="me-seg" role="radiogroup" aria-label={t('salon.forma')}>
-                  {[['cuadrada', '▢', t('salon.formaCuadrada')], ['redonda', '◯', t('salon.formaRedonda')], ['rect', '▭', t('salon.formaRect')]].map(([k, ico, txt]) => (
+                  {[['cuadrada', '▢', tOr('salon.formaCuadrada', 'Cuadrada')], ['redonda', '◯', tOr('salon.formaRedonda', 'Redonda')], ['rect', '▭', tOr('salon.formaRect', 'Rectangular')]].map(([k, ico, txt]) => (
                     <button key={k} type="button" role="radio" aria-checked={mesaSel.forma === k}
+                      title={txt} aria-label={txt}
                       className={'me-opc' + (mesaSel.forma === k ? ' on' : '')} onClick={() => ponerForma(k)}>
-                      <span aria-hidden="true">{ico}</span> {txt}
+                      <span aria-hidden="true">{ico}</span>
                     </button>
                   ))}
                 </div>
@@ -385,7 +391,7 @@ export default function SalonPage({ rol, sesion }) {
                 <button type="button" key={m.id} className={`mesa-item ${est}`} onClick={() => setSel(m.id)}>
                   <b className="nombre">{m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : ''}</b>
                   <span className="mi-est">{t('salon.' + est)}</span>
-                  {c && <small className="importe">{MONEDA} {totalFinal(c).toFixed(2)}</small>}
+                  {c && <small className="importe">{money(totalFinal(c))}</small>}
                   {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
                 </button>
               )
@@ -415,11 +421,11 @@ export default function SalonPage({ rol, sesion }) {
                   title={c ? (com > capT ? t('salon.comensalesDeMas', { comensales: com, cap: capT }) : t('salon.comensalesTitle', { comensales: com, cap: capT })) : t('salon.capacidadTitle', { cap: m.cap })}>
                   👥 {c ? `${com}/${capT}` : m.cap}
                 </span>
-                {c && <small className="importe">{MONEDA} {totalFinal(c).toFixed(2)}</small>}
+                {c && <small className="importe">{money(totalFinal(c))}</small>}
                 {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
                 {c && heredadas.includes(c.id) && <span className="badge-heredada" title={t('salon.heredadaTitle')}>↩</span>}
                 {unida && (
-                  <span className="badge-unida" title={t('salon.unidaTitle', { n: c.mesaIds.length, total: `${MONEDA} ${totalCuenta(c).toFixed(2)}` })}>
+                  <span className="badge-unida" title={t('salon.unidaTitle', { n: c.mesaIds.length, total: money(totalCuenta(c)) })}>
                     🔗 ×{c.mesaIds.length}
                   </span>
                 )}

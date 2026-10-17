@@ -1,0 +1,51 @@
+/* DataTable — hoja de tabla con cabeceras ordenables y columnas ajustables a mano.
+   Puerto de las clases sheet, th-sort y col-resize-handle del DataTable de Catering
+   Control, pero pintado con los tokens de styles.css del POS (--card, --card-2, --line,
+   --mut, --ac), así que obedece los temas data-theme night y forest
+   sin fijar fondos blancos. */
+
+.dt-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.dt-search{flex:1 1 220px;min-width:180px}
+
+.sheet{
+  background:var(--card);border:1px solid var(--line);border-radius:14px;
+  overflow:auto;box-shadow:0 4px 14px rgba(0,0,0,.05)}
+.sheet table{border-collapse:collapse;width:100%;min-width:560px}
+.sheet th,.sheet td{
+  text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);
+  font-size:.9rem;vertical-align:top}
+.sheet tbody tr:last-child td{border-bottom:none}
+.sheet tbody tr:hover{background:var(--card-2)}
+.sheet td{color:var(--ink)}
+
+/* Cabecera: fondo ligeramente más oscuro que la hoja y texto discreto. */
+.sheet th{
+  position:relative;background:var(--card-2);color:var(--mut);
+  font-size:.78rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase;
+  white-space:nowrap;user-select:none}
+
+/* Botón de orden: parece texto de cabecera, no un botón del global (styles.css da
+   min-height:40px y bordes a TODO <button>: aquí se anula para que quepa en el th). */
+.th-sort-btn{
+  display:inline-flex;align-items:center;gap:6px;border:0;background:none;border-radius:999px;
+  padding:0 8px;min-height:0;cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;
+  text-transform:inherit;font-weight:inherit}
+.th-sort-btn:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 12%,var(--card-2));color:var(--ink)}
+.th-sort-icon{font-size:.85em;opacity:.7}
+.th-sortable[aria-sort] .th-sort-icon{opacity:1;color:var(--ac)}
+
+/* Manija de redimensionado en el borde derecho del th (Pointer Events, ver columnPrefs.js). */
+.col-resize-handle{
+  position:absolute;top:0;right:-3px;width:8px;height:100%;
+  cursor:col-resize;touch-action:none;z-index:2;border-radius:4px}
+.col-resize-handle:hover,.col-resize-handle:active{background:color-mix(in srgb,var(--ac) 40%,transparent)}
+
+.sheet td.empty{color:var(--mut);text-align:center;padding:22px 12px;font-style:italic}
+
+@media (max-width:640px){
+  .sheet{border-radius:12px}
+  .sheet th,.sheet td{padding:8px 9px;font-size:.84rem}
+}
+@media (prefers-reduced-motion:reduce){
+  .sheet tbody tr:hover{background:inherit}
+}

@@ -1,4 +1,4 @@
-> **Nota v0.7:** el backend vive en SOLO 2 archivos SQL: `supabase/setup.sql` (todo, idempotente) y `supabase/super-admin.sql`. Las menciones a "migraciones", `schema.sql` o `00x_*.sql` en este documento se refieren a lo que hoy está dentro de `setup.sql`.
+> **Nota v0.13:** TODO el backend vive en UN solo archivo idempotente: `supabase/setup.sql`. El antiguo archivo suelto del super y la carpeta de migraciones numeradas (001–007) **ya no existen**: todo está fusionado dentro de `setup.sql` (se pega COMPLETO en el SQL Editor y admite re-pegadas sin romper nada; ver CONTRATO §8). Las menciones a `schema.sql`, `00x_*.sql` o «migración 00x» en este documento son históricas (antes/ex-archivos sueltos) y hoy corresponden a secciones internas de `setup.sql`.
 
 # GUÍA · POS Control (versión gratuita multiempresa)
 
@@ -16,32 +16,38 @@ POS web (React + Supabase) para restaurantes y pequeños comercios de comida:
 ## 2. Login y multiempresa (diferencia clave vs otros sistemas)
 
 1. **Paso 1 — Empresa**: el usuario escribe/elige el código de su empresa. En la versión gratuita la lista no es pública (privacidad); se ingresa el código asignado al registrarse. El endpoint `empresa_por_codigo` lleva **throttle anti-fuerza-bruta** (migración 002): 30 intentos por IP en 10 minutos; al agotar devuelve 0 filas, indistinguible de un código equivocado (no revela nada a quien intenta enumerar empresas).
-2. **Paso 2 — Usuario y clave**. Roles posibles por empresa: `admin`, `cajero`, `mesero`.
+2. **Paso 2 — Usuario y clave**. Roles posibles por empresa: `admin`, `cajero`, `mesero` y —desde v0.13— `cocina` y `barra` (estos dos solo operan su pantalla de cola digital; no ven salón, caja ni mostrador).
 3. Al entrar, el cliente guarda `empresa_id` y **todas** las consultas pasan por ella (en Supabase: `set local app.empresa_id` vía RPC/encabezado + políticas RLS; nunca se confía solo en el filtro del cliente).
 4. Un mismo usuario puede pertenecer a varias empresas con roles distintos (elección en login).
 5. Sesión persistida; botón salir siempre visible. Un admin puede invitar/crear usuarios y **resetear claves** (solo admin).
 
 ## 3. Roles y permisos (contrato mínimo)
 
-| Acción | admin | cajero | mesero |
-|---|---|---|---|
-| Editar mapa de mesas/zonas | ✔ | — | — |
-| Gestionar menú (secciones/productos) | ✔ | — | — |
-| Configurar negocio (moneda, IVA, propina) | ✔ | — | — |
-| Abrir/cerrar turno de caja, ingresos/egresos | ✔ | ✔ | — |
-| Tomar pedidos, notas, enviar a cocina | ✔ | ✔ | ✔ |
-| Pre-cuenta | ✔ | ✔ | ✔ |
-| Cobrar, pagos mixtos, propina | ✔ | ✔ | — |
-| Descuento | ✔ directo | con PIN de admin | — |
-| Anular ítem pendiente | ✔ | ✔ | ✔ |
-| Anular ítem **enviado** a cocina | ✔ + motivo | — | — |
-| Mover ítems entre mesas | ✔ | ✔ | ✔ |
-| Unir/separar mesas | ✔ | ✔ | — |
-| Venta directa (mostrador) | ✔ | ✔ | opcional |
-| Reportes | ✔ | ✔ | — |
-| Gestionar personal | ✔ | — | — |
+| Acción | admin | cajero | mesero | cocina | barra |
+|---|---|---|---|---|---|
+| Editar mapa de mesas/zonas | ✔ | — | — | — | — |
+| Gestionar menú (secciones/productos) | ✔ | — | — | — | — |
+| Configurar negocio (moneda, IVA, propina) | ✔ | — | — | — | — |
+| Abrir/cerrar turno de caja, ingresos/egresos | ✔ | ✔ | — | — | — |
+| Tomar pedidos, notas, enviar a cocina | ✔ | ✔ | ✔ | — | — |
+| Pre-cuenta | ✔ | ✔ | ✔ | — | — |
+| Cobrar, pagos mixtos, propina | ✔ | ✔ | — | — | — |
+| Descuento | ✔ directo | con PIN de admin | — | — | — |
+| Anular ítem pendiente | ✔ | ✔ | ✔ | — | — |
+| Anular ítem **enviado/listo** (corte directo, con motivo) | ✔ | ✔ (v0.13) | — | — | — |
+| Pedir anulación de ítem enviado/listo (motivo, con aprobación) | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Aprobar/rechazar anulaciones pedidas | ✔ | ✔ | — | — | — |
+| Ver cola digital del área (Cocina/Barra) | ✔ | ✔ | ✔ | ✔ su área | ✔ su área |
+| Marcar salida / deshacer salida | ✔ | ✔ | — | ✔ | ✔ |
+| Mover ítems entre mesas | ✔ | ✔ | ✔ | — | — |
+| Unir/separar mesas | ✔ | ✔ | — | — | — |
+| Venta directa (mostrador) | ✔ | ✔ | opcional | — | — |
+| Reportes | ✔ | ✔ | — | — | — |
+| Inventario (insumos, recetas, movimientos) | ✔ | — | — | — | — |
+| Auditoría del negocio | ✔ | — | — | — | — |
+| Gestionar personal | ✔ | — | — | — | — |
 
-La validación real va en la base (RLS/RPC); el mapa de permisos en el cliente es solo UX.
+La validación real va en la base (RLS/RPC); el mapa de permisos en el cliente es solo UX. `cocina` y `barra` son roles "hacia abajo": su único permiso es `ver_cocina`, y en la base cada RPC filtra el rol (§3.22/§3.23 del CONTRATO) — aunque alguien manipule la UI, inventario, caja o equipo les devuelven error de rol.
 
 ## 4. Módulo: Salón (mapa de mesas)
 
@@ -58,7 +64,7 @@ La validación real va en la base (RLS/RPC); el mapa de permisos en el cliente e
 
 - Menú del día = **secciones** (Desayunos, Comida, Bebidas, Postres…) con sus productos. **No existe "menú semanal/ruta"**: el menú es único y se gestiona desde Administración; las secciones son la única división. Cada sección es una pestaña/bloque del selector de productos.
 - Ítems: cantidad ±, nota por ítem ("sin picante", "término medio"), anular con motivo.
-- **Enviar a cocina (comanda)**: envía solo los pendientes; los enviados quedan bloqueados para el mesero (solo admin anula con motivo). Reimpresión de comanda disponible.
+- **Enviar a cocina (comanda)**: envía solo los pendientes; los enviados quedan bloqueados para el mesero (el corte directo lo tienen admin y —desde v0.13— también el cajero, siempre con motivo; cocina/barra pueden **pedir** anulación que admin/cajero aprueba). La salida se marca en la cola digital (`listo`), no al cobrado. Reimpresión de comanda disponible.
 - **Mover ítems a otra mesa**: selección de ítems + mesa destino (crea cuenta destino si hace falta). Es la herramienta para dividir cuenta y para correcciones de servicio.
 - **Unir mesas**: varias mesas → una sola cuenta (grupos grandes). Separar una mesa devuelve cuenta propia vacía; el reparto de ítems se hace con "mover".
 - **Dividir cuenta**: por ítems (mover a cuenta directa " divides") o partes iguales al cobrar.
@@ -89,19 +95,23 @@ La validación real va en la base (RLS/RPC); el mapa de permisos en el cliente e
 
 ## 9. Impresión
 
-- Motor: `imprimirTicket(...)` vía iframe oculto + `window.print()` (no depende de drivers ni bloqueadores de popups).
-- Tipos: **comanda** (solo ítems para cocina, sin precios si se configura), **pre-cuenta**, **ticket final** (con pagos y cambio), **resumen de arqueo**.
-- Anchos 58/80 mm. En fase 1 todo se imprime desde el dispositivo; impresión automática por red (EPPOS/ESC-POS vía Edge Function) es fase 2.
-- Regla de diseño: un botón "Imprimir" en cocina (comanda), en cobro (ticket) y en caja (arqueo).
+- **Dos motores, un mismo contenido** (`src/components/ticket/Ticket.jsx` + `src/services/impresora.js`):
+  - `imprimirTicket(...)`: **diálogo del navegador** vía iframe oculto + `window.print()` (no depende de drivers ni bloqueadores de popups); se usa en modo manual y como respaldo de tickets si la silenciosa no tiene impresora.
+  - `imprimirCuenta(...)`: modo **silencioso** por Web Serial + ESC/POS a la térmica del grupo; si `config.modoImpresion = 'estacion'`, no imprime en este equipo: encola el trabajo (RPC `encolar_impresion`) y la PC del local con la pestaña Impresión lo saca (v0.8). La comanda NUNCA abre diálogo: o silenciosa/cola, o `sin-impresora`.
+- **Grupos de impresión** (`src/services/impresion.js`): la base es Cocina / Barra / Caja (`GRUPOS_BASE`), editable por negocio en `config.gruposImpresion` (nombre, ancho 32|48 columnas, baudios; el grupo marcado `tickets:true` —Caja— recibe tickets y pre-cuentas y no se asigna a secciones). Cada sección del menú dirige su comanda a un grupo vía `config.impresoraPorSeccion` (`grupoDeSeccion`; sin asignación cae al primer grupo de comanda).
+- **Ítems multi-área (v0.13)**: `AREAS_PRODUCTO = ['cocina','barra']` refleja la columna `productos.areas text[]` (CHECK: subconjunto no vacío de `{cocina,barra}`, default `['cocina']`) y su snapshot `cuenta_items.areas` (lo copia `agregar_items`). `areasDelItem(item, productos)` resuelve snapshot → áreas del producto → `null`; `gruposDelItem(item, productos, config)` mapea esas áreas a los grupos reales del negocio (ignora áreas desconocidas sin crashear) y, si no hay ninguna válida, usa el reparto clásico por sección; `repartirPorGrupo(items, productos, config)` reparte el envío: **un combo con `['cocina','barra']` sale simultáneamente por las dos impresoras** (y aparece en las dos colas digitales).
+- **El ticket refleja las áreas**: en la comanda, `Ticket.jsx` (`prefijoAreas`) imprime el prefijo **`[COCINA+BARRA]`** en la línea del ítem solo cuando tiene 2+ áreas; los nombres salen de los grupos del negocio (no se traducen) o de la clave i18n `areas.<id>`. `imprimirComandas` envía todas las partes del reparto en una sola acción.
+- Tipos de comprobante: **comanda** (ítems con sus notas, sin precios ni totales, partida por grupo), **pre-cuenta**, **ticket final** (pagos, cambio, anuladas tachadas) y **resumen de arqueo**.
+- Anchos 58/80 mm (58 mm ⇒ 32 columnas ESC/POS; 80 mm ⇒ 48/42 según motor; el ancho contractual no cambia con el idioma).
 
 ## 10. Base de datos y contrato (Supabase)
 
 - Compartida entre empresas: `empresa_id` en todas las tablas + RLS con función `empresa_activa()`; RPCs `SECURITY DEFINER` que validan rol por membresía.
-- Tablas de negocio/catálogo: `empresas, perfiles, membresias, zonas, mesas, secciones_menu, productos, cuentas, cuenta_mesas, cuenta_items, pagos, turnos_caja`.
-- **Tablas de plataforma OCULTAS** (migración 002): `limites` (cuota de artículos), `throttle` (anti-fuerza-bruta), `auditoria` (rastro de acciones privilegiadas). `force row level security` sin políticas + `revoke all` desde `public/anon/authenticated` ⇒ el tenant no las ve ni por REST (403); solo se escriben desde funciones `security definer` y se leen por RPC privativas del super. Convención asociada: toda función pública nueva lleva `revoke all … from public, anon` + `grant execute … to authenticated` (a `anon` solo en pre-login) + `set search_path = ''`.
-- RPCs atómicas de negocio: `abrir_cuenta, abrir_venta_directa, agregar_items, cambiar_qty_item, poner_nota, enviar_items, anular_item, unir_mesas, separar_mesa, mover_items, aplicar_extras, actualizar_comensales (003), cobrar_cuenta, abrir_turno, registrar_movimiento_caja, cerrar_turno`. RPCs de plataforma (solo super): `es_super, fijar_empresa, super_listar_empresas, super_exportar_empresa, super_importar_empresa, super_ajustar_empresa, super_ver_cuota, super_listar_auditoria, super_registrar_exporte`; pre-login: `empresa_por_codigo` (con throttle).
-- **Orden de deploy de migraciones** (idempotentes, pegar en el SQL Editor; detalle en CONTRATO §8): `supabase/setup.sql` → `supabase/setup.sql` → `002_seguridad.sql` → `003_comensales.sql`. En el proyecto real las cuatro están aplicadas.
-- Ver `supabase/setup.sql` + `supabase/migraciones/` y `docs/CONTRATO.md`. El cliente ya está cableado a Supabase (v0.3): `store.jsx` mantiene el modo demo y la capa `tiendaSupabase.js` traduce cada acción a su RPC/escritura 1:1.
+- Tablas de negocio/catálogo: `empresas, perfiles, membresias, zonas, mesas, secciones_menu, productos, cuentas, cuenta_mesas, cuenta_items, pagos, turnos_caja` + `trabajos_impresion` (cola de la estación, v0.8) + `insumos, recetas, insumos_movimientos` (inventario, v0.13, solo visible para el rol admin).
+- **Tablas de plataforma OCULTAS** (sección 002 de `setup.sql`): `limites` (cuota de artículos), `throttle` (anti-fuerza-bruta), `auditoria` (rastro de acciones privilegiadas; desde v0.13 con columnas legibles `actor_nombre`, `actor_rol`, `entity_type`, `entity_label` y lectura local para el admin del negocio vía `auditoria_listar`). `force row level security` sin políticas + `revoke all` desde `public/anon/authenticated` ⇒ el tenant no las ve ni por REST (403); solo se escriben desde funciones `security definer` y se leen por RPC. Convención asociada: toda función pública nueva lleva `revoke all … from public, anon` + `grant execute … to authenticated` (a `anon` solo en pre-login) + `set search_path = ''`.
+- RPCs atómicas de negocio: `abrir_cuenta, abrir_venta_directa, agregar_items, cambiar_qty_item, poner_nota, enviar_items, anular_item, unir_mesas, separar_mesa, mover_items, aplicar_extras, actualizar_comensales, cobrar_cuenta (descuenta stock por receta, best-effort), abrir_turno, registrar_movimiento_caja, cerrar_turno`. Cocina/barra y anulación con aprobación (v0.13): `cola_de_area, marcar_salida, deshacer_salida, pedir_anulacion, resolver_anulacion`. Inventario y auditoría local (v0.13, solo admin): `inventario_listar, insumo_guardar, insumo_borrar, insumo_movimiento, receta_reemplazar, movimientos_listar, auditoria_listar`. Impresión por estación (v0.8): `encolar_impresion, reclamar_impresion, finalizar_impresion, listar_impresion, gestionar_impresion`. Equipo/altas: `equipo_listar, equipo_invitar, equipo_restablecer, equipo_revocar, empresas_para_login`. RPCs de plataforma (solo super): `es_super, fijar_empresa, super_listar_empresas, super_exportar_empresa, super_importar_empresa, super_ajustar_empresa, super_ver_cuota, super_listar_auditoria, super_registrar_exporte, crear_super, quitar_super`; pre-login: `empresa_por_codigo` (con throttle). Firmas exactas en CONTRATO §3.
+- **Despliegue**: UN solo archivo — pegar `supabase/setup.sql` COMPLETO en el SQL Editor tras cada cambio (idempotente y atómico; se puede re-pegar sin romper nada; `super-admin.sql` y `supabase/migraciones/` ya no existen: todo fusionado dentro, detalle en CONTRATO §8). Al final hay un bloque «PASO OPCIONAL» con `crear_super(...) where false;` para promocionarse super quitándole el `where false`. En el proyecto real las secciones históricas están aplicadas; la 009 (v0.13) falta por re-pegar.
+- Ver `supabase/setup.sql` (el único SQL) y `docs/CONTRATO.md`. El cliente ya está cableado a Supabase (v0.3): `store.jsx` mantiene el modo demo y la capa `tiendaSupabase.js` traduce cada acción a su RPC/escritura 1:1.
 
 ## 11. Versión gratuita → de pago (fogging de empresas)
 
@@ -119,7 +129,9 @@ La validación real va en la base (RLS/RPC); el mapa de permisos en el cliente e
 5. Caja (turnos/arqueo) ✅ carril IA-2b
 6. Admin menú/config ✅ carril IA-3
 7. Tickets/comandas imprimibles ✅ carril IA-2b
-8. **Fase 2**: reportes (ventas por día/sección/mesero, cortes), inventarios/recetas, catálogo de impresoras por red, menús digitales QR para clientes, propinas por mesero, propina sobre servicio.
+8. **Cocina/Barra (cola digital por área)** ✅ v0.13 — roles `cocina`/`barra`, ruta rápida `#cocina`
+9. **Inventario** (solo admin) y **Auditoría del negocio** (solo admin) ✅ v0.13
+10. **Fase 2**: reportes (ventas por día/sección/mesero, cortes y mermas), catálogo de impresoras por red, menús digitales QR para clientes, propinas por mesero, propina sobre servicio, alertas de `stock_min` más visibles.
 
 ## 13. Estilo y UX (lo "lindo")
 
@@ -134,7 +146,7 @@ La validación real va en la base (RLS/RPC); el mapa de permisos en el cliente e
 - **Grupos y subgrupos de productos**: secciones con subsecciones anidadas (fase 2; hoy: secciones planas con orden).
 - **Formas de pago configurables**: admin define métodos (efectivo, QR, tarjeta, bonos, mixto) con nombre y prioridad; hoy fijo efectivo/qr/tarjeta.
 - **Formatos de impresión por comprobante**: plantillas separadas para ticket de venta, pre-cuenta, comanda de cocina y resumen de arqueo (ancho, logo, pie de página).
-- **Áreas de impresión de comandas**: cada sección del menú puede dirigir su comanda a una impresora/área distinta (cocina, barra, parrilla) — fase 2 con gestión de impresoras.
+- **Áreas de impresión de comandas**: **entregado en v0.13** — cada sección dirige su comanda a un grupo (Cocina/Barra/Caja, configurable) y, además, cada producto puede declarar varias áreas (`productos.areas`): un combo se imprime a la vez en cocina y barra, con prefijo `[COCINA+BARRA]` en la línea de comanda (GUÍA §9).
 - **Canales de venta**: mesa, mostrador, para llevar, delivery (campo `canal` en cuentas desde ya; UI de delivery fase 2).
 - **Seguridad por menú**: cada pantalla/acción visible según rol (matriz §3).
 
@@ -145,16 +157,17 @@ La validación real va en la base (RLS/RPC); el mapa de permisos en el cliente e
 - v0.3 (esta entrega): seguridad de plataforma (migraciones 002: cuota oculta de artículos, auditoría, throttle, storage de miniaturas, super-entrar; re-export/import v2 con histórico) + **comensales corregibles en el salón** (003) + CRUD de zonas, arrastre persistido, layout móvil y miniaturas 45×45.
 - v0.5: registration de empresa nueva desde la app, reportes y cortes.
 - v0.6: impresión por red + menú digital QR.
-- v0.7: inventario y recetas (insumos → costo de plato → descuento automático de stock).
+- v0.7: inventario y recetas → **entregado en v0.13** (insumos → recetas por plato → descuento automático de stock al cobrar; costo por insumo guardado, sin reportar costo de plato aún).
+- v0.13 (entrega actual): roles `cocina`/`barra` con cola digital, ítems multi-área (`[COCINA+BARRA]`), estados `listo`/`anulacion` con anulación por aprobación, inventario (solo admin), auditoría legible con lectura local del admin, tabla `DataTable` reutilizable (puerto de Catering Control) y backend fusionado en un único `supabase/setup.sql`.
 
 ## 15. Super admin de la plataforma (dueño del software, no del negocio)
 
 Petición del dueño: "que el super admin pueda acceder a todas las empresas, que se pueda exportar e importar la base de datos de esa empresa para si crece a una versión de pago poder llevar todos los datos, que el super admin pueda cambiar el idioma de la app a los 3 que están disponibles".
 
-- **Quién es**: una fila en `public.supers` (hoy solo el uid del dueño). No es un rol de negocio: admin/cajero/mesero siguen siendo los únicos roles dentro de una empresa.
+- **Quién es**: una fila en `public.supers` (hoy solo el uid del dueño). No es un rol de negocio: dentro de una empresa los roles siguen siendo los de §3 (admin/cajero/mesero para operación y dinero; cocina/barra solo su cola — el super no añade privilegios de negocio a nadie).
 - **Puede**: listar todas las empresas con contadores (`super_listar_empresas`), **entrar y operar** cualquier empresa sin tener membresía (`fijar_empresa` + header `X-Session-Id`; desde 002 `private.fijar_empresa` acepta super y `private.mi_rol()` le da rol admin efectivo), leer sus datos, exportar/importar, ajustar la cuota de artículos (`super_ajustar_empresa`/`super_ver_cuota`) y leer la auditoría (`super_listar_auditoria`).
 - **No puede**: los RPCs de operación siguen validando empresa y rol para cualquiera; el super solo obtiene privilegios porque `public.supers` lo autoriza explícitamente, y cada "Entrar" queda auditado (`super_entro`).
-- **Migrar el schema**: `schema.sql` funciona sin la tabla `supers` gracias a `private.es_super_compat()`; las migraciones se aplican en orden (§10): 001 → 002 → 003.
+- **Migrar el schema**: ya no hay nada que ordenar — todo (esquema, supers, seguridad, 009 de v0.13) está fusionado en `supabase/setup.sql` y se pega completo (CONTRATO §8); `private.es_super_compat()` sigue tolerando una base sin la tabla `supers`. El super se promociona a sí mismo con el bloque «PASO OPCIONAL» del final del archivo (`crear_super`, re-pegable; `quitar_super` quita solo la marca).
 
 ### 15.1 Exportar / importar (del plan gratis al plan de pago)
 
@@ -168,7 +181,7 @@ Petición del dueño: "que el super admin pueda acceder a todas las empresas, qu
 
 `src/i18n/` con diccionarios `es/en/pt` de claves idénticas, hook `useIdioma()` y `t(clave, params)`; el idioma activo se guarda en `localStorage['pos-idioma-app']` y se refleja en `document.documentElement.lang`. El español es la fuente de verdad: si falta una clave, se muestra el texto español y, en último término, la propia clave (nunca un vacío). Ticket y comanda se imprimen en el idioma activo manteniendo las 32 columnas.
 
-### 15.3 Seguridad de plataforma (002_seguridad.sql) — paridad con Catering Control
+### 15.3 Seguridad de plataforma (sección 002 de `supabase/setup.sql`) — paridad con Catering Control
 
 - **Cuota oculta** (§11): vive en `public.limites`, tabla deny-all; el comercio no puede leerla ni editarla (REST 403). Se exige con trigger en `productos`, no por RPC, porque el catálogo se escribe por INSERT directo. El ajuste solo lo hace el super con `super_ajustar_empresa`/`super_ver_cuota`.
 - **Auditoría** (`public.auditoria`): registra entradas del super a empresas ajenas, ajustes de cuota, exportaciones (`super_registrar_exporte` tras descargar el .json), importaciones, agotamiento del throttle y cambios de comensales. Tabla oculta; única lectura: `super_listar_auditoria(empresa, límite≤1000)`.
@@ -201,7 +214,7 @@ Detalles, la tabla completa de equivalencias con la app vieja y "dónde está X"
 
 ## 18. Alta del negocio, equipo y claves olvidadas (v0.5)
 
-**Crear negocio desde el login** (`src/pages/LoginPage.jsx`, pantalla `alta`): botón "Crear mi negocio" → nombre del negocio, código, tu nombre, correo y clave. Llama a `sb.auth.signUp()` con `options.data = { alta_empresa: true, codigo_empresa, nombre_empresa, nombre, display_name }` y, como el proyecto tiene autoconfirmación desactivada, la respuesta ya trae sesión: se entra derecho al panel como `admin`. Quién hace el negocio es **la base**: el trigger `private.registrar_empresa_del_registrado()` (migración `004_altas.sql`) crea la empresa, la membresía de administrador, la zona **Salón con 8 mesas** de capacidad 4 y la cuota (`limites` lo siembra `trg_nueva_cuota` de 002).
+**Crear negocio desde el login** (`src/pages/LoginPage.jsx`, pantalla `alta`): botón "Crear mi negocio" → nombre del negocio, código, tu nombre, correo y clave. Llama a `sb.auth.signUp()` con `options.data = { alta_empresa: true, codigo_empresa, nombre_empresa, nombre, display_name }` y, como el proyecto tiene autoconfirmación desactivada, la respuesta ya trae sesión: se entra derecho al panel como `admin`. Quién hace el negocio es **la base**: el trigger `private.registrar_empresa_del_registrado()` (sección `004_altas` de `supabase/setup.sql`) crea la empresa, la membresía de administrador, la zona **Salón con 8 mesas** de capacidad 4 y la cuota (`limites` lo siembra `trg_nueva_cuota` de la sección 002).
 
 El código de negocio es lo que escribirán los empleados para entrar: 3-24 caracteres `a-z 0-9 . _ -` (el campo lo fuerza minúsculas y quita lo inválido mientras se escribe; el mismo regex valida en el cliente y en la base). Si está repetido, el aviso sale en el formulario (`alta.codigoTomado`), porque se consulta `empresa_por_codigo` antes de registrarse y el trigger además lo rechaza con `alta_codigo_tomado`.
 
@@ -211,7 +224,7 @@ El código de negocio es lo que escribirán los empleados para entrar: 3-24 cara
 - Si es **administrador** del negocio → botón que abre WhatsApp con el mensaje ya escrito a `SOPORTE_WHATSAPP` (`src/config.js`, `59177299692`) con negocio y correo. Como super se responde entrando al panel Super → "Entrar" en esa empresa → Configuración → Equipo → Nueva clave (002 le da rol `admin` efectivo dentro de la empresa); el atajo por API es `super_resetear_clave`, todavía sin pantalla propia.
 - Si es **cajero o mesero** → el texto le dice que pida clave a un administrador de su negocio, que se la da desde esa misma pantalla.
 
-**Y el super, ¿quién lo crea?** No sale de estas pantallas: se mintea desde el SQL Editor con la migración `005_super_usuario.sql` ya aplicada ⇒ `select public.crear_super('tu@correo.com', 'ClaveSegura', 'Alex');`. Es re-pegable: si el correo existe, solo lo promove y no toca la clave (para cambiarla, el cuarto parámetro en `true`). `quitar_super('correo')` quita la marca sin borrar la cuenta. Detrás de `public.es_super()` solo hay una fila en `public.supers`, así que tampoco se puede "olvidar" el super: `select * from public.supers` lo muestra.
+**Y el super, ¿quién lo crea?** No sale de estas pantallas: se mintea desde el SQL Editor con la sección final de `supabase/setup.sql` (el super quedó fusionado dentro; ya no hay archivo aparte) ⇒ en el bloque «★ PASO OPCIONAL ★»: `select public.crear_super('tu@correo.com', 'ClaveSegura', 'Alex', true) where false;` — cambias las comillas, quitas el `where false` y pegas el archivo completo. Es re-pegable: si el correo existe, solo lo promove y no toca la clave (para cambiarla, el cuarto parámetro en `true`). `quitar_super('correo')` quita la marca sin borrar la cuenta. Detrás de `public.es_super()` solo hay una fila en `public.supers`, así que tampoco se puede "olvidar" el super: `select * from public.supers` lo muestra.
 
 ## 19. Despliegue en Cloudflare Pages (pos-control.pages.dev)
 
@@ -230,3 +243,22 @@ Con "Save and Deploy" (o "Retry deployment" en el último deploy) se recompila. 
 **RAMAS / vistas previas:** cada push de rama genera un alias `HASH.proyecto.pages.dev`; la producción es el branch de producción (`main`). Para que el dominio propio apunte, *Custom domains* dentro del proyecto.
 
 **Después de cambiar iconos o el manifiesto**, subir `VERSION` en `public/sw.js` (ver §17) o el PWA vieja seguirá sirviendo la caché anterior.
+
+## 20. Cómo probar cocina/barra e inventario (v0.13)
+
+Prerrequisito: **re-pegar `supabase/setup.sql` completo** en el proyecto (sección 009) — sin eso las RPCs nuevas no existen y las pantallas dan error de función. Estas pantallas **no funcionan en modo demo** (avisan que hace falta conexión; el inventario nunca se simula).
+
+**Cocina/barra (cola digital):**
+1. Como admin: Configuración → Equipo → invitar a una persona con rol `cocina` (y otra con `barra`). Entrar con esa cuenta: el único módulo que ve es **Cocina** (arranca en su área; puede alternar cocina↔barra; la última se recuerda en `localStorage 'pos-cocina-area'`).
+2. Como mesero: abrir mesa → agregar un plato con área `cocina`, una bebida con área `barra` y un **combo con ambas áreas** (se marca en Menú, campo áreas; default `['cocina']`) → Enviar. Deben aparecer en la cola de cada área en ≤4 s (refresco + Realtime); el combo en las dos; la tarjeta pasa a rojo pasados ~10 min desde el envío.
+3. En la cola: “salió” ⇒ el ítem queda `listo`; “deshacer” lo devuelve a `enviado`. Probar también con `admin` y `cajero` (pueden marcar) y con `mesero` (ve la cola, NO puede marcar: la base rechaza el rol).
+4. **Anulación con aprobación**: desde la cola, “pedir anular” con motivo (rápido o libre) ⇒ el ítem queda `anulacion` (se ve el motivo, sigue en la cola). Entrar como cajero o admin y **aprobar** ⇒ `anulado` y desaparece de totales; o **rechazar** ⇒ vuelve a su estado previo (`enviado`/`listo`) y se limpian los campos de la solicitud. El corte directo (anular con motivo desde el panel de cuenta) sigue para admin/cajero.
+5. Impresión: con impresora/grupos configurados, enviar el combo debe sacar dos tickets (uno por grupo) y ambos con prefijo `[COCINA+BARRA]` en la línea del ítem (§9).
+
+**Inventario (⚠ solo rol admin — la pestaña Inventario no aparece para cajero/mesero/cocina/barra, y además cada RPC rechaza en la base a quien no sea admin):**
+1. Inventario → dar de alta 2-3 insumos (nombre único por negocio, unidad p. ej. `kg`, stock, mínimo, costo).
+2. Pestaña recetas: elegir un plato del menú y asignarle líneas `insumo + cantidad` (se guarda la receta **completa de reemplazo**: lo que no esté en la lista se borra).
+3. Venta directa: cobrar 2 unidades de ese plato ⇒ el stock baja `2 × cantidad` por insumo y en “Movimientos” aparece un `tipo='venta'` con el `stock_after`. El cobro **nunca** se bloquea por inventario: sin receta, o si el fallo ocurre, la cuenta cierra igual (descuento best-effort) y el stock puede quedar **negativo** a propósito — se corrige con un `ajuste`.
+4. Movimientos manuales: `entrada` (+), `salida` (−) y `ajuste` (=): la cantidad debe ser >0; el ajuste fija el stock al valor dicho. Probar también borrar un insumo (sus recetas y movimientos caen en cascada; los movimientos históricos muestran '(insumo eliminado)').
+5. Como admin abrir **Auditoría** (pestaña propia, `auditoria_listar`): deben verse las acciones `item_salida`, `item_anulacion_pedida/resuelta`, `insumo_*`, `receta_guardar` con el nombre y rol del actor y la entidad afectada; filtros por días (1..90) y búsqueda; las columnas usan la `DataTable` redimensionable (anchos guardados por usuario en localStorage).
+6. Prueba de roles: con la cuenta `cajero`, llamar `rpc('inventario_listar')` ⇒ error de rol (la UI ni muestra la pestaña; la base es la que manda).

@@ -1,16 +1,18 @@
 -- ============================================================================
--- setup.sql · POS Control · TODO el backend en UN solo archivo (1 de 2 SQL del proyecto)
+-- setup.sql · POS Control · TODO el backend en UN solo archivo (el ÚNICO SQL del proyecto)
 -- ----------------------------------------------------------------------------
 -- Pegar COMPLETO en el SQL Editor de Supabase. Es idempotente: se puede volver a correr
 -- siempre (base nueva o ya instalada) sin romper ni duplicar datos, y es atómico
 -- (begin/commit: si algo falla, no queda nada a medias).
 -- Contiene, en este orden: esquema + RLS + RPCs · super admin (tablas/funciones) ·
 -- seguridad (cuota, auditoría, throttle, fotos) · comensales · altas y equipo ·
--- lista de empresas del login · cola de impresión (estación de impresión del local). Regla de caja: cajero y admin pueden anular ítems enviados (con motivo).
--- El único otro SQL es super-admin.sql (crear/promover al super administrador).
+-- lista de empresas del login · cola de impresión (estación de impresión del local) ·
+-- retención e inventario · cocina/barra con áreas por ítem, salida y anulación con
+-- aprobación, auditoría local e INVENTARIO (009) · super admin fusionado (crear_super /
+-- quitar_super, que antes iban en un archivo aparte; ahora todo está aquí). Regla de caja:
+-- cajero y admin pueden anular ítems enviados (con motivo).
 -- ============================================================================
 begin;
-
 
 -- ################################################################
 -- ## schema.sql
@@ -32,7 +34,7 @@ begin;
 --
 --  1. `public.empresas`            → cada tenant (negocio).
 --  2. `public.membresias`          → relación usuario(auth) ↔ empresa + rol
---                                    (admin | cajero | mesero) + pin_descuento_hash.
+--                                    (admin | cajero | mesero | cocina | barra) + pin_descuento_hash.
 --  3. EN TODAS las tablas de negocio hay columna `empresa_id` + índice.
 --
 --  FLUJO DE "EMPRESA ACTIVA" (cómo sabe la base a qué empresa pertenece cada
@@ -124,19 +126,6 @@ create table if not exists public.empresas (
 );
 create unique index if not exists empresas_codigo_uniq on public.empresas (lower(codigo)) where codigo is not null;
 
--- búsqueda pre-login: solo datos públicos de la empresa por código
-create or replace function public.empresa_por_codigo(p_codigo text)
-returns table (id uuid, nombre text, moneda text)
-language sql stable security definer
-set search_path = ''
-as $$
-  select e.id, e.nombre, e.moneda
-  from public.empresas e
-  where e.codigo is not null and lower(e.codigo) = lower(trim(p_codigo));
-$$;
-revoke all on function public.empresa_por_codigo(text) from anon, authenticated;
-grant execute on function public.empresa_por_codigo(text) to anon, authenticated;
-
 -- perfiles: puente auth.users ↔ datos visibles por la app (nombre para tickets,
 -- etc.). La fila la crea el trigger handle_new_user() al registrarse.
 create table if not exists public.perfiles (
@@ -152,7 +141,7 @@ create table if not exists public.membresias (
   id                uuid primary key default gen_random_uuid(),
   empresa_id        uuid not null references public.empresas(id) on delete cascade,
   user_id           uuid not null references auth.users(id) on delete cascade,
-  rol               text not null check (rol in ('admin','cajero','mesero')),
+  rol               text not null check (rol in ('admin','cajero','mesero','cocina','barra')),
   pin_descuento_hash text,
   creada_en         timestamptz not null default now(),
   unique (empresa_id, user_id)
@@ -242,7 +231,7 @@ create table if not exists public.cuenta_items (
   nombre_snapshot  text not null,
   precio_snapshot  numeric(10,2) not null check (precio_snapshot >= 0),
   qty              integer not null default 1 check (qty >= 1),
-  estado           text not null default 'pendiente' check (estado in ('pendiente','enviado','anulado')),
+  estado           text not null default 'pendiente' check (estado in ('pendiente','enviado','listo','anulacion','anulado')),
   nota             text not null default '',
   motivo_anulacion text,
   enviado_en       timestamptz,
@@ -305,32 +294,76 @@ create index if not exists idx_turnos_empresa          on public.turnos_caja (em
 --    Declaradas TODAS antes que las políticas y las RPCs que las usan.
 -- ----------------------------------------------------------------------------
 
--- es_super_compat(): true si la migración 001_super.sql está aplicada y el
---   usuario es super. Se consulta pg_class primero porque la tabla `supers` NO
---   existe en una instalación sin esa migración (y una excepción dentro de
---   empresa_activa() abortaría toda la política RLS).
-create or replace function private.es_super_compat()
-returns boolean
-language plpgsql
-stable
-security definer
-set search_path = ''
-as $fn$
-begin
-  if not exists (select 1 from pg_class c
-                   join pg_namespace n on n.oid = c.relnamespace
-                  where n.nspname = 'public' and c.relname = 'supers') then
-    return false;
-  end if;
-  return public.es_super();
-end $fn$;
+-- ============================================================================
+-- 2) NÚCLEO DE ACCESO · tablas auxiliares y funciones de empresa/rol/auditoría
+--    Cada función está definida UNA sola vez (antes vivían 2-3 versiones que se
+--    pisaban entre sí) y TODAS van antes de las políticas y RPCs que las usan.
+--    Quién es super → public.es_super() (tabla `supers` siempre existe).
+--    La empresa activa se guarda como FILA por usuario (empresa_activa_usuario): el GUC
+--    de sesión no sobrevive al pool de Supabase en modo transacción (pgbouncer).
+-- ============================================================================
 
--- ★ empresa_activa(): fuente de verdad de la "empresa actual" para RLS.
---   Lee current_setting('app.empresa_id', true) (seteado por fijar_empresa(),
---   transacción-local) y verifica que auth.uid() tiene membresía ahí.
---   Fallback: sin setting y con EXACTAMENTE una membresía → esa empresa.
---   SECURITY DEFINER para leer membresias sin recursión de RLS.
---   Un SUPER (migración 001_super) puede fijar cualquier empresa.
+-- Super admins (dueño de la plataforma). Se crean con public.crear_super (final del archivo).
+-- 1) tabla de super administradores (dueño de la plataforma)
+create table if not exists public.supers (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  creado_en  timestamptz not null default now()
+);
+alter table public.supers enable row level security;
+drop policy if exists supers_propio on public.supers;
+create policy supers_propio on public.supers for select using (user_id = auth.uid());
+
+-- Auditoría de accesos y acciones. Sin políticas ni grants: la API no la expone;
+-- solo se lee con super_listar_auditoria() / auditoria_listar() (security definer).
+-- ----------------------------------------------------------------------------
+-- 0) AUDITORÍA (antes que todo: las funciones de abajo la escriben)
+--    Tabla SIN políticas y SIN grants: PostgREST no la expone, nadie la lee por
+--    API. Solo se consulta con super_listar_auditoria() (security definer).
+-- ----------------------------------------------------------------------------
+create table if not exists public.auditoria (
+  id         bigint generated always as identity primary key,
+  empresa_id uuid,
+  actor      uuid,
+  accion     text not null,
+  detalle    jsonb not null default '{}'::jsonb,
+  en         timestamptz not null default now(),
+  actor_nombre text,      -- quién (perfil o correo)
+  actor_rol    text,      -- con qué rol actuó
+  entity_type  text,      -- sobre qué tipo de entidad
+  entity_label text       -- y cuál (texto legible)
+);
+alter table public.auditoria enable row level security;
+alter table public.auditoria force row level security;
+   -- ni el dueño accidental
+revoke all on table public.auditoria from public, anon, authenticated;
+create index if not exists idx_auditoria_empresa_en on public.auditoria (empresa_id, en desc);
+
+-- Empresa elegida por cada usuario (el GUC de sesión no sobrevive al pool en modo transacción).
+create table if not exists public.empresa_activa_usuario (
+  user_id    uuid primary key,
+  empresa_id uuid not null references public.empresas (id) on delete cascade,
+  updated_at timestamptz not null default now()
+);
+comment on table public.empresa_activa_usuario is
+  'Empresa elegida por cada usuario; reemplaza al GUC de sesión (no sobrevive al pool en modo transacción).';
+alter table public.empresa_activa_usuario enable row level security;
+drop policy if exists eau_select on public.empresa_activa_usuario;
+create policy eau_select on public.empresa_activa_usuario for select to authenticated
+  using (user_id = auth.uid());
+drop policy if exists eau_write on public.empresa_activa_usuario;
+create policy eau_write on public.empresa_activa_usuario for all to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+grant select, insert, update on public.empresa_activa_usuario to authenticated;
+
+-- 2) helper es_super()
+create or replace function public.es_super()
+returns boolean language sql stable security definer set search_path = ''
+as $$ select exists (select 1 from public.supers s where s.user_id = auth.uid()); $$;
+
+grant execute on function public.es_super() to authenticated;
+
+-- private.empresa_activa(): versión definitiva (manda sobre las de 002 y 008).
+-- Prioridad: 1) GUC transaccional, 2) fila del usuario, 3) miembro único.
 create or replace function private.empresa_activa()
 returns uuid
 language plpgsql
@@ -339,45 +372,51 @@ security definer
 set search_path = ''
 as $fn$
 declare
-  v_setting uuid;
-  v_unica   uuid;
-  v_uid     uuid;
+  v_uid   uuid;
+  v_guc   uuid;
+  v_fila  uuid;
+  v_unica uuid;
 begin
   v_uid := auth.uid();
-  if v_uid is null then
-    return null;                      -- sin sesión ⇒ nada visible
-  end if;
+  if v_uid is null then return null; end if;    -- sin sesión ⇒ nada visible
 
-  -- El GUC puede venir ausente ('' / NULL) o basura no-uuid: nullif + bloque
-  -- de excepción lo reducen a NULL sin abortar la transacción.
+  -- 1) GUC transaccional: lo pone private.fijar_empresa(p_empresa_id) dentro de cada RPC
+  --    de negocio. Es la empresa EXPLÍCITA de esta llamada ⇒ manda sobre lo demás, si no,
+  --    una RPC de otra empresa leería datos de la última empresa visitada.
   begin
-    v_setting := nullif(current_setting('app.empresa_id', true), '')::uuid;
+    v_guc := nullif(current_setting('app.empresa_id', true), '')::uuid;
   exception when others then
-    v_setting := null;
+    v_guc := null;   -- GUC ausente o basura no-uuid: se ignora, no aborta la transacción
   end;
-
-  if v_setting is not null then
+  if v_guc is not null then
     if exists (select 1 from public.membresias m
-               where m.empresa_id = v_setting and m.user_id = v_uid)
-       or private.es_super_compat() then
-      return v_setting;               -- setting válido + membresía real (o super)
+               where m.empresa_id = v_guc and m.user_id = v_uid)
+       or public.es_super() then
+      return v_guc;
     end if;
-    return null;                      -- setting espurio ⇒ denial
+    return null;
   end if;
 
-  -- Fallback 1-empresa (SELECTs directos / realtime sobre vistas):
-  -- OJO: min(uuid) no existe como agregado en PostgreSQL < 17; se agregava a
-  -- text y se vuelve a castear (fix 2026-10-16: sin esto, TODO SELECT RLS con
-  -- GUC sin fijar fallaba con «function min(uuid) does not exist»).
+  -- 2) Fila del usuario: los SELECT/INSERT directos de PostgREST llegan sin GUC y pueden
+  --    caer en cualquier conexión; la empresa que eligió al entrar es lo único estable.
+  select e.empresa_id into v_fila
+    from public.empresa_activa_usuario e where e.user_id = v_uid limit 1;
+  if v_fila is not null then
+    if exists (select 1 from public.membresias m
+               where m.empresa_id = v_fila and m.user_id = v_uid)
+       or public.es_super() then
+      return v_fila;
+    end if;
+    return null;
+  end if;
+
+  -- 3) Miembro de una sola empresa: no hay nada que elegir.
+  --    min(uuid) no es agregado en PostgreSQL < 17: se agrega como text y se resuelve.
   select min(m.empresa_id::text)::uuid into v_unica
-    from public.membresias m
-   where m.user_id = v_uid
-   having count(*) = 1;               -- si tiene 2+ membresías ⇒ NULL (0 filas)
+    from public.membresias m where m.user_id = v_uid having count(*) = 1;
   return v_unica;
 end $fn$;
 
--- fijar_empresa(): cabecera del flujo "RPC → GUC transaccional → RLS".
--- Valida membresía y fija app.empresa_id LOCAL a la transacción (true).
 create or replace function private.fijar_empresa(p_empresa_id uuid)
 returns uuid
 language plpgsql
@@ -391,15 +430,19 @@ begin
   if v is null then
     raise exception 'empresa no seleccionada: pase p_empresa_id o defina app.empresa_id';
   end if;
-  if not exists (select 1 from public.membresias m
-                 where m.empresa_id = v and m.user_id = auth.uid()) then
+  if not exists (select 1 from public.empresas e where e.id = v) then
+    raise exception 'empresa inexistente';
+  end if;
+  -- miembro normal, o dueño de la plataforma (001_super) operando otra empresa.
+  if not (exists (select 1 from public.membresias m
+                  where m.empresa_id = v and m.user_id = auth.uid())
+          or public.es_super()) then
     raise exception 'el usuario actual no tiene membresía en la empresa %', v;
   end if;
   perform set_config('app.empresa_id', v::text, true);
   return v;
 end $fn$;
 
--- mi_rol(): rol del usuario en la empresa activa (NULL si no es miembro).
 create or replace function private.mi_rol()
 returns text
 language sql
@@ -407,11 +450,18 @@ stable
 security definer
 set search_path = ''
 as $fn$
-  select m.rol
-    from public.membresias m
-   where m.empresa_id = private.empresa_activa()
-     and m.user_id = auth.uid()
-   limit 1;
+  -- empresa_activa() ya validó que el que pide es miembro o super; si es super sin
+  -- membresía, su rol efectivo en esa empresa es admin (solo puede serlo por RLS).
+  select coalesce(
+    (select m.rol
+       from public.membresias m
+      where m.empresa_id = private.empresa_activa()
+        and m.user_id = auth.uid()
+      limit 1),
+    case when public.es_super()
+          and private.empresa_activa() is not null
+         then 'admin' end
+  );
 $fn$;
 
 -- exigir_rol(): gate de permisos de las RPCs. Aborta si el rol no está en la
@@ -433,8 +483,11 @@ begin
   return v_rol;
 end $fn$;
 
--- es_admin(): usado en políticas RLS de escritura de tablas de catálogo.
--- SECURITY DEFINER + envolvente (select ...) para evitar recursión en RLS.
+-- es_admin(): la versión de la sección 002 consulta public.membresias en crudo, así que
+-- ignoraba a mi_rol() y devolvía false para un super sin membresía. Con false le quedaban
+-- vetados TODOS los writes directos de catálogo (zonas/mesas/secciones_menu/productos → 403
+-- al dar de alta una sección o una mesa desde «Entrar en empresa» del super) y el SELECT de
+-- las tablas de inventario. Se redefine sobre mi_rol(), que ya mapea super → 'admin'.
 create or replace function private.es_admin()
 returns boolean
 language sql
@@ -442,12 +495,7 @@ stable
 security definer
 set search_path = ''
 as $fn$
-  select exists (
-    select 1 from public.membresias m
-     where m.empresa_id = private.empresa_activa()
-       and m.user_id = auth.uid()
-       and m.rol = 'admin'
-  );
+  select private.mi_rol() = 'admin';
 $fn$;
 
 -- empresa_ok(): true si p_id ES la empresa activa. Se usa en la política de
@@ -462,20 +510,17 @@ as $fn$
   select p_id = private.empresa_activa();
 $fn$;
 
--- es_miembro_de(): usado en la política SELECT de empresas (login: "veo las
--- empresas a las que pertenezco" ANTES de fijar empresa activa).
+-- 8) un super ve TODAS las empresas en el listado de acceso (empresas_select es
+--    la única política que usa es_miembro_de; las de escritura usan
+--    empresa_activa()+es_admin() y no se modifican).
 create or replace function private.es_miembro_de(p_empresa_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
+returns boolean language sql stable security definer set search_path = ''
 as $fn$
   select exists (
     select 1 from public.membresias m
      where m.empresa_id = p_empresa_id
        and m.user_id = auth.uid()
-  ) or private.es_super_compat();
+  ) or public.es_super();
 $fn$;
 
 -- compartir_empresa(): para perfiles (puedo ver los nombres de mis colegas).
@@ -494,6 +539,76 @@ as $fn$
        and b.user_id = p_user_id
   );
 $fn$;
+
+-- private.auditar(): firma de 5 args (los 2 últimos opcionales ⇒ las llamadas de 3 args siguen válidas).
+drop function if exists private.auditar(uuid, text, jsonb);
+create or replace function private.auditar(
+  p_empresa      uuid,
+  p_accion       text,
+  p_detalle      jsonb default '{}'::jsonb,
+  p_entity_type  text  default null,
+  p_entity_label text  default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_actor_nombre text;
+  v_actor_rol    text;
+begin
+  select coalesce(
+           nullif((select pf.display_name from public.perfiles pf
+                    where pf.user_id = auth.uid()), ''),
+           nullif(auth.jwt() ->> 'email', ''),
+           'Sistema'
+         ),
+         coalesce(
+           nullif(private.mi_rol(), ''),
+           case when public.es_super() then 'super' else '—' end
+         )
+    into v_actor_nombre, v_actor_rol;
+
+  insert into public.auditoria (empresa_id, actor, accion, detalle,
+                                actor_nombre, actor_rol, entity_type, entity_label)
+  values (p_empresa, auth.uid(), p_accion, coalesce(p_detalle, '{}'::jsonb),
+          v_actor_nombre, v_actor_rol, p_entity_type, p_entity_label);
+end $fn$;
+
+drop function if exists public.fijar_empresa(uuid);
+create or replace function public.fijar_empresa(p_empresa uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+begin
+  if auth.uid() is null then raise exception 'sin sesion'; end if;
+  if p_empresa is null or not exists (select 1 from public.empresas e where e.id = p_empresa) then
+    raise exception 'empresa inexistente';
+  end if;
+  if not (exists (select 1 from public.membresias m
+                  where m.empresa_id = p_empresa and m.user_id = auth.uid())
+          or public.es_super()) then
+    raise exception 'no pertenece a esa empresa';
+  end if;
+  -- Antes: set_config(..., false) (GUC de SESIÓN). Inútil bajo pgbouncer en modo
+  -- transacción; la elección se guarda como fila, que sí viaja hasta la siguiente
+  -- petición sin importar qué conexión la atienda.
+  insert into public.empresa_activa_usuario (user_id, empresa_id, updated_at)
+  values (auth.uid(), p_empresa, now())
+  on conflict (user_id) do update
+    set empresa_id = excluded.empresa_id, updated_at = excluded.updated_at;
+  if public.es_super() then
+    perform private.auditar(p_empresa, 'super_entro',
+                            jsonb_build_object('empresa', p_empresa::text));
+  end if;
+end $fn$;
+
+revoke all on function public.fijar_empresa(uuid) from public, anon;
+
+grant execute on function public.fijar_empresa(uuid) to authenticated;
 
 -- total_items(): suma de items VIVOS (no anulados) de una cuenta.
 create or replace function private.total_items(p_cuenta_id uuid)
@@ -735,10 +850,11 @@ begin
        where id = v_item;
     else
       insert into public.cuenta_items
-        (empresa_id, cuenta_id, producto_id, nombre_snapshot, precio_snapshot, qty, estado, nota)
+        (empresa_id, cuenta_id, producto_id, nombre_snapshot, precio_snapshot, qty, estado, nota, areas)
       values
         (v_emp, v_cuenta.id, v_prod.id, v_prod.nombre, v_prod.precio, v_qty, 'pendiente',
-         coalesce(v_it->>'nota', ''))
+         coalesce(v_it->>'nota', ''),
+         coalesce(v_prod.areas, array['cocina']::text[]))
       returning id into v_item;
     end if;
   end loop;
@@ -781,7 +897,7 @@ begin
   if v_it.estado = 'anulado' then
     raise exception 'el ítem está anulado';
   end if;
-  if v_it.estado = 'enviado' then
+  if v_it.estado in ('enviado','listo','anulacion') then
     raise exception 'ítem ya enviado a cocina: anúlelo y agréguelo de nuevo';
   end if;
 
@@ -894,7 +1010,7 @@ begin
   if v_it.estado = 'anulado' then
     raise exception 'el ítem ya está anulado';
   end if;
-  if v_it.estado = 'enviado' then
+  if v_it.estado in ('enviado','listo','anulacion') then
     if v_rol not in ('admin','cajero') then
       raise exception 'anular un ítem enviado requiere rol cajero o admin';
     end if;
@@ -1299,6 +1415,40 @@ begin
               'cuentas_cerradas', coalesce((t.movimientos->>'cuentas_cerradas')::integer, 0) + 1)
      where t.id = v_turno;
   end if;
+
+  -- INVENTARIO (009) · descuenta stock por receta al cobrar. BEST-EFFORT: un fallo
+  -- de inventario NUNCA puede impedir el cobro ni desbaratar la cuenta cerrada.
+  begin
+    with vivos as (
+      select i.producto_id, sum(i.qty)::numeric as qty
+        from public.cuenta_items i
+       where i.cuenta_id = v_cuenta.id and i.empresa_id = v_emp
+         and i.producto_id is not null
+         and i.estado <> 'anulado'
+       group by i.producto_id
+    ), baja as (
+      select r.insumo_id, sum(v.qty * r.cantidad) as consume
+        from vivos v
+        join public.recetas r on r.producto_id = v.producto_id
+       group by r.insumo_id
+    ), upd as (
+      update public.insumos s
+         set stock = s.stock - b.consume,       -- sin bloquear: puede quedar negativo
+             actualizado_en = now()
+        from baja b
+       where s.id = b.insumo_id
+      returning s.id as insumo_id, b.consume, s.stock as stock_after
+    )
+    insert into public.insumos_movimientos
+      (empresa_id, insumo_id, tipo, cantidad, stock_after, nota, usuario, usuario_nombre)
+    select v_emp, u.insumo_id, 'venta', u.consume, u.stock_after,
+           'venta cuenta ' || coalesce(v_cuenta.numero::text, v_cuenta.id::text),
+           auth.uid(),
+           coalesce((select p.display_name from public.perfiles p where p.user_id = auth.uid()), '')
+      from upd u;
+  exception when others then
+    null;   -- la cuenta se cierra igual; el inventario se corrige a mano
+  end;
 
   return jsonb_build_object(
     'cuenta_id',  v_cuenta.id,
@@ -1834,6 +1984,8 @@ revoke all on all functions in schema public from anon;
 grant usage on schema private to authenticated;
 revoke all on all functions in schema private from anon;
 grant execute on all functions in schema private to authenticated;
+-- Excepción: private.auditar() solo la llaman RPCs security definer, nunca un cliente.
+revoke all on function private.auditar(uuid, text, jsonb, text, text) from public, anon, authenticated;
 
 -- ----------------------------------------------------------------------------
 -- 6) Trigger: crear public.perfiles al registrarse en Supabase Auth
@@ -1929,7 +2081,7 @@ create trigger on_auth_user_created
 -- --   insert into public.membresias (empresa_id, user_id, rol)
 -- --     values ('11111111-1111-4111-8111-111111111111', auth.uid(), 'admin');
 --
--- -- Para dar de alta cajeros/meseros: crear sus cuentas en Auth y repetir
+-- -- Para dar de alta cajeros/meseros/cocina/barra: crear sus cuentas en Auth y repetir
 -- -- (3) con su email y rol; o (más adelante) una RPC admin add_membresia.
 -- -- FIN SEED ==================================================================
 
@@ -1952,74 +2104,6 @@ create trigger on_auth_user_created
 -- Idempotente. Ejecutar como postgres en el SQL Editor (después de schema.sql).
 -- ============================================================================
 
--- 1) tabla de super administradores (dueño de la plataforma)
-create table if not exists public.supers (
-  user_id    uuid primary key references auth.users(id) on delete cascade,
-  creado_en  timestamptz not null default now()
-);
-alter table public.supers enable row level security;
-drop policy if exists supers_propio on public.supers;
-create policy supers_propio on public.supers for select using (user_id = auth.uid());
-
--- (el super admin se crea con super-admin.sql, no se siembra aquí)
-
--- 2) helper es_super()
-create or replace function public.es_super()
-returns boolean language sql stable security definer set search_path = ''
-as $$ select exists (select 1 from public.supers s where s.user_id = auth.uid()); $$;
-grant execute on function public.es_super() to authenticated;
-
--- 3) empresa_activa() ahora también deja "entrar" a un super a cualquier empresa
---    (el GUC app.empresa_id sigue siendo el único canal; un super puede fijarlo
---     a una empresa aunque no tenga membresía).
-create or replace function private.empresa_activa()
-returns uuid language plpgsql stable security definer set search_path = ''
-as $fn$
-declare
-  v_setting uuid;
-  v_unica   uuid;
-  v_uid     uuid;
-begin
-  v_uid := auth.uid();
-  if v_uid is null then return null; end if;
-  begin
-    v_setting := nullif(current_setting('app.empresa_id', true), '')::uuid;
-  exception when others then
-    v_setting := null;
-  end;
-  if v_setting is not null then
-    if exists (select 1 from public.membresias m
-               where m.empresa_id = v_setting and m.user_id = v_uid)
-       or public.es_super() then
-      return v_setting;
-    end if;
-    return null;
-  end if;
-  if public.es_super() then
-    return null;  -- el super debe fijar empresa explícitamente
-  end if;
-  -- min(uuid) no es agregado en PostgreSQL < 17: se agrega como text y se
-  -- vuelve a castea (mismo fix que schema.sql).
-  select min(m.empresa_id::text)::uuid into v_unica
-    from public.membresias m where m.user_id = v_uid having count(*) = 1;
-  return v_unica;
-end $fn$;
-
--- 4) fijar empresa activa (la app la llama tras login / cambio de empresa)
-create or replace function public.fijar_empresa(p_empresa uuid)
-returns void language plpgsql security definer set search_path = ''
-as $$
-begin
-  if auth.uid() is null then raise exception 'sin sesion'; end if;
-  if not (exists (select 1 from public.membresias m
-                  where m.empresa_id = p_empresa and m.user_id = auth.uid())
-          or public.es_super()) then
-    raise exception 'no pertenece a esa empresa';
-  end if;
-  perform set_config('app.empresa_id', p_empresa::text, false);  -- sesión actual
-end $$;
-grant execute on function public.fijar_empresa(uuid) to authenticated;
-
 -- 5) listado global (solo super)
 create or replace function public.super_listar_empresas()
 returns table (id uuid, nombre text, codigo text, moneda text,
@@ -2039,138 +2123,6 @@ begin
     from public.empresas e order by e.creada_en;
 end $$;
 grant execute on function public.super_listar_empresas() to authenticated;
-
--- 6) EXPORTAR empresa completa a un jsonb (respaldo / migración a plan de pago)
-create or replace function public.super_exportar_empresa(p_empresa uuid)
-returns jsonb language plpgsql stable security definer set search_path = ''
-as $$
-declare v jsonb;
-begin
-  if not public.es_super() then raise exception 'requiere super'; end if;
-  select jsonb_build_object(
-    'version', 1,
-    'exportado_en', now(),
-    'empresa', (select to_jsonb(e) from public.empresas e where e.id = p_empresa),
-    'zonas',       coalesce((select jsonb_agg(to_jsonb(z) order by z.orden) from public.zonas z where z.empresa_id = p_empresa), '[]'),
-    'mesas',       coalesce((select jsonb_agg(to_jsonb(m) || jsonb_build_object('zona_nombre',
-                                  (select z.nombre from public.zonas z where z.id = m.zona_id)))
-                             from public.mesas m where m.empresa_id = p_empresa), '[]'),
-    'secciones',   coalesce((select jsonb_agg(to_jsonb(s) order by s.orden) from public.secciones_menu s where s.empresa_id = p_empresa), '[]'),
-    'productos',   coalesce((select jsonb_agg(to_jsonb(p) || jsonb_build_object('seccion_nombre', s.nombre)) from public.productos p
-                             left join public.secciones_menu s on s.id = p.seccion_id where p.empresa_id = p_empresa), '[]'),
-    'cuentas',     coalesce((select jsonb_agg(to_jsonb(c)) from public.cuentas c where c.empresa_id = p_empresa), '[]'),
-    'cuenta_mesas',coalesce((select jsonb_agg(to_jsonb(cm)) from public.cuenta_mesas cm
-                             join public.cuentas c on c.id = cm.cuenta_id where c.empresa_id = p_empresa), '[]'),
-    'cuenta_items',coalesce((select jsonb_agg(to_jsonb(ci)) from public.cuenta_items ci
-                             join public.cuentas c on c.id = ci.cuenta_id where c.empresa_id = p_empresa), '[]'),
-    'pagos',       coalesce((select jsonb_agg(to_jsonb(pg)) from public.pagos pg
-                             join public.cuentas c on c.id = pg.cuenta_id where c.empresa_id = p_empresa), '[]'),
-    'turnos',      coalesce((select jsonb_agg(to_jsonb(t)) from public.turnos_caja t where t.empresa_id = p_empresa), '[]'),
-    'equipo',      coalesce((select jsonb_agg(jsonb_build_object('correo', u.email, 'rol', m.rol, 'nombre', coalesce(p.display_name,'')))
-                             from public.membresias m
-                             join auth.users u on u.id = m.user_id
-                             left join public.perfiles p on p.user_id = m.user_id
-                             where m.empresa_id = p_empresa), '[]')
-  ) into v;
-  if v->'empresa' is null then
-    raise exception 'empresa inexistente';
-  end if;
-  return v;
-end $$;
-grant execute on function public.super_exportar_empresa(uuid) to authenticated;
-
--- 7) IMPORTAR snapshot en ESTE proyecto (crea empresa nueva con código nuevo)
---    clave_inicial: contraseña temporal para recrear usuarios que no existan.
-create or replace function public.super_importar_empresa(p_datos jsonb, p_codigo text, p_clave_inicial text default 'pos12345')
-returns uuid language plpgsql security definer set search_path = ''
-as $$
-declare
-  v_emp   uuid;
-  v_old   uuid := (p_datos->'empresa'->>'id')::uuid;
-  r       jsonb;
-  v_map   jsonb := '{}'::jsonb;   -- producto viejo -> nuevo (para items no hace falta: snapshot)
-begin
-  if not public.es_super() then raise exception 'requiere super'; end if;
-  if p_datos is null or (p_datos->'empresa'->>'nombre') is null then raise exception 'snapshot invalido'; end if;
-  if exists (select 1 from public.empresas where lower(codigo) = lower(p_codigo)) then
-    raise exception 'el codigo % ya existe', p_codigo;
-  end if;
-
-  insert into public.empresas (nombre, codigo, moneda, iva_pct, propina_pct, config)
-  values (p_datos->'empresa'->>'nombre', lower(p_codigo),
-          coalesce(p_datos->'empresa'->>'moneda','Bs'),
-          coalesce((p_datos->'empresa'->>'iva_pct')::numeric,0),
-          coalesce((p_datos->'empresa'->>'propina_pct')::numeric,10),
-          coalesce((p_datos->'empresa'->'config'), '{}'::jsonb))
-  returning id into v_emp;
-
-  for r in select * from jsonb_array_elements(p_datos->'zonas') loop
-    insert into public.zonas (id, empresa_id, nombre, orden)
-    values (gen_random_uuid(), v_emp, r->>'nombre', coalesce((r->>'orden')::int,0));
-  end loop;
-
-  for r in select * from jsonb_array_elements(p_datos->'secciones') loop
-    insert into public.secciones_menu (id, empresa_id, nombre, orden)
-    values (gen_random_uuid(), v_emp, r->>'nombre', coalesce((r->>'orden')::int,0));
-  end loop;
-
-  for r in select * from jsonb_array_elements(p_datos->'productos') loop
-    insert into public.productos (empresa_id, seccion_id, nombre, precio, activo)
-    select v_emp, s.id, r->>'nombre', coalesce((r->>'precio')::numeric,0), coalesce((r->>'activo')::boolean,true)
-    from public.secciones_menu s
-    where s.empresa_id = v_emp and s.nombre = r->>'seccion_nombre'
-    limit 1;
-  end loop;
-
-  for r in select * from jsonb_array_elements(p_datos->'mesas') loop
-    insert into public.mesas (empresa_id, zona_id, nombre, x, y, w, h, forma, capacidad, activa)
-    select v_emp, z.id, r->>'nombre', coalesce((r->>'x')::numeric,0), coalesce((r->>'y')::numeric,0),
-           coalesce((r->>'w')::numeric,100), coalesce((r->>'h')::numeric,100),
-           coalesce(r->>'forma','cuadrada'), coalesce((r->>'capacidad')::int,4), coalesce((r->>'activa')::boolean,true)
-    from public.zonas z
-    where z.empresa_id = v_emp and z.nombre = r->>'zona_nombre'
-    limit 1;
-  end loop;
-
-  -- equipo: recrear usuarios por correo si no existen (confirmados, clave temporal)
-  for r in select * from jsonb_array_elements(p_datos->'equipo') loop
-    if not exists (select 1 from auth.users u where u.email = r->>'correo') then
-      insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
-                              email_confirmed_at, created_at, updated_at,
-                              raw_app_meta_data, raw_user_meta_data)
-      values ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated',
-              r->>'correo', extensions.crypt(p_clave_inicial, extensions.gen_salt('bf')),
-              now(), now(), now(), '{"provider":"email","providers":["email"]}', jsonb_build_object('display_name', r->>'nombre'));
-      insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
-      select gen_random_uuid(), au.id, au.id::text, 'email', jsonb_build_object('sub', au.id::text, 'email', au.email, 'email_verified', true),
-             now(), now(), now()
-      from auth.users au where au.email = r->>'correo';
-    end if;
-    insert into public.membresias (empresa_id, user_id, rol)
-    select v_emp, u.id, r->>'rol' from auth.users u where u.email = r->>'correo'
-    on conflict (empresa_id, user_id) do nothing;
-  end loop;
-
-  return v_emp;
-end $$;
-grant execute on function public.super_importar_empresa(jsonb, text, text) to authenticated;
-
--- 8) un super ve TODAS las empresas en el listado de acceso (empresas_select es
---    la única política que usa es_miembro_de; las de escritura usan
---    empresa_activa()+es_admin() y no se modifican).
-create or replace function private.es_miembro_de(p_empresa_id uuid)
-returns boolean language sql stable security definer set search_path = ''
-as $fn$
-  select exists (
-    select 1 from public.membresias m
-     where m.empresa_id = p_empresa_id
-       and m.user_id = auth.uid()
-  ) or public.es_super();
-$fn$;
-
--- 9) verificación (contados directos: auth.uid() es null en el SQL Editor)
-select (select count(*) from public.supers) as supers_semilla,
-       (select count(*) from public.empresas) as empresas;
 
 -- ################################################################
 -- ## 002 · seguridad
@@ -2192,154 +2144,55 @@ select (select count(*) from public.supers) as supers_semilla,
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- 0) AUDITORÍA (antes que todo: las funciones de abajo la escriben)
---    Tabla SIN políticas y SIN grants: PostgREST no la expone, nadie la lee por
---    API. Solo se consulta con super_listar_auditoria() (security definer).
+-- 2) PLANES Y CUOTAS OCULTAS (Básico = 'gratis' · Premium = 'pago')
+--    Básico: 20 artículos activos y 3 personas en el equipo (admin incluido).
+--    Premium: sin límite. Los valores viven en private.plan_defaults() (UN solo sitio) y
+--    en public.limites, tabla SIN grants ni políticas: el comercio NO puede leer ni
+--    cambiar su cuota y nunca ve un número; solo un aviso genérico al tocar el tope.
+--    Se exige en el servidor con triggers (catálogo y membresías se escriben por INSERT
+--    directo o por RPC security definer). El super no cuenta ni se bloquea.
 -- ----------------------------------------------------------------------------
-create table if not exists public.auditoria (
-  id         bigint generated always as identity primary key,
-  empresa_id uuid,
-  actor      uuid,
-  accion     text not null,
-  detalle    jsonb not null default '{}'::jsonb,
-  en         timestamptz not null default now()
-);
-alter table public.auditoria enable row level security;
-alter table public.auditoria force row level security;   -- ni el dueño accidental
-revoke all on table public.auditoria from public, anon, authenticated;
-
-create index if not exists idx_auditoria_empresa_en on public.auditoria (empresa_id, en desc);
-
--- private.auditar(): único punto de escritura. SECURITY DEFINER (dueño postgres) ⇒ bypassea
--- el deny-all de la tabla, que es justo lo que queremos: escribir sí, leer por API no.
-create or replace function private.auditar(
-  p_empresa uuid,
-  p_accion  text,
-  p_detalle jsonb default '{}'::jsonb
-)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $fn$
-begin
-  insert into public.auditoria (empresa_id, actor, accion, detalle)
-  values (p_empresa, auth.uid(), p_accion, coalesce(p_detalle, '{}'::jsonb));
-end $fn$;
-revoke all on function private.auditar(uuid, text, jsonb) from public, anon, authenticated;
-
--- ----------------------------------------------------------------------------
--- 1) SUPER: ENTRAR en cualquier empresa
---    - private.fijar_empresa(): hoy exige membresía ⇒ todo RPC de negocio fallaba
---      para un super que pulsaba "Entrar" (error: «no tiene membresía en la empresa»).
---    - private.mi_rol(): devolvía NULL para un super ⇒ las políticas de escritura
---      (es_admin()/exigir_rol) lo rechazaban aunque viera los datos.
---    - public.fijar_empresa(): fija el GUC de SESIÓN (necesita el header
---      X-Session-Id en el cliente, ver src/services/supabase.js) y ahora audita.
--- ----------------------------------------------------------------------------
-create or replace function private.fijar_empresa(p_empresa_id uuid)
-returns uuid
-language plpgsql
-security definer
-set search_path = ''
-as $fn$
-declare
-  v uuid;
-begin
-  v := coalesce(p_empresa_id, private.empresa_activa());
-  if v is null then
-    raise exception 'empresa no seleccionada: pase p_empresa_id o defina app.empresa_id';
-  end if;
-  if not exists (select 1 from public.empresas e where e.id = v) then
-    raise exception 'empresa inexistente';
-  end if;
-  -- miembro normal, o dueño de la plataforma (001_super) operando otra empresa.
-  if not (exists (select 1 from public.membresias m
-                  where m.empresa_id = v and m.user_id = auth.uid())
-          or private.es_super_compat()) then
-    raise exception 'el usuario actual no tiene membresía en la empresa %', v;
-  end if;
-  perform set_config('app.empresa_id', v::text, true);
-  return v;
-end $fn$;
-
-create or replace function private.mi_rol()
-returns text
+create or replace function private.plan_defaults(p_plan text)
+returns table (max_productos integer, max_miembros integer)
 language sql
-stable
-security definer
+immutable
 set search_path = ''
 as $fn$
-  -- empresa_activa() ya validó que el que pide es miembro o super; si es super sin
-  -- membresía, su rol efectivo en esa empresa es admin (solo puede serlo por RLS).
-  select coalesce(
-    (select m.rol
-       from public.membresias m
-      where m.empresa_id = private.empresa_activa()
-        and m.user_id = auth.uid()
-      limit 1),
-    case when private.es_super_compat()
-          and private.empresa_activa() is not null
-         then 'admin' end
-  );
+  select case when p_plan = 'pago' then null else 20 end,   -- artículos activos
+         case when p_plan = 'pago' then null else 3  end;   -- personas en el equipo
 $fn$;
+revoke all on function private.plan_defaults(text) from public, anon, authenticated;
 
-drop function if exists public.fijar_empresa(uuid);
-create or replace function public.fijar_empresa(p_empresa uuid)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $fn$
-begin
-  if auth.uid() is null then raise exception 'sin sesion'; end if;
-  if p_empresa is null or not exists (select 1 from public.empresas e where e.id = p_empresa) then
-    raise exception 'empresa inexistente';
-  end if;
-  if not (exists (select 1 from public.membresias m
-                  where m.empresa_id = p_empresa and m.user_id = auth.uid())
-          or public.es_super()) then
-    raise exception 'no pertenece a esa empresa';
-  end if;
-  -- false ⇒ GUC de SESIÓN (no de transacción): lo aguanta la conexión pinzada por
-  -- X-Session-Id, y así los SELECT directos de mesas/cuentas/turnos ven la empresa.
-  perform set_config('app.empresa_id', p_empresa::text, false);
-  if public.es_super() then
-    perform private.auditar(p_empresa, 'super_entro',
-                            jsonb_build_object('empresa', p_empresa::text));
-  end if;
-end $fn$;
-revoke all on function public.fijar_empresa(uuid) from public, anon;
-grant execute on function public.fijar_empresa(uuid) to authenticated;
-
--- ----------------------------------------------------------------------------
--- 2) CUOTA OCULTA DE ARTÍCULOS (plan gratuito = 30 artículos por defecto)
---    El número vive en public.limites, tabla SIN grants ni políticas: el comercio
---    NO puede leer su cuota ni cambiarla; solo choca con el límite al crear el
---    artículo 31 y recibe el mensaje de suscripción. Se exige en el servidor con
---    un trigger porque el catálogo se escribe por INSERT directo (políticas
---    productos_insert), no por RPC.
--- ----------------------------------------------------------------------------
 create table if not exists public.limites (
   empresa_id      uuid primary key references public.empresas(id) on delete cascade,
   max_productos   integer,                              -- NULL = sin límite
+  max_miembros    integer,                              -- NULL = sin límite
   plan            text not null default 'gratis' check (plan in ('gratis','pago')),
   notas           text,                                 -- nota interna del super
   actualizado_en  timestamptz not null default now(),
   actualizado_por uuid
 );
+alter table public.limites add column if not exists max_miembros integer;
 alter table public.limites enable row level security;
 alter table public.limites force row level security;
 revoke all on table public.limites from public, anon, authenticated;
 
--- toda empresa existente (y las futuras) nace con 30 artículos del plan gratis.
-insert into public.limites (empresa_id, max_productos, plan)
-select e.id, 30, 'gratis' from public.empresas e
+-- Empresas existentes sin fila: nacen en Básico.
+insert into public.limites (empresa_id, plan, max_productos, max_miembros)
+select e.id, 'gratis', d.max_productos, d.max_miembros
+  from public.empresas e, private.plan_defaults('gratis') d
 on conflict (empresa_id) do nothing;
 
--- Y las que se creen después (registro desde la app, importación de un respaldo):
--- trigger en empresas ⇒ SIEMPRE hay fila de cuota, aunque el alta venga de un
--- super_importar_empresa (security definer, role postgres ⇒ pasa el deny-all de limites).
+-- Migración única v0.14: SOLO toca lo que aún tiene el valor heredado. Volver a pegar
+-- este archivo NO pisa los valores que el super haya puesto a mano.
+update public.limites l
+   set max_miembros = (select d.max_miembros from private.plan_defaults('gratis') d)
+ where l.plan = 'gratis' and l.max_miembros is null;
+update public.limites l
+   set max_productos = (select d.max_productos from private.plan_defaults('gratis') d)
+ where l.plan = 'gratis' and l.max_productos = 30;
+update public.limites set max_productos = null, max_miembros = null where plan = 'pago';
+
 create or replace function private.nueva_cuota_empresa()
 returns trigger
 language plpgsql
@@ -2347,8 +2200,9 @@ security definer
 set search_path = ''
 as $fn$
 begin
-  insert into public.limites (empresa_id, max_productos, plan)
-  values (new.id, 30, 'gratis')
+  insert into public.limites (empresa_id, plan, max_productos, max_miembros)
+  select new.id, 'gratis', d.max_productos, d.max_miembros
+    from private.plan_defaults('gratis') d
   on conflict (empresa_id) do nothing;
   return new;
 end $fn$;
@@ -2358,17 +2212,6 @@ drop trigger if exists trg_nueva_cuota on public.empresas;
 create trigger trg_nueva_cuota
   after insert on public.empresas
   for each row execute function private.nueva_cuota_empresa();
-
-create or replace function private.productos_permitidos(p_empresa uuid)
-returns integer
-language sql
-stable
-security definer
-set search_path = ''
-as $fn$
-  select l.max_productos from public.limites l where l.empresa_id = p_empresa;
-$fn$;
-revoke all on function private.productos_permitidos(uuid) from public, anon, authenticated;
 
 create or replace function private.controlar_cuota_productos()
 returns trigger
@@ -2380,25 +2223,23 @@ declare
   v_max integer;
   v_hay integer;
 begin
-  -- el dueño de la plataforma importa/exporta datos de prueba sin tope.
-  if private.es_super_compat() then
-    return new;
+  if public.es_super() then return new; end if;
+
+  select l.max_productos into v_max from public.limites l where l.empresa_id = new.empresa_id;
+  if not found then                                   -- sin fila = Básico (falla cerrado)
+    select d.max_productos into v_max from private.plan_defaults('gratis') d;
   end if;
-  v_max := private.productos_permitidos(new.empresa_id);
-  if v_max is null then
-    return new;                                   -- sin límite (plan de pago)
-  end if;
-  if not coalesce(new.activo, true) then
-    return new;                                   -- dar de baja nunca se bloquea
-  end if;
+  if v_max is null then return new; end if;           -- Premium
+
+  if not coalesce(new.activo, true) then return new; end if;                 -- dar de baja siempre se puede
   if tg_op = 'UPDATE' and coalesce(old.activo, true) = coalesce(new.activo, true) then
-    return new;                                   -- cambiar precio/nombre/foto no cuenta
+    return new;                                        -- editar nombre/precio/foto no cuenta
   end if;
-  select count(*) into v_hay
-    from public.productos
-   where empresa_id = new.empresa_id and activo;
+
+  perform pg_advisory_xact_lock(hashtext('cuota_productos:' || new.empresa_id::text));
+  select count(*) into v_hay from public.productos where empresa_id = new.empresa_id and activo;
   if v_hay >= v_max then
-    raise exception 'El plan gratuito permite % artículos como máximo. Para tener más artículos, solicite el plan de pagos.', v_max
+    raise exception 'Llegaste al límite de artículos de tu plan Básico. Para agregar más, solicita el plan Premium.'
       using errcode = '22000';
   end if;
   return new;
@@ -2410,12 +2251,49 @@ create trigger trg_controlar_cuota
   before insert or update on public.productos
   for each row execute function private.controlar_cuota_productos();
 
--- RPC del super para ajustar la cuota (oculta para los comercios).
+create or replace function private.controlar_cuota_miembros()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_max integer;
+  v_hay integer;
+begin
+  if public.es_super() then return new; end if;
+
+  select l.max_miembros into v_max from public.limites l where l.empresa_id = new.empresa_id;
+  if not found then
+    select d.max_miembros into v_max from private.plan_defaults('gratis') d;
+  end if;
+  if v_max is null then return new; end if;           -- Premium
+
+  -- Serializa altas simultáneas de la misma empresa (si no, dos invitaciones a la vez
+  -- podrían colarse las dos con el cupo en 2/3).
+  perform pg_advisory_xact_lock(hashtext('cuota_miembros:' || new.empresa_id::text));
+  select count(*) into v_hay from public.membresias where empresa_id = new.empresa_id;
+  if v_hay >= v_max then
+    raise exception 'Llegaste al límite de personas de tu plan Básico. Para sumar más gente al equipo, solicita el plan Premium.'
+      using errcode = '22000';
+  end if;
+  return new;
+end $fn$;
+revoke all on function private.controlar_cuota_miembros() from public, anon, authenticated;
+
+drop trigger if exists trg_cuota_miembros on public.membresias;
+create trigger trg_cuota_miembros
+  before insert on public.membresias
+  for each row execute function private.controlar_cuota_miembros();
+
+-- RPC del super: ajuste fino (valores a mano). NULL en un máximo = sin límite.
+drop function if exists public.super_ajustar_empresa(uuid, integer, text, text);
 create or replace function public.super_ajustar_empresa(
   p_empresa       uuid,
   p_max_productos integer default null,
-  p_plan          text default null,
-  p_notas         text default null
+  p_plan          text    default null,
+  p_notas         text    default null,
+  p_max_miembros  integer default null
 )
 returns jsonb
 language plpgsql
@@ -2426,11 +2304,8 @@ declare
   v_plan text := coalesce(p_plan,
                           (select l.plan from public.limites l where l.empresa_id = p_empresa),
                           'gratis');
-  v_max  integer := case
-    when p_max_productos is not null then p_max_productos
-    when coalesce(p_plan, v_plan) = 'pago' then null
-    else coalesce((select l.max_productos from public.limites l where l.empresa_id = p_empresa), 30)
-  end;
+  v_prod integer;
+  v_miem integer;
 begin
   if not public.es_super() then raise exception 'requiere super'; end if;
   if p_empresa is null or not exists (select 1 from public.empresas e where e.id = p_empresa) then
@@ -2438,25 +2313,74 @@ begin
   end if;
   if v_plan not in ('gratis','pago') then raise exception 'plan inválido'; end if;
   if p_max_productos is not null and p_max_productos < 1 then
-    raise exception 'el máximo de artículos debe ser 1 o más (NULL = sin límite)';
+    raise exception 'el máximo de artículos debe ser 1 o más (vacío = sin límite)';
+  end if;
+  if p_max_miembros is not null and p_max_miembros < 1 then
+    raise exception 'el máximo de personas debe ser 1 o más (vacío = sin límite)';
   end if;
 
-  insert into public.limites (empresa_id, max_productos, plan, notas, actualizado_en, actualizado_por)
-  values (p_empresa, v_max, v_plan, p_notas, now(), auth.uid())
+  -- Premium ⇒ sin límite. Básico ⇒ lo que mande el super o, si no manda nada, el defecto.
+  if v_plan = 'pago' then
+    v_prod := null; v_miem := null;
+  else
+    select coalesce(p_max_productos, d.max_productos),
+           coalesce(p_max_miembros,  d.max_miembros)
+      into v_prod, v_miem
+      from private.plan_defaults('gratis') d;
+  end if;
+
+  insert into public.limites (empresa_id, plan, max_productos, max_miembros, notas, actualizado_en, actualizado_por)
+  values (p_empresa, v_plan, v_prod, v_miem, p_notas, now(), auth.uid())
   on conflict (empresa_id) do update
-    set max_productos  = excluded.max_productos,
-        plan           = excluded.plan,
+    set plan           = excluded.plan,
+        max_productos  = excluded.max_productos,
+        max_miembros   = excluded.max_miembros,
         notas          = coalesce(excluded.notas, limites.notas),
         actualizado_en = now(),
         actualizado_por = excluded.actualizado_por;
   perform private.auditar(p_empresa, 'super_ajustar_cuota',
-    jsonb_build_object('max_productos', v_max, 'plan', v_plan));
-  return jsonb_build_object('max_productos', v_max, 'plan', v_plan);
+    jsonb_build_object('plan', v_plan, 'max_productos', v_prod, 'max_miembros', v_miem));
+  return jsonb_build_object('plan', v_plan, 'max_productos', v_prod, 'max_miembros', v_miem);
 end $fn$;
-revoke all on function public.super_ajustar_empresa(uuid, integer, text, text) from public, anon;
-grant execute on function public.super_ajustar_empresa(uuid, integer, text, text) to authenticated;
+revoke all on function public.super_ajustar_empresa(uuid, integer, text, text, integer) from public, anon;
+grant execute on function public.super_ajustar_empresa(uuid, integer, text, text, integer) to authenticated;
 
--- Lectura de cuota para el panel del super (nunca para el comercio).
+-- Pasar de plan con un clic (valores por defecto del plan).
+create or replace function public.super_cambiar_plan(p_empresa uuid, p_plan text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_prod integer;
+  v_miem integer;
+begin
+  if not public.es_super() then raise exception 'requiere super'; end if;
+  if p_plan not in ('gratis', 'pago') then raise exception 'plan inválido (gratis | pago)'; end if;
+  if p_empresa is null or not exists (select 1 from public.empresas e where e.id = p_empresa) then
+    raise exception 'empresa inexistente';
+  end if;
+
+  select d.max_productos, d.max_miembros into v_prod, v_miem from private.plan_defaults(p_plan) d;
+
+  insert into public.limites (empresa_id, plan, max_productos, max_miembros, actualizado_en, actualizado_por)
+  values (p_empresa, p_plan, v_prod, v_miem, now(), auth.uid())
+  on conflict (empresa_id) do update
+    set plan = excluded.plan,
+        max_productos = excluded.max_productos,
+        max_miembros  = excluded.max_miembros,
+        actualizado_en = now(),
+        actualizado_por = excluded.actualizado_por;
+
+  perform private.auditar(p_empresa, 'super_cambio_plan',
+    jsonb_build_object('plan', p_plan, 'max_productos', v_prod, 'max_miembros', v_miem));
+  return jsonb_build_object('plan', p_plan, 'max_productos', v_prod, 'max_miembros', v_miem);
+end $fn$;
+revoke all on function public.super_cambiar_plan(uuid, text) from public, anon;
+grant execute on function public.super_cambiar_plan(uuid, text) to authenticated;
+
+-- Lectura de cuota y uso para el panel del super (nunca para el comercio).
 create or replace function public.super_ver_cuota(p_empresa uuid)
 returns jsonb
 language plpgsql
@@ -2467,11 +2391,12 @@ as $fn$
 begin
   if not public.es_super() then raise exception 'requiere super'; end if;
   return jsonb_build_object(
-    'max_productos', (select l.max_productos from public.limites l where l.empresa_id = p_empresa),
-    'plan',          (select l.plan from public.limites l where l.empresa_id = p_empresa),
-    'notas',         (select l.notas from public.limites l where l.empresa_id = p_empresa),
-    'productos_actuales', (select count(*) from public.productos p
-                          where p.empresa_id = p_empresa and p.activo)
+    'plan',               (select l.plan          from public.limites l where l.empresa_id = p_empresa),
+    'max_productos',      (select l.max_productos from public.limites l where l.empresa_id = p_empresa),
+    'max_miembros',       (select l.max_miembros  from public.limites l where l.empresa_id = p_empresa),
+    'notas',              (select l.notas         from public.limites l where l.empresa_id = p_empresa),
+    'productos_actuales', (select count(*) from public.productos p where p.empresa_id = p_empresa and p.activo),
+    'miembros_actuales',  (select count(*) from public.membresias m where m.empresa_id = p_empresa)
   );
 end $fn$;
 revoke all on function public.super_ver_cuota(uuid) from public, anon;
@@ -2876,7 +2801,7 @@ begin
       values (v_new, coalesce(r->>'nombre',''))
       on conflict (user_id) do nothing;
     end if;
-    v_rol := case when r->>'rol' in ('admin','cajero','mesero') then r->>'rol' else 'cajero' end;
+    v_rol := case when r->>'rol' in ('admin','cajero','mesero','cocina','barra') then r->>'rol' else 'cajero' end;
     insert into public.membresias (empresa_id, user_id, rol)
     values (v_emp, v_new, v_rol)
     on conflict (empresa_id, user_id) do nothing;
@@ -2919,15 +2844,16 @@ begin
     if v_cuenta is null then continue; end if;
     v_old    := nullif(v_map_productos->>(r->>'producto_id'), '')::uuid;
     insert into public.cuenta_items (empresa_id, cuenta_id, producto_id, nombre_snapshot,
-                                     precio_snapshot, qty, estado, nota, motivo_anulacion, enviado_en)
+                                     precio_snapshot, qty, estado, nota, motivo_anulacion, enviado_en, areas)
     values (v_emp, v_cuenta, v_old,
             coalesce(nullif(r->>'nombre_snapshot',''),'(importado)'),
             coalesce((r->>'precio_snapshot')::numeric, 0),
             greatest(1, coalesce((r->>'qty')::int, 1)),
-            case when coalesce(r->>'estado','pendiente') in ('pendiente','enviado','anulado')
+            case when coalesce(r->>'estado','pendiente') in ('pendiente','enviado','listo','anulacion','anulado')
                  then r->>'estado' else 'pendiente' end,
             coalesce(r->>'nota',''), r->>'motivo_anulacion',
-            (r->>'enviado_en')::timestamptz);
+            (r->>'enviado_en')::timestamptz,
+            coalesce((select p.areas from public.productos p where p.id = v_old), array['cocina']::text[]));
   end loop;
 
   for r in select * from jsonb_array_elements(coalesce(p_datos->'pagos','[]'::jsonb)) loop
@@ -3052,7 +2978,7 @@ select 'funcion' as objeto, p.proname as nombre,
 -- (y, por convención, después de 003_comensales.sql).
 --
 -- Requiere 001 (public.supers / public.es_super() y el patrón de INSERT directo
--- a auth.users de super_importar_empresa) y 002 (private.auditar, private.es_super_compat,
+-- a auth.users de super_importar_empresa) y 002 (private.auditar, public.es_super,
 -- private.exigir_rol/fijar_empresa/mi_rol y el trigger trg_nueva_cuota que ya siembra
 -- public.limites por cada empresa nueva).
 --
@@ -3072,7 +2998,6 @@ select 'funcion' as objeto, p.proname as nombre,
 -- `grant execute ... to authenticated`. Los triggers solo se revocan (no necesitan
 -- grants). Nunca se escribe una clave/anon/token en este archivo.
 -- ============================================================================
-
 
 -- ----------------------------------------------------------------------------
 -- 1) ALTA SELF-SERVICE DE EMPRESA (trigger sobre auth.users)
@@ -3157,7 +3082,8 @@ begin
     perform private.auditar(v_emp, 'alta_empresa',
       jsonb_build_object('usuario', NEW.id::text,
                          'correo',  coalesce(NEW.email, ''),
-                         'codigo',  v_codigo));
+                         'codigo',  v_codigo),
+      'empresa', (select e.nombre from public.empresas e where e.id = v_emp));
   end if;
 
   return NEW;
@@ -3170,7 +3096,6 @@ drop trigger if exists trg_alta_empresa_registrado on auth.users;
 create trigger trg_alta_empresa_registrado
   after insert on auth.users
   for each row execute function private.registrar_empresa_del_registrado();
-
 
 -- ----------------------------------------------------------------------------
 -- 2) EQUIPO · LISTAR (solo admin de la empresa activa)
@@ -3206,7 +3131,6 @@ end $fn$;
 revoke all on function public.equipo_listar() from public, anon;
 grant execute on function public.equipo_listar() to authenticated;
 
-
 -- ----------------------------------------------------------------------------
 -- 3) EQUIPO · INVITAR (alta directa en auth.users, espejo de super_importar_empresa)
 --    Crea auth.users (confirmado, clave bcrypt coste 10, columnas de token en '' y
@@ -3232,8 +3156,8 @@ begin
   perform private.exigir_rol(array['admin']::text[]);
   v_emp := private.empresa_activa();
 
-  if coalesce(p_rol, '') not in ('admin','cajero','mesero') then
-    raise exception 'El rol debe ser admin, cajero o mesero';
+  if coalesce(p_rol, '') not in ('admin','cajero','mesero','cocina','barra') then
+    raise exception 'El rol debe ser admin, cajero, mesero, cocina o barra';
   end if;
 
   v_email := lower(trim(coalesce(p_correo, '')));
@@ -3290,7 +3214,8 @@ begin
 
   if to_regclass('public.auditoria') is not null then
     perform private.auditar(v_emp, 'equipo_invito',
-      jsonb_build_object('usuario', v_new::text, 'correo', v_email, 'rol', p_rol));
+      jsonb_build_object('usuario', v_new::text, 'correo', v_email, 'rol', p_rol),
+      'usuario', coalesce(nullif(trim(p_nombre), ''), v_email));
   end if;
 
   return v_new;
@@ -3298,7 +3223,6 @@ end $fn$;
 
 revoke all on function public.equipo_invitar(text, text, text, text) from public, anon;
 grant execute on function public.equipo_invitar(text, text, text, text) to authenticated;
-
 
 -- ----------------------------------------------------------------------------
 -- 4) EQUIPO · RESTABLECER CLAVE (solo miembros de la empresa activa; no se fía del uuid)
@@ -3345,7 +3269,10 @@ begin
 
   if to_regclass('public.auditoria') is not null then
     perform private.auditar(v_emp, 'equipo_restablecio_clave',
-      jsonb_build_object('usuario', p_usuario_id::text));
+      jsonb_build_object('usuario', p_usuario_id::text),
+      'usuario', coalesce(nullif((select pf.display_name from public.perfiles pf
+                                   where pf.user_id = p_usuario_id), ''),
+                          (select u.email from auth.users u where u.id = p_usuario_id)));
   end if;
 
   return true;
@@ -3353,7 +3280,6 @@ end $fn$;
 
 revoke all on function public.equipo_restablecer(uuid, text) from public, anon;
 grant execute on function public.equipo_restablecer(uuid, text) to authenticated;
-
 
 -- ----------------------------------------------------------------------------
 -- 5) EQUIPO · REVOCAR miembro de la empresa activa.
@@ -3435,7 +3361,6 @@ end $fn$;
 revoke all on function public.equipo_revocar(uuid) from public, anon;
 grant execute on function public.equipo_revocar(uuid) to authenticated;
 
-
 -- ----------------------------------------------------------------------------
 -- 6) SUPER · RESETEAR CLAVE de cualquier usuario (dueño de la plataforma).
 --    Requiere public.es_super() y NO se acota a la empresa activa (actúa cross-tenant).
@@ -3487,7 +3412,6 @@ end $fn$;
 
 revoke all on function public.super_resetear_clave(uuid, text) from public, anon;
 grant execute on function public.super_resetear_clave(uuid, text) to authenticated;
-
 
 -- ----------------------------------------------------------------------------
 -- 7) Verificación (en el SQL Editor auth.uid() es NULL ⇒ solo contados/.existencias).
@@ -3865,10 +3789,9 @@ begin
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
   select jsonb_build_object(
            'plan', l.plan,
-           'retencion_meses', case when l.plan = 'gratis' then l.retencion_meses end,
-           'max_productos', l.max_productos)
+           'retencion_meses', case when l.plan = 'gratis' then l.retencion_meses end)
     into v from public.limites l where l.empresa_id = v_emp;
-  return coalesce(v, jsonb_build_object('plan', 'gratis', 'retencion_meses', 6, 'max_productos', 30));
+  return coalesce(v, jsonb_build_object('plan', 'gratis', 'retencion_meses', 6));
 end $fn$;
 revoke all on function public.mi_plan(uuid) from public, anon;
 grant execute on function public.mi_plan(uuid) to authenticated;
@@ -3916,4 +3839,933 @@ begin
 end $fn$;
 revoke all on function public.exportar_mi_empresa(uuid) from public, anon;
 grant execute on function public.exportar_mi_empresa(uuid) to authenticated;
+
+-- ################################################################
+-- ## 009 · cocina/barra · áreas por ítem · salida y anulación con aprobación ·
+-- ##         auditoría local · inventario · super admin fusionado
+-- ################################################################
+-- Roles nuevos (cocina, barra) SIN tocar los permisos de dinero: cobrar, turnos,
+-- movimientos de caja, import/export y gestión de equipo siguen siendo admin/cajero.
+-- Los ítems ahora llevan su área (snapshot de productos.areas) y estados extendidos
+-- ('listo' y 'anulacion' con solicitud + aprobación). Las tablas de inventario se
+-- crean acá y cobrar_cuenta ya descuenta su stock (best-effort, arriba en §cobrar).
+begin;
+
+-- ----------------------------------------------------------------------------
+-- A) ROL · cocina y barra en membresías (constraint con nombre estable).
+-- ----------------------------------------------------------------------------
+alter table public.membresias drop constraint if exists membresias_rol_check;
+alter table public.membresias add constraint membresias_rol_check
+  check (rol in ('admin','cajero','mesero','cocina','barra'));
+
+-- ----------------------------------------------------------------------------
+-- B) MULTI-ÁREA · un combo puede ir a cocina Y barra a la vez.
+--    productos.areas = origen; cuenta_items.areas = snapshot al insertar
+--    (agregar_items y la importación ya copian p.areas).
+-- ----------------------------------------------------------------------------
+alter table public.productos add column if not exists areas text[] not null default array['cocina']::text[];
+alter table public.productos drop constraint if exists productos_areas_chk;
+alter table public.productos add constraint productos_areas_chk
+  check (areas <@ array['cocina','barra']::text[] and coalesce(array_length(areas, 1), 0) > 0);
+
+alter table public.cuenta_items add column if not exists areas text[] not null default array['cocina']::text[];
+
+-- ----------------------------------------------------------------------------
+-- C) ESTADOS · 'listo' y 'anulacion' (anulación pedida, no aprobada aún).
+--    Primero el update defensivo (base vieja con valores raros), luego el CHECK.
+-- ----------------------------------------------------------------------------
+update public.cuenta_items
+   set estado = 'enviado'
+ where estado not in ('pendiente','enviado','listo','anulacion','anulado');
+alter table public.cuenta_items drop constraint if exists cuenta_items_estado_check;
+alter table public.cuenta_items add constraint cuenta_items_estado_check
+  check (estado in ('pendiente','enviado','listo','anulacion','anulado'));
+
+alter table public.cuenta_items add column if not exists listo_en              timestamptz;
+alter table public.cuenta_items add column if not exists anulacion_motivo      text;
+alter table public.cuenta_items add column if not exists anulacion_por         uuid;
+alter table public.cuenta_items add column if not exists anulacion_pedida_en   timestamptz;
+alter table public.cuenta_items add column if not exists anulacion_estado_previo text;
+alter table public.cuenta_items add column if not exists anulacion_resuelta_por uuid;
+alter table public.cuenta_items add column if not exists anulacion_resuelta_en  timestamptz;
+
+-- marcar_salida: cocina/barra/admin/cajero pasan ítems 'enviado' → 'listo'.
+create or replace function public.marcar_salida(
+  p_item_ids   jsonb,
+  p_empresa_id uuid default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_n   integer;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','cocina','barra']::text[]);
+
+  if p_item_ids is null or jsonb_typeof(p_item_ids) <> 'array' then
+    raise exception 'Debe enviar una lista de ítems';
+  end if;
+
+  update public.cuenta_items
+     set estado = 'listo', listo_en = now()
+   where empresa_id = v_emp
+     and estado = 'enviado'
+     and id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids));
+
+  get diagnostics v_n = row_count;
+  if v_n > 0 then
+    perform private.auditar(v_emp, 'item_salida',
+      jsonb_build_object('items', v_n),
+      'cuenta_item',
+      (select coalesce(string_agg(s.nombre_snapshot, ', '), (v_n)::text || ' ítems')
+         from (select ci.nombre_snapshot
+                 from public.cuenta_items ci
+                where ci.empresa_id = v_emp
+                  and ci.id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids))
+                limit 6) s));
+  end if;
+  return v_n;
+end $fn$;
+revoke all on function public.marcar_salida(jsonb, uuid) from public, anon, authenticated;
+grant execute on function public.marcar_salida(jsonb, uuid) to authenticated;
+
+-- deshacer_salida: 'listo' → 'enviado' (se limpió la salida por error).
+create or replace function public.deshacer_salida(
+  p_item_ids   jsonb,
+  p_empresa_id uuid default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_n   integer;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','cocina','barra']::text[]);
+
+  if p_item_ids is null or jsonb_typeof(p_item_ids) <> 'array' then
+    raise exception 'Debe enviar una lista de ítems';
+  end if;
+
+  update public.cuenta_items
+     set estado = 'enviado', listo_en = null
+   where empresa_id = v_emp
+     and estado = 'listo'
+     and id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids));
+
+  get diagnostics v_n = row_count;
+  if v_n > 0 then
+    perform private.auditar(v_emp, 'item_salida_deshacer',
+      jsonb_build_object('items', v_n),
+      'cuenta_item',
+      (select coalesce(string_agg(s.nombre_snapshot, ', '), (v_n)::text || ' ítems')
+         from (select ci.nombre_snapshot
+                 from public.cuenta_items ci
+                where ci.empresa_id = v_emp
+                  and ci.id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids))
+                limit 6) s));
+  end if;
+  return v_n;
+end $fn$;
+revoke all on function public.deshacer_salida(jsonb, uuid) from public, anon, authenticated;
+grant execute on function public.deshacer_salida(jsonb, uuid) to authenticated;
+
+-- pedir_anulacion: cualquier rol pide anular un ítem ENVIADO o LISTO (motivo obligatorio).
+-- El ítem queda en 'anulacion' hasta que admin/cajero resuelva con resolver_anulacion.
+create or replace function public.pedir_anulacion(
+  p_item_id    uuid,
+  p_motivo     text,
+  p_empresa_id uuid default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_it  public.cuenta_items;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero','cocina','barra']::text[]);
+
+  if coalesce(trim(p_motivo), '') = '' then
+    raise exception 'El motivo es obligatorio';
+  end if;
+
+  select * into v_it from public.cuenta_items
+   where id = p_item_id and empresa_id = v_emp;
+  if not found then
+    raise exception 'ítem inexistente en la empresa activa';
+  end if;
+  perform private.load_cuenta(v_it.cuenta_id, array['abierta','precuenta']::text[]);
+
+  if v_it.estado not in ('enviado','listo') then
+    raise exception 'Solo se puede pedir anulación de un ítem enviado o listo (estado actual: %)', v_it.estado;
+  end if;
+
+  update public.cuenta_items
+     set estado = 'anulacion',
+         anulacion_estado_previo = v_it.estado,
+         anulacion_motivo        = trim(p_motivo),
+         anulacion_por           = auth.uid(),
+         anulacion_pedida_en     = now(),
+         anulacion_resuelta_por  = null,
+         anulacion_resuelta_en   = null
+   where id = p_item_id;
+
+  perform private.auditar(v_emp, 'item_anulacion_pedida', jsonb_build_object(
+    'item', p_item_id::text, 'cuenta', v_it.cuenta_id::text, 'motivo', trim(p_motivo)),
+    'cuenta_item', v_it.nombre_snapshot);
+  return true;
+end $fn$;
+revoke all on function public.pedir_anulacion(uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public.pedir_anulacion(uuid, text, uuid) to authenticated;
+
+-- resolver_anulacion: admin/cajero aprueba (ítem → 'anulado') o rechaza (vuelve al
+-- estado previo y se limpian los campos de la solicitud). El corte directo de
+-- anular_item sigue existiendo para admin/cajero sin pasar por acá.
+create or replace function public.resolver_anulacion(
+  p_item_id    uuid,
+  p_aprobar    boolean,
+  p_motivo     text default null,
+  p_empresa_id uuid default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_it  public.cuenta_items;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+
+  select * into v_it from public.cuenta_items
+   where id = p_item_id and empresa_id = v_emp;
+  if not found then
+    raise exception 'ítem inexistente en la empresa activa';
+  end if;
+  if v_it.estado <> 'anulacion' then
+    raise exception 'Ese ítem no tiene una anulación pendiente';
+  end if;
+
+  if coalesce(p_aprobar, false) then
+    update public.cuenta_items
+       set estado = 'anulado',
+           motivo_anulacion = coalesce(nullif(trim(p_motivo), ''), v_it.anulacion_motivo, 'sin motivo'),
+           anulacion_resuelta_por = auth.uid(),
+           anulacion_resuelta_en  = now()
+     where id = p_item_id;
+  else
+    update public.cuenta_items
+       set estado = coalesce(v_it.anulacion_estado_previo, 'enviado'),
+           anulacion_motivo        = null,
+           anulacion_por           = null,
+           anulacion_pedida_en     = null,
+           anulacion_estado_previo = null,
+           anulacion_resuelta_por  = null,
+           anulacion_resuelta_en   = null
+     where id = p_item_id;
+  end if;
+
+  perform private.auditar(v_emp, 'item_anulacion_resuelta', jsonb_build_object(
+    'item', p_item_id::text,
+    'aprobada', coalesce(p_aprobar, false),
+    'motivo', coalesce(nullif(trim(p_motivo), ''), v_it.anulacion_motivo)),
+    'cuenta_item', v_it.nombre_snapshot);
+  return true;
+end $fn$;
+revoke all on function public.resolver_anulacion(uuid, boolean, text, uuid) from public, anon, authenticated;
+grant execute on function public.resolver_anulacion(uuid, boolean, text, uuid) to authenticated;
+
+-- cola_de_area: la pantalla de cocina/barra. Un objeto por cuenta abierta con los
+-- ítems vivos de ESA área (enviado/listo/anulacion), ordenados por enviada_en.
+create or replace function public.cola_de_area(
+  p_area       text default 'cocina',
+  p_empresa_id uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_out jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero','cocina','barra']::text[]);
+
+  if coalesce(p_area, '') not in ('cocina','barra') then
+    raise exception 'El área debe ser cocina o barra';
+  end if;
+
+  select coalesce(jsonb_agg(t.cuenta_json order by t.enviada_en nulls last, t.cuenta_id), '[]'::jsonb)
+    into v_out
+    from (
+      select cu.id                                          as cuenta_id,
+             min(i.enviado_en)                              as enviada_en,
+             jsonb_build_object(
+               'cuenta_id',  cu.id,
+               'mesa',       coalesce((select string_agg(m.nombre, ', ' order by m.nombre)
+                                        from public.cuenta_mesas cm
+                                        join public.mesas m on m.id = cm.mesa_id
+                                       where cm.cuenta_id = cu.id), 'Mostrador'),
+               'canal',      case when exists (select 1 from public.cuenta_mesas cm
+                                               where cm.cuenta_id = cu.id)
+                                  then 'mesa' else 'mostrador' end,
+               'comensales', cu.comensales,
+               'abierta_en', cu.abierta_en,
+               'enviada_en', min(i.enviado_en),
+               'items', coalesce(jsonb_agg(jsonb_build_object(
+                          'id',               i.id,
+                          'nombre',           i.nombre_snapshot,
+                          'qty',              i.qty,
+                          'nota',             i.nota,
+                          'estado',           i.estado,
+                          'areas',            i.areas,
+                          'enviada_en',       i.enviado_en,
+                          'listo_en',         i.listo_en,
+                          'anulacion_motivo', i.anulacion_motivo)
+                        order by i.enviado_en), '[]'::jsonb)
+             ) as cuenta_json
+        from public.cuentas cu
+        join public.cuenta_items i on i.cuenta_id = cu.id
+       where cu.empresa_id = v_emp
+         and cu.estado <> 'cerrada'
+         and i.areas @> array[p_area]::text[]
+         and i.estado in ('enviado','listo','anulacion')
+       group by cu.id, cu.comensales, cu.abierta_en
+    ) t;
+  return v_out;
+end $fn$;
+revoke all on function public.cola_de_area(text, uuid) from public, anon, authenticated;
+grant execute on function public.cola_de_area(text, uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- D) AUDITORÍA local: el admin de la empresa ya puede leer su auditoria desde la app
+--    (antes solo el super con super_listar_auditoria).
+-- ----------------------------------------------------------------------------
+create or replace function public.auditoria_listar(
+  p_dias       integer default 7,
+  p_accion     text    default null,
+  p_actor      uuid    default null,
+  p_limite     integer default 300,
+  p_empresa_id uuid    default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp  uuid;
+  v_dias integer;
+  v_lim  integer;
+  v_out  jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+
+  v_dias := least(greatest(coalesce(p_dias, 7), 1), 90);
+  v_lim  := least(greatest(coalesce(p_limite, 300), 1), 500);
+
+  select coalesce(jsonb_agg(q.r order by (q.r->>'en') desc), '[]'::jsonb) into v_out
+    from (
+      select jsonb_build_object('en', a.en, 'actor', a.actor,
+                                'actor_nombre', coalesce(nullif(a.actor_nombre, ''), nullif(p.display_name, ''), '—'),
+                                'actor_rol',    coalesce(nullif(a.actor_rol, ''), '—'),
+                                'accion', a.accion, 'detalle', a.detalle,
+                                'entity_type',  coalesce(nullif(a.entity_type, ''), '—'),
+                                'entity_label', coalesce(nullif(a.entity_label, ''), '—')) as r
+        from public.auditoria a
+        left join public.perfiles p on p.user_id = a.actor
+       where a.empresa_id = v_emp
+         and a.en >= now() - make_interval(days => v_dias)
+         and (p_accion is null or a.accion = p_accion)
+         and (p_actor is null or a.actor = p_actor)
+       order by a.en desc
+       limit v_lim
+    ) q;
+  return v_out;
+end $fn$;
+revoke all on function public.auditoria_listar(integer, text, uuid, integer, uuid) from public, anon, authenticated;
+grant execute on function public.auditoria_listar(integer, text, uuid, integer, uuid) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- E) INVENTARIO · insumos → recetas de platos → movimientos.
+--    cobro (cobrar_cuenta) ya descuenta por receta arriba. Acceso directo solo
+--    SELECT para el admin (patrón de trabajos_impresion); lo demás pasa por RPCs
+--    security definer con gate admin.
+-- ----------------------------------------------------------------------------
+create table if not exists public.insumos (
+  id             uuid primary key default gen_random_uuid(),
+  empresa_id     uuid not null references public.empresas(id) on delete cascade,
+  nombre         text not null,
+  unidad         text not null default 'unidad',
+  stock          numeric(12,3) not null default 0,
+  stock_min      numeric(12,3) not null default 0,
+  costo          numeric(12,2) not null default 0,
+  activo         boolean not null default true,
+  creada_en      timestamptz not null default now(),
+  actualizado_en timestamptz
+);
+create index if not exists insumos_empresa_idx on public.insumos (empresa_id);
+create unique index if not exists insumos_empresa_nombre_ux
+  on public.insumos (empresa_id, lower(nombre));
+
+create table if not exists public.recetas (
+  id          uuid primary key default gen_random_uuid(),
+  empresa_id  uuid not null references public.empresas(id) on delete cascade,
+  producto_id uuid not null references public.productos(id) on delete cascade,
+  insumo_id   uuid not null references public.insumos(id) on delete cascade,
+  cantidad    numeric(12,3) not null check (cantidad > 0),
+  creada_en   timestamptz not null default now(),
+  unique (producto_id, insumo_id)
+);
+create index if not exists recetas_empresa_idx on public.recetas (empresa_id);
+
+create table if not exists public.insumos_movimientos (
+  id             uuid primary key default gen_random_uuid(),
+  empresa_id     uuid not null,
+  insumo_id      uuid not null references public.insumos(id) on delete cascade,
+  tipo           text not null check (tipo in ('entrada','salida','venta','ajuste')),
+  cantidad       numeric(12,3) not null,
+  stock_after    numeric(12,3),
+  nota           text,
+  usuario        uuid default auth.uid(),
+  usuario_nombre text,
+  en             timestamptz not null default now()
+);
+create index if not exists insumos_movimientos_empresa_en_idx
+  on public.insumos_movimientos (empresa_id, en desc);
+
+-- RLS: mismo patrón que trabajos_impresion (el cliente solo lee por API; toda
+-- escritura real la hacen las RPCs definer de abajo).
+alter table public.insumos enable row level security;
+alter table public.insumos force row level security;
+drop policy if exists insumos_select on public.insumos;
+create policy insumos_select on public.insumos for select to authenticated
+  using (empresa_id = (select private.empresa_activa()) and (select private.es_admin()));
+revoke all on public.insumos from public, anon;
+revoke insert, update, delete, truncate on public.insumos from authenticated;
+grant select on public.insumos to authenticated;
+
+alter table public.recetas enable row level security;
+alter table public.recetas force row level security;
+drop policy if exists recetas_select on public.recetas;
+create policy recetas_select on public.recetas for select to authenticated
+  using (empresa_id = (select private.empresa_activa()) and (select private.es_admin()));
+revoke all on public.recetas from public, anon;
+revoke insert, update, delete, truncate on public.recetas from authenticated;
+grant select on public.recetas to authenticated;
+
+alter table public.insumos_movimientos enable row level security;
+alter table public.insumos_movimientos force row level security;
+drop policy if exists insumos_movimientos_select on public.insumos_movimientos;
+create policy insumos_movimientos_select on public.insumos_movimientos for select to authenticated
+  using (empresa_id = (select private.empresa_activa()) and (select private.es_admin()));
+revoke all on public.insumos_movimientos from public, anon;
+revoke insert, update, delete, truncate on public.insumos_movimientos from authenticated;
+grant select on public.insumos_movimientos to authenticated;
+
+-- inventario_listar: todo lo que necesita la pantalla de inventario de una sola vez.
+create or replace function public.inventario_listar(p_empresa_id uuid default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+  return jsonb_build_object(
+    'insumos', coalesce((select jsonb_agg(jsonb_build_object(
+                   'id', i.id, 'nombre', i.nombre, 'unidad', i.unidad,
+                   'stock', i.stock, 'stock_min', i.stock_min,
+                   'costo', i.costo, 'activo', i.activo)
+                 order by lower(i.nombre))
+                 from public.insumos i where i.empresa_id = v_emp), '[]'::jsonb),
+    'productos', coalesce((select jsonb_agg(jsonb_build_object(
+                   'id', p.id, 'nombre', p.nombre,
+                   'recetas', coalesce((select jsonb_agg(jsonb_build_object(
+                                  'insumo_id', r.insumo_id, 'cantidad', r.cantidad)
+                                order by r.creada_en)
+                                from public.recetas r where r.producto_id = p.id), '[]'::jsonb))
+                 order by lower(p.nombre))
+                 from public.productos p
+                where p.empresa_id = v_emp and p.activo), '[]'::jsonb)
+  );
+end $fn$;
+revoke all on function public.inventario_listar(uuid) from public, anon, authenticated;
+grant execute on function public.inventario_listar(uuid) to authenticated;
+
+-- insumo_guardar: upsert. Con 'id' ⇒ actualiza ese insumo; sin 'id' ⇒ crea o
+-- actualiza por nombre normalizado (índice único empresa + lower(nombre)).
+create or replace function public.insumo_guardar(
+  p_insumo     jsonb,
+  p_empresa_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp    uuid;
+  v_id     uuid;
+  v_out    uuid;
+  v_nombre text;
+  v_unidad text;
+  v_stock  numeric;
+  v_min    numeric;
+  v_costo  numeric;
+  v_activo boolean;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+
+  if p_insumo is null or jsonb_typeof(p_insumo) <> 'object' then
+    raise exception 'Los datos del insumo son inválidos';
+  end if;
+  v_id     := nullif(p_insumo->>'id', '')::uuid;
+  v_nombre := trim(coalesce(p_insumo->>'nombre', ''));
+  if v_nombre = '' then
+    raise exception 'El nombre del insumo es obligatorio';
+  end if;
+  v_unidad := coalesce(nullif(trim(coalesce(p_insumo->>'unidad', '')), ''), 'unidad');
+  v_stock  := coalesce((p_insumo->>'stock')::numeric, 0);
+  v_min    := coalesce((p_insumo->>'stock_min')::numeric, 0);
+  v_costo  := coalesce((p_insumo->>'costo')::numeric, 0);
+  v_activo := coalesce((p_insumo->>'activo')::boolean, true);
+
+  if v_id is not null then
+    begin
+      update public.insumos
+         set nombre = v_nombre, unidad = v_unidad, stock = v_stock,
+             stock_min = v_min, costo = v_costo, activo = v_activo,
+             actualizado_en = now()
+       where id = v_id and empresa_id = v_emp
+      returning id into v_out;
+    exception when unique_violation then
+      raise exception 'Ya existe otro insumo con ese nombre en la empresa';
+    end;
+    if v_out is null then
+      raise exception 'El insumo no existe en la empresa activa';
+    end if;
+  else
+    insert into public.insumos (empresa_id, nombre, unidad, stock, stock_min, costo, activo)
+    values (v_emp, v_nombre, v_unidad, v_stock, v_min, v_costo, v_activo)
+    on conflict (empresa_id, lower(nombre)) do update
+       set unidad = excluded.unidad,
+           stock = excluded.stock,
+           stock_min = excluded.stock_min,
+           costo = excluded.costo,
+           activo = excluded.activo,
+           actualizado_en = now()
+    returning id into v_out;
+  end if;
+  return v_out;
+end $fn$;
+revoke all on function public.insumo_guardar(jsonb, uuid) from public, anon, authenticated;
+grant execute on function public.insumo_guardar(jsonb, uuid) to authenticated;
+
+-- insumo_borrar: borrado real (las recetas caen en cascada; los movimientos también).
+create or replace function public.insumo_borrar(
+  p_insumo_id  uuid,
+  p_empresa_id uuid default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp    uuid;
+  v_nombre text;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+
+  delete from public.insumos
+   where id = p_insumo_id and empresa_id = v_emp
+  returning nombre into v_nombre;
+  if v_nombre is null then
+    raise exception 'El insumo no existe en la empresa activa';
+  end if;
+
+  perform private.auditar(v_emp, 'insumo_borrar',
+    jsonb_build_object('insumo', p_insumo_id::text, 'nombre', v_nombre),
+    'insumo', v_nombre);
+  return true;
+end $fn$;
+revoke all on function public.insumo_borrar(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.insumo_borrar(uuid, uuid) to authenticated;
+
+-- insumo_movimiento: entrada/salida/ajuste manual. Devuelve el stock nuevo.
+create or replace function public.insumo_movimiento(
+  p_insumo_id  uuid,
+  p_tipo       text,
+  p_cantidad   numeric,
+  p_nota       text default null,
+  p_empresa_id uuid default null
+)
+returns numeric
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp    uuid;
+  v_nombre text;
+  v_new    numeric;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+
+  if coalesce(p_tipo, '') not in ('entrada','salida','ajuste') then
+    raise exception 'El tipo de movimiento debe ser entrada, salida o ajuste';
+  end if;
+  if coalesce(p_cantidad, 0) <= 0 then
+    raise exception 'La cantidad debe ser mayor que cero';
+  end if;
+
+  update public.insumos
+     set stock = case p_tipo
+                   when 'entrada' then stock + p_cantidad
+                   when 'salida'  then stock - p_cantidad
+                   else p_cantidad   -- ajuste: el valor pasa a ser el stock
+                 end,
+         actualizado_en = now()
+   where id = p_insumo_id and empresa_id = v_emp
+  returning nombre, stock into v_nombre, v_new;
+  if v_nombre is null then
+    raise exception 'El insumo no existe en la empresa activa';
+  end if;
+
+  insert into public.insumos_movimientos
+    (empresa_id, insumo_id, tipo, cantidad, stock_after, nota, usuario, usuario_nombre)
+  values (v_emp, p_insumo_id, p_tipo, p_cantidad, v_new, nullif(trim(coalesce(p_nota, '')), ''),
+          auth.uid(),
+          coalesce((select p.display_name from public.perfiles p where p.user_id = auth.uid()), ''));
+
+  perform private.auditar(v_emp, 'insumo_movimiento', jsonb_build_object(
+    'insumo', p_insumo_id::text, 'nombre', v_nombre, 'tipo', p_tipo,
+    'cantidad', p_cantidad, 'stock_after', v_new),
+    'insumo', v_nombre);
+  return v_new;
+end $fn$;
+revoke all on function public.insumo_movimiento(uuid, text, numeric, text, uuid) from public, anon, authenticated;
+grant execute on function public.insumo_movimiento(uuid, text, numeric, text, uuid) to authenticated;
+
+-- receta_reemplazar: guarda la receta completa de un plato (borra y reinserta).
+-- p_lineas = [{insumo_id, cantidad}]. Devuelve cuántas líneas quedaron.
+create or replace function public.receta_reemplazar(
+  p_producto_id uuid,
+  p_lineas      jsonb,
+  p_empresa_id  uuid default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp  uuid;
+  v_line jsonb;
+  v_ins  uuid;
+  v_cant numeric;
+  v_n    integer := 0;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+
+  if not exists (select 1 from public.productos p
+                  where p.id = p_producto_id and p.empresa_id = v_emp) then
+    raise exception 'El producto no existe en la empresa activa';
+  end if;
+  if p_lineas is null then
+    p_lineas := '[]'::jsonb;
+  end if;
+  if jsonb_typeof(p_lineas) <> 'array' then
+    raise exception 'Las líneas de la receta deben ser una lista';
+  end if;
+
+  delete from public.recetas where producto_id = p_producto_id and empresa_id = v_emp;
+
+  for v_line in select * from jsonb_array_elements(p_lineas) loop
+    v_ins  := nullif(v_line->>'insumo_id', '')::uuid;
+    v_cant := coalesce((v_line->>'cantidad')::numeric, 0);
+    if v_ins is null or v_cant <= 0 then
+      raise exception 'Cada línea de receta necesita un insumo y una cantidad mayor que cero';
+    end if;
+    if not exists (select 1 from public.insumos i
+                    where i.id = v_ins and i.empresa_id = v_emp) then
+      raise exception 'El insumo de la receta no pertenece a la empresa activa';
+    end if;
+    insert into public.recetas (empresa_id, producto_id, insumo_id, cantidad)
+    values (v_emp, p_producto_id, v_ins, v_cant)
+    on conflict (producto_id, insumo_id) do update
+       set cantidad = excluded.cantidad;
+    v_n := v_n + 1;
+  end loop;
+
+  perform private.auditar(v_emp, 'receta_guardar', jsonb_build_object(
+    'producto', p_producto_id::text, 'lineas', v_n),
+    'producto', (select pr.nombre from public.productos pr where pr.id = p_producto_id));
+  return v_n;
+end $fn$;
+revoke all on function public.receta_reemplazar(uuid, jsonb, uuid) from public, anon, authenticated;
+grant execute on function public.receta_reemplazar(uuid, jsonb, uuid) to authenticated;
+
+-- movimientos_listar: historial de entradas/salidas/ventas/ajustes de la empresa.
+create or replace function public.movimientos_listar(
+  p_dias       integer default 7,
+  p_limite     integer default 200,
+  p_empresa_id uuid    default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp  uuid;
+  v_dias integer;
+  v_lim  integer;
+  v_out  jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+
+  v_dias := least(greatest(coalesce(p_dias, 7), 1), 90);
+  v_lim  := least(greatest(coalesce(p_limite, 200), 1), 500);
+
+  select coalesce(jsonb_agg(q.r order by (q.r->>'en') desc), '[]'::jsonb) into v_out
+    from (
+      select jsonb_build_object('en', m.en,
+                                'insumo_nombre', coalesce(i.nombre, '(insumo eliminado)'),
+                                'tipo', m.tipo, 'cantidad', m.cantidad,
+                                'stock_after', m.stock_after, 'nota', m.nota,
+                                'usuario_nombre', coalesce(nullif(m.usuario_nombre, ''), '—')) as r
+        from public.insumos_movimientos m
+        left join public.insumos i on i.id = m.insumo_id
+       where m.empresa_id = v_emp
+         and m.en >= now() - make_interval(days => v_dias)
+       order by m.en desc
+       limit v_lim
+    ) q;
+  return v_out;
+end $fn$;
+revoke all on function public.movimientos_listar(integer, integer, uuid) from public, anon, authenticated;
+grant execute on function public.movimientos_listar(integer, integer, uuid) to authenticated;
+
+-- ============================================================================
+-- G) AUDITORÍA LEGIBLE (modelo "Catering Control"): cada fila guarda quién,
+--    con qué rol y sobre qué entidad actuó, no solo un jsonb suelto.
+--    Columnas nuevas (actor_nombre, actor_rol, entity_type, entity_label) son
+--    nullables ⇒ no rompen nada. private.auditar se reemplaza con 2 parámetros
+--    OPCIONALES al final ⇒ las ~40 llamadas de 3 argumentos siguen válidas
+--    (Postgres resuelve la de 5 usando los defaults).
+--    OJO: create or replace con 5 args crea una función DISTINTA de la de 3,
+--    así que se hace DROP de la de 3 antes de crear la de 5.
+-- ============================================================================
+
+-- 1) Columnas nuevas (idempotente)
+alter table public.auditoria add column if not exists actor_nombre text;
+alter table public.auditoria add column if not exists actor_rol    text;
+alter table public.auditoria add column if not exists entity_type  text;
+alter table public.auditoria add column if not exists entity_label text;
+
+-- 3) Backfill idempotente de las filas ya existentes (una sola vez por fila).
+--    actor_nombre: desde perfiles (se ignora el display_name vacío).
+update public.auditoria a
+   set actor_nombre = nullif((select pf.display_name from public.perfiles pf
+                              where pf.user_id = a.actor), '')
+ where a.actor_nombre is null
+   and a.actor is not null
+   and exists (select 1 from public.perfiles pf where pf.user_id = a.actor);
+
+--    actor_rol: desde membresias (join directo empresa_id + user_id ⇒ columna rol).
+update public.auditoria a
+   set actor_rol = (select m.rol from public.membresias m
+                    where m.empresa_id = a.empresa_id and m.user_id = a.actor
+                    limit 1)
+ where a.actor_rol is null
+   and a.actor is not null
+   and a.empresa_id is not null
+   and exists (select 1 from public.membresias m
+               where m.empresa_id = a.empresa_id and m.user_id = a.actor);
+
+-- ----------------------------------------------------------------------------
+-- F) SUPER ADMIN FUSIONADO (antes vivía en un archivo aparte que ya no existe;
+--    todo el backend es este setup.sql). crear_super / quitar_super siguen
+--    REVOCADAS para anon y authenticated: solo se usan desde el SQL Editor o con la
+--    service key. Nadie con cuenta de negocio puede mintear supers.
+--    Ojo con la clave: queda escrita en el historial del SQL Editor.
+-- ----------------------------------------------------------------------------
+create or replace function public.crear_super(
+  p_correo             text,
+  p_clave              text,
+  p_nombre             text   default 'Super',
+  p_reemplazar_clave   boolean default false
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_email text;
+  v_uid   uuid;
+  v_nuevo boolean := false;
+begin
+  v_email := lower(trim(coalesce(p_correo, '')));
+  if v_email = '' or position('@' in v_email) = 0 or position('.' in split_part(v_email, '@', 2)) = 0 then
+    raise exception 'super_correo_invalido: escribe un correo completo (algo@dominio.com)';
+  end if;
+  if coalesce(p_clave, '') = '' or length(p_clave) < 8 then
+    raise exception 'La clave del super debe tener al menos 8 caracteres';
+  end if;
+
+  select u.id into v_uid from auth.users u where lower(u.email) = v_email limit 1;
+
+  if v_uid is null then
+    v_uid := gen_random_uuid();
+    v_nuevo := true;
+    -- Columnas de verificación a '' (nunca NULL): GoTrue los usa para decidir si
+    -- la cuenta está pendiente de confirmación. Igual que equipo_invitar.
+    insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+                            email_confirmed_at, created_at, updated_at,
+                            raw_app_meta_data, raw_user_meta_data,
+                            confirmation_token, recovery_token,
+                            email_change, email_change_token_new, email_change_token_current,
+                            phone_change, phone_change_token, reauthentication_token)
+    values ('00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated',
+            v_email, extensions.crypt(p_clave, extensions.gen_salt('bf', 10)),
+            now(), now(), now(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            jsonb_build_object('display_name', coalesce(nullif(trim(p_nombre), ''), 'Super')),
+            '', '', '', '', '', '', '', '');
+
+    insert into auth.identities (id, user_id, provider_id, provider, identity_data,
+                                 last_sign_in_at, created_at, updated_at)
+    values (gen_random_uuid(), v_uid, v_uid::text, 'email',
+            jsonb_build_object('sub', v_uid::text, 'email', v_email, 'email_verified', true),
+            now(), now(), now())
+    on conflict (provider_id, provider) do nothing;
+
+    -- handle_new_user ya creó public.perfiles con el display_name.
+    insert into public.perfiles (user_id, display_name)
+    values (v_uid, coalesce(nullif(trim(p_nombre), ''), 'Super'))
+    on conflict (user_id) do update set display_name = excluded.display_name;
+  elsif p_reemplazar_clave then
+    update auth.users
+       set encrypted_password = extensions.crypt(p_clave, extensions.gen_salt('bf', 10)),
+           email_confirmed_at = coalesce(email_confirmed_at, now()),
+           confirmation_token = '',
+           recovery_token = '',
+           email_change = '',
+           email_change_token_new = '',
+           email_change_token_current = '',
+           phone_change = '',
+           phone_change_token = '',
+           reauthentication_token = '',
+           updated_at = now()
+     where id = v_uid;
+    -- La identidad puede seguir diciendo email_verified=false si la cuenta se creó
+    -- por otro proveedor; se alinea para que el login por clave no se queje.
+    update auth.identities
+       set identity_data = jsonb_set(identity_data, '{email_verified}', 'true'),
+           updated_at = now()
+     where user_id = v_uid and provider = 'email';
+  end if;
+
+  -- El candado real de super: una fila en public.supers.
+  insert into public.supers (user_id) values (v_uid) on conflict (user_id) do nothing;
+
+  if to_regclass('public.auditoria') is not null then
+    -- Sin empresa: es un evento de plataforma, no de negocio.
+    perform private.auditar(null::uuid, 'super_alta',
+      jsonb_build_object('correo', v_email,
+                         'cuenta_nueva', v_nuevo,
+                         'clave_fijada', (v_nuevo or coalesce(p_reemplazar_clave, false))));
+  end if;
+
+  return v_uid;
+end $fn$;
+
+-- Solo el rol postgres del editor (o la service key) puede mintear supers.
+revoke all on function public.crear_super(text, text, text, boolean) from public, anon, authenticated;
+grant execute on function public.crear_super(text, text, text, boolean) to service_role;
+
+-- quitar_super: deja de ser super pero conserva su cuenta y sus empresas
+-- (borra la fila de public.supers, no al usuario).
+create or replace function public.quitar_super(p_correo text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_uid uuid;
+begin
+  select u.id into v_uid from auth.users u where lower(u.email) = lower(trim(coalesce(p_correo, ''))) limit 1;
+  if v_uid is null then
+    raise exception 'No hay ninguna cuenta con ese correo';
+  end if;
+  delete from public.supers where user_id = v_uid;
+  return true;
+end $fn$;
+
+revoke all on function public.quitar_super(text) from public, anon, authenticated;
+grant execute on function public.quitar_super(text) to service_role;
+
+-- SUPER SEMILLA · el uuid heredado que traía la siembra antigua. Se deja comentado:
+-- si public.supers ya tiene filas no hay que crear nada, y si está vacía lo suyo
+-- es promocionarse abajo con crear_super (nunca un uuid heredado de otro proyecto).
+-- insert into public.supers (user_id)
+-- values ('85201957-cdfb-4235-acfe-dd1a54e348d0')
+-- on conflict (user_id) do nothing;
+
+-- Verificación (en el SQL Editor auth.uid() es NULL ⇒ solo contados/.existencias).
+select 'funcion' as objeto, p.proname as nombre
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public'
+   and p.proname in ('crear_super', 'quitar_super')
+ order by p.proname;
+
+select (select count(*)::int from public.supers)                                        as supers,
+       (select count(*)::int from information_schema.routine_privileges rp
+         where rp.routine_name in ('crear_super','quitar_super')
+           and rp.grantee in ('anon','authenticated'))                                  as permisos_publicos;
+
+-- ============================================================================
+-- ★ PASO OPCIONAL · HACERME SUPER ADMIN DESDE AQUÍ ★
+-- Si tu correo YA existe (es admin de una empresa, p.ej. el de "fuego"), esta
+-- línea lo promociona a super y le fija la clave: con ese correo y clave podrá
+-- entrar a TODAS las empresas desde la app.
+-- Cambia las 3 comillas y pega el archivo completo en el SQL Editor.
+-- Si no quieres hacerlo ahora, deja el select comentado: el resto del archivo
+-- funciona igual.
+-- ============================================================================
+select public.crear_super('tu@correo.com', 'ClaveMin8Caracteres', 'Tu nombre', true)
+where false;   -- ← quita esta línea (where false) para que se ejecute
+
+-- Limpieza de una versión anterior: esta función ya no existe (se usa public.es_super()).
+drop function if exists private.es_super_compat();
+
+commit;
 

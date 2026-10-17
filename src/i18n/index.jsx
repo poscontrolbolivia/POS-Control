@@ -16,7 +16,6 @@
 //   inexistente también en español ⇒ devuelve la propia clave (visible para el dev).
 // ─────────────────────────────────────────────────────────────────────────────
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { MONEDA } from '../config.js'
 import es from './es.js'
 import en from './en.js'
 import pt from './pt.js'
@@ -143,11 +142,11 @@ export function IdiomaProvider({ children }) {
     [idiom],
   )
 
-  const valor = useMemo(() => ({ idiom, setIdioma, t, tOr, MONEDA, idiomas: IDIOMAS_INFO }), [idiom, setIdioma, t, tOr])
+  const valor = useMemo(() => ({ idiom, setIdioma, t, tOr, idiomas: IDIOMAS_INFO }), [idiom, setIdioma, t, tOr])
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>
 }
 
-/** Hook de idioma: { idiom, setIdioma, t, tOr, MONEDA, idiomas }. */
+/** Hook de idioma: { idiom, setIdioma, t, tOr, idiomas }. */
 export function useIdioma() {
   const ctx = useContext(Ctx)
   if (!ctx) {
@@ -158,7 +157,6 @@ export function useIdioma() {
       setIdioma: normalizarIdioma,
       t: (clave, params) => traducirEn(IDIOMA_DEFECTO, clave, params),
       tOr: (clave, alternativa, params) => (existeClave(clave) ? traducirEn(IDIOMA_DEFECTO, clave, params) : alternativa),
-      MONEDA,
       idiomas: IDIOMAS_INFO,
     }
   }

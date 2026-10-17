@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useStore } from '../services/store.jsx'
 import { puede } from '../services/permisos.js'
 import { suscribirVista } from '../services/notificaciones.js'
@@ -7,16 +7,25 @@ import Topbar from '../components/panel/Topbar.jsx'
 import SalonPage from '../components/salon/SalonPage.jsx'
 import CajaPage from '../components/caja/CajaPage.jsx'
 import VentaDirecta from '../components/venta/VentaDirecta.jsx'
+import CocinaPage from '../components/cocina/CocinaPage.jsx'
 import MenuAdmin from '../components/admin/MenuAdmin.jsx'
 import ConfigAdmin from '../components/admin/ConfigAdmin.jsx'
-import SuperPage from '../components/super/SuperPage.jsx'
-import EstacionPage from '../components/estacion/EstacionPage.jsx'
 import { iniciarEstacion, detenerEstacion, estacionRecordada, actualizarConfig } from '../services/estacion.js'
 
+// Pantallas que no todo el mundo abre: se descargan solo al entrar (el mesero no baja Inventario ni Super).
+const AuditoriaPage = lazy(() => import('../components/auditoria/AuditoriaPage.jsx'))
+const InventarioPage = lazy(() => import('../components/inventario/InventarioPage.jsx'))
+const SuperPage = lazy(() => import('../components/super/SuperPage.jsx'))
+const EstacionPage = lazy(() => import('../components/estacion/EstacionPage.jsx'))
+
 // Los avisos del sistema (al pulsarlos) y los atajos del ícono de la PWA llegan como
-// '#salon', '#cocina', '#caja'. No existe pantalla de cocina: lo enviado a preparar se ve
-// en el mapa del salón, así que '#cocina' abre el salón.
-const VISTAS = { '#salon': 'salon', '#cocina': 'salon', '#caja': 'caja', '#estacion': 'estacion', '#venta': 'venta', '#menu': 'menu', '#config': 'config' }
+// '#salon', '#cocina', '#caja'. '#cocina' es ahora la pantalla de área (antes no existía
+// y abría el salón).
+const VISTAS = { '#salon': 'salon', '#cocina': 'cocina', '#caja': 'caja', '#estacion': 'estacion', '#venta': 'venta', '#menu': 'menu', '#config': 'config', '#auditoria': 'auditoria', '#inventario': 'inventario' }
+
+// Cocina y barra no verán el salón, la caja ni el mostrador: su única pantalla de trabajo
+// es su cola de área (más Arriba, para idioma/tema).
+const EN_PANTALLA = ['cocina', 'barra']
 
 // Panel de la app (la ruta /panel). Es el equivalente al PanelPage.jsx de Catering Control:
 // el shell con la barra de arriba y el módulo activo. Los ids de módulo NO se traducen (son
@@ -24,13 +33,24 @@ const VISTAS = { '#salon': 'salon', '#cocina': 'salon', '#caja': 'caja', '#estac
 export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   const { s } = useStore()
   const { t, tOr } = useIdioma()
+  const enPantalla = EN_PANTALLA.includes(sesion.rol)
   // Un super sin empresa (dueño de la plataforma sin membresías) arranca en su panel; un super
   // "operando" otra empresa arranca en el salón de ESA empresa.
-  const [modulo, setModulo] = useState(sesion.es_super && !sesion.empresaId ? 'super' : 'salon')
+  const [modulo, setModulo] = useState(
+    sesion.es_super && !sesion.empresaId ? 'super' : enPantalla ? 'cocina' : 'salon'
+  )
 
-  const modulos = [{ id: 'salon', nombre: t('app.mod.salon') }, { id: 'caja', nombre: t('app.mod.caja') }, { id: 'venta', nombre: t('app.mod.venta') }]
+  const modulos = []
+  if (enPantalla) {
+    modulos.push({ id: 'cocina', nombre: tOr('app.mod.cocina', 'Cocina') })
+  } else {
+    modulos.push({ id: 'salon', nombre: t('app.mod.salon') }, { id: 'caja', nombre: t('app.mod.caja') }, { id: 'venta', nombre: t('app.mod.venta') })
+    if (puede(sesion.rol, 'ver_cocina')) modulos.push({ id: 'cocina', nombre: tOr('app.mod.cocina', 'Cocina') })
+  }
   if (puede(sesion.rol, 'gestionar_menu')) modulos.push({ id: 'menu', nombre: t('app.mod.menu') })
   if (sesion.supabase && (sesion.rol === 'admin' || sesion.rol === 'cajero')) modulos.push({ id: 'estacion', nombre: t('app.mod.estacion') })
+  if (puede(sesion.rol, 'ver_inventario')) modulos.push({ id: 'inventario', nombre: tOr('app.mod.inventario', 'Inventario') })
+  if (puede(sesion.rol, 'ver_auditoria')) modulos.push({ id: 'auditoria', nombre: tOr('app.mod.auditoria', 'Auditoría') })
   modulos.push({ id: 'config', nombre: t('app.mod.config') }) // todos: idioma y tema; el resto solo admin
   if (sesion.es_super) modulos.push({ id: 'super', nombre: tOr('app.mod.super', 'Super') })
 
@@ -77,13 +97,18 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
         </div>
       )}
       {s._supCargando && <div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}
-      {modulo === 'salon' && <SalonPage rol={sesion.rol} sesion={sesion} />}
-      {modulo === 'caja' && <CajaPage rol={sesion.rol} sesion={sesion} />}
-      {modulo === 'venta' && <VentaDirecta rol={sesion.rol} sesion={sesion} />}
-      {modulo === 'menu' && <MenuAdmin rol={sesion.rol} />}
-      {modulo === 'estacion' && <EstacionPage rol={sesion.rol} sesion={sesion} />}
-      {modulo === 'config' && <ConfigAdmin rol={sesion.rol} sesion={sesion} />}
-      {modulo === 'super' && sesion.es_super && <SuperPage sesion={sesion} />}
+      <Suspense fallback={<div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}>
+        {modulo === 'salon' && <SalonPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'caja' && <CajaPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'venta' && <VentaDirecta rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'cocina' && <CocinaPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'menu' && <MenuAdmin rol={sesion.rol} />}
+        {modulo === 'estacion' && <EstacionPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'inventario' && <InventarioPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'auditoria' && <AuditoriaPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'config' && <ConfigAdmin rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'super' && sesion.es_super && <SuperPage sesion={sesion} />}
+      </Suspense>
     </div>
   )
 }

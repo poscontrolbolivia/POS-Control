@@ -4,6 +4,9 @@
 //   config.gruposImpresion   = [{ id, nombre, ancho (32|48), baud, tickets? }]
 //   config.impresoraPorSeccion = { [seccionId]: grupoId }   ← se edita al crear/editar la sección
 // Un grupo con `tickets:true` (Caja) recibe tickets/pre-cuentas; no se asigna a secciones.
+// Además, cada producto puede listar varias ÁREAS de impresión (`productos.areas` y su snapshot
+// en `cuenta_items.areas`, p. ej. ['cocina','barra'] para un combo): al enviar, el ítem sale
+// simultáneamente por la impresora de cada grupo. Sin `areas`, manda la sección (modos viejos).
 
 export const GRUPOS_BASE = [
   { id: 'cocina', nombre: 'Cocina', ancho: 32, baud: 9600 },
@@ -25,17 +28,52 @@ export function grupoDeSeccion(config, seccionId) {
 }
 
 /**
- * Reparte items pendientes por grupo de impresión según la sección de cada producto.
+ * Áreas por producto (columna `productos.areas` / snapshot `cuenta_items.areas` en Supabase).
+ * Un combo puede ir a VARIOS grupos a la vez; en modo demo los productos viejos no traen
+ * `areas` y caen al reparto clásico por sección.
+ */
+export const AREAS_PRODUCTO = ['cocina', 'barra']
+
+/** Áreas efectivas de un ítem: snapshot del ítem → áreas del producto → null (fallback por sección). */
+export function areasDelItem(item, productos = []) {
+  if (Array.isArray(item?.areas) && item.areas.length) return item.areas
+  const prod = productos.find(p => p.id === item?.productoId)
+  return Array.isArray(prod?.areas) && prod.areas.length ? prod.areas : null
+}
+
+/**
+ * Grupos de comanda a los que va un ítem (puede devolver VARIOS: combo cocina+barra).
+ * Prioridad: `areas` del ítem/producto (ignorando áreas desconocidas sin crashear) y, si no
+ * hay ninguna válida, el grupo de su sección (`config.impresoraPorSeccion` → `grupoDeSeccion`).
+ */
+export function gruposDelItem(item, productos = [], config = {}) {
+  const lista = gruposDeComanda(config)
+  const validos = []
+  const vistos = new Set()
+  const agregar = id => {
+    const g = lista.find(x => x.id === String(id).toLowerCase())
+    if (g && !vistos.has(g.id)) { vistos.add(g.id); validos.push(g) }
+  }
+  const areas = areasDelItem(item, productos)
+  if (areas) areas.forEach(agregar)
+  if (validos.length) return validos
+  const prod = productos.find(p => p.id === item?.productoId)
+  const g = grupoDeSeccion(config, prod?.seccionId)
+  return g ? [g] : []
+}
+
+/**
+ * Reparte items pendientes por grupo de impresión. Un ítem con `areas` de más de un valor
+ * aparece en TODOS sus grupos (cocina y barra a la vez); sin `areas` vale la sección.
  * Devuelve [{ grupo, items }] en el orden de los grupos (solo los que tienen algo que imprimir).
  */
 export function repartirPorGrupo(items, productos, config) {
   const porGrupo = new Map()
   items.forEach(i => {
-    const prod = productos.find(p => p.id === i.productoId)
-    const g = grupoDeSeccion(config, prod?.seccionId)
-    if (!g) return
-    if (!porGrupo.has(g.id)) porGrupo.set(g.id, { grupo: g, items: [] })
-    porGrupo.get(g.id).items.push(i)
+    gruposDelItem(i, productos, config).forEach(g => {
+      if (!porGrupo.has(g.id)) porGrupo.set(g.id, { grupo: g, items: [] })
+      porGrupo.get(g.id).items.push(i)
+    })
   })
   return gruposDeComanda(config).map(g => porGrupo.get(g.id)).filter(Boolean)
 }

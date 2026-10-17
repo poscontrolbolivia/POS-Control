@@ -31,7 +31,6 @@ export default function PlanDatos({ sesion }) {
     <div className="adm-card">
       <div className="adm-card-cab"><h3>{t('plan.titulo')}</h3><span className="adm-chip">{gratis ? t('plan.gratis') : t('plan.pago')}</span></div>
       <p className="adm-sub">{gratis ? t('plan.retencion', { meses: plan?.retencion_meses ?? 6 }) : t('plan.retencionPago')}</p>
-      {plan?.max_productos != null && gratis && <p className="adm-sub">{t('plan.articulos', { max: plan.max_productos })}</p>}
       <p className="adm-sub">{t('plan.consejo')}</p>
       <div className="adm-fila">
         <button type="button" className="ghost" onClick={descargar} disabled={busy}>{busy ? t('plan.preparando') : t('plan.descargar')}</button>

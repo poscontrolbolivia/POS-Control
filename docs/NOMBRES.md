@@ -1,4 +1,4 @@
-> **Nota v0.7:** el backend vive en SOLO 2 archivos SQL: `supabase/setup.sql` (todo, idempotente) y `supabase/super-admin.sql`. Las menciones a "migraciones", `schema.sql` o `00x_*.sql` en este documento se refieren a lo que hoy está dentro de `setup.sql`.
+> **Nota v0.13:** TODO el backend vive en UN solo archivo idempotente: `supabase/setup.sql` (se pega completo en el SQL Editor; admite re-pegadas). El antiguo archivo suelto del super y la carpeta de migraciones numeradas (001–007) **ya no existen**: todo está fusionado dentro de `setup.sql`. Cualquier mención a migraciones, `schema.sql` o `00x_*.sql` en estos docs es histórica (antes/ex-archivos sueltos) y hoy corresponde a secciones internas de `setup.sql`.
 
 # NOMBRES.md · Equivalencias Catering Control → POS Control
 
@@ -16,7 +16,7 @@ no existen archivos sueltos de login: son componentes.
 | Ruta | Catering Control | POS Control |
 |---|---|---|
 | `/` | `LoginPage` (login) | `LoginPage` (login empresa → usuario) |
-| `/panel` | `PanelPage` (app) | `PanelPage` (app: salón, caja, mostrador, menú, config, super) |
+| `/panel` | `PanelPage` (app) | `PanelPage` (app: salón, cocina, caja, mostrador, inventario, auditoría, menú, config, estación, super) |
 | `/terminos` | `TerminosPage` | `TerminosPage` |
 | `/privacidad` | `PrivacidadPage` | `PrivacidadPage` |
 | `/cliente` | `ClientePage` (portal del cliente) | no existe (POS no tiene portal de comensales) |
@@ -52,6 +52,7 @@ y el service worker responde cualquier ruta con `/index.html`.
 | `src/services/session.js` + `storageKeys.js` | `leerSesionSup` / `guardarSesionSup` en `src/services/store.jsx` (clave `'pos-sesion-id'`, evento `'pos-sesion'`) | sesión guardada en el navegador |
 | `src/i18n/locales/es.json` | `src/i18n/es.js` | diccionario de textos (fuente de verdad) |
 | `src/i18n/index.js` | `src/i18n/index.jsx` | provider + hook de idioma |
+| `src/components/panel/DataTable.jsx` (+ preferencias de columnas) | `src/components/panel/DataTable.jsx` + `src/styles/DataTable.css` + `src/services/columnPrefs.js` | **puerto v0.13**: tabla reutilizable con orden de 3 estados por columna (asc → desc → orden original), redimensionado de columnas a mano y preferencias guardadas en `localStorage` (`'pos-cols-<grupo>'`, por usuario). Simplificado para POS: sin ColumnsModal (se pintan TODAS las `columns`) y sin react-i18next (usa `tOr()`); hoy lo consume `AuditoriaPage`, reutilizable donde haga falta |
 
 ## Pares de concepto (el nombre cambia porque el producto cambia)
 
@@ -93,7 +94,10 @@ y el service worker responde cualquier ruta con `/index.html`.
 - Un texto que se ve en pantalla → `src/i18n/es.js` (buscar la cadena en español; la clave es lo que
   usa el componente).
 - Una regla de permisos ("el mesero no puede cobrar") → `src/services/permisos.js`.
-- Una consulta o llamada RPC a Supabase → `src/services/tiendaSupabase.js` y `supabase/setup.sql`.
+- Una consulta o llamada RPC a Supabase → `src/services/tiendaSupabase.js` y `supabase/setup.sql` (único archivo SQL del backend).
+- La cola digital de cocina/barra (v0.13) → `src/components/cocina/CocinaPage.jsx` (RPCs `cola_de_area`, `marcar_salida`, `deshacer_salida`, `pedir_anulacion`, `resolver_anulacion` en `supabase/setup.sql`).
+- Insumos, recetas y movimientos (v0.13, solo admin) → `src/components/inventario/InventarioPage.jsx`; las tablas `insumos/recetas/insumos_movimientos` y sus RPCs están en `supabase/setup.sql`.
+- Auditoría legible del negocio (v0.13, solo admin) → `src/components/auditoria/AuditoriaPage.jsx` (RPC `auditoria_listar`) sobre la tabla oculta `public.auditoria`.
 - Qué se puede exportar/importar de una empresa → `src/services/super/superApi.js` + `src/components/super/`.
 - Impresión (comanda, ticket) → `src/services/impresora.js` + `src/components/ticket/Ticket.jsx`.
 - Crear un negocio nuevo, invitar personal o cambiar una clave → `src/pages/LoginPage.jsx` (pantallas `alta`/`recupera`) + `src/components/admin/EquipoAdmin.jsx`; del lado de la base, `supabase/setup.sql`.

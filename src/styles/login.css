@@ -26,7 +26,7 @@ body{background:radial-gradient(circle at 20% 20%,color-mix(in srgb,var(--ac) 22
 .lg-form input:focus-visible,.lg-form select:focus-visible,.lg-share-btn:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .lg-clave{display:flex;gap:6px}
 .lg-clave input{flex:1;min-width:0}
-.lg-clave button{width:46px;min-height:46px;padding:0;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;color:var(--mut)}
+.lg-clave button{width:46px;min-height:46px;padding:0;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--mut)}
 .lg-alerta{margin:0;padding:10px 14px;border-radius:12px;background:#fdeaea;color:#a61b1b;font-size:.9rem;text-align:center}
 .lg-bloqueo{background:#fff4e0;color:#8a5a00;font-weight:650}
 [data-theme="night"] .lg-alerta{background:#3a1d22;color:#ffb4b4}

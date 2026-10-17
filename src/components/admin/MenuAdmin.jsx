@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { MONEDA } from '../../config.js'
 import { useStore, nuevoId } from '../../services/store.jsx'
-import { gruposDeComanda, grupoDeSeccion } from '../../services/impresion.js'
+import { gruposDeComanda, grupoDeSeccion, AREAS_PRODUCTO } from '../../services/impresion.js'
 import { puede } from '../../services/permisos'
 import { sb } from '../../services/supabase.js'
 import {
@@ -29,7 +30,7 @@ function Miniatura({ producto }) {
 export default function MenuAdmin({ rol }) {
   const { s, d, modo } = useStore()
   const { t, tOr } = useIdioma()
-  const moneda = s.config?.moneda || 'Bs'
+  const moneda = s.config?.moneda || MONEDA
   const money = n => `${moneda} ${Number(n || 0).toFixed(2)}`
 
   const [nuevaSeccion, setNuevaSeccion] = useState('')
@@ -44,9 +45,9 @@ export default function MenuAdmin({ rol }) {
   const [confProd, setConfProd] = useState(null)         // producto con la confirmación de borrado abierta
   useEffect(() => { try { sessionStorage.setItem('pos-menu-abiertas', JSON.stringify([...abiertas])) } catch { /* sin almacenamiento */ } }, [abiertas])
   const [agregarEn, setAgregarEn] = useState(null)        // seccionId con formulario abierto
-  const [nuevoProd, setNuevoProd] = useState({ nombre: '', precio: '' })
+  const [nuevoProd, setNuevoProd] = useState({ nombre: '', precio: '', areas: ['cocina'] })
   const [editandoId, setEditandoId] = useState(null)      // producto en edición inline
-  const [editTmp, setEditTmp] = useState({ nombre: '', precio: '' })
+  const [editTmp, setEditTmp] = useState({ nombre: '', precio: '', areas: ['cocina'] })
   const [subiendoId, setSubiendoId] = useState(null)       // producto cuyo foto se está procesando
   const [avisoImg, setAvisoImg] = useState(null)           // { id, msg } error de foto (español)
 
@@ -102,24 +103,52 @@ export default function MenuAdmin({ rol }) {
     d({ t: 'seccion~', id: b.id, cambios: { orden: oa } })
   }
 
-  const empezarAgregar = secId => { setAgregarEn(secId); setNuevoProd({ nombre: '', precio: '' }) }
+  const empezarAgregar = secId => { setAgregarEn(secId); setNuevoProd({ nombre: '', precio: '', areas: [grupoActual(secId)?.id && AREAS_PRODUCTO.includes(grupoActual(secId).id) ? grupoActual(secId).id : 'cocina'] }) }
   const agregarProducto = e => {
     e.preventDefault()
     const nombre = nuevoProd.nombre.trim()
     const precio = Number(nuevoProd.precio)
     if (!nombre || !Number.isFinite(precio) || precio < 0) return
-    d({ t: 'producto+', producto: { nombre, seccionId: agregarEn, precio } })
-    setNuevoProd({ nombre: '', precio: '' })
+    d({ t: 'producto+', producto: { nombre, seccionId: agregarEn, precio, areas: nuevoProd.areas } })
+    setNuevoProd({ nombre: '', precio: '', areas: ['cocina'] })
     setAgregarEn(null)
   }
 
-  const empezarEditar = p => { setEditandoId(p.id); setEditTmp({ nombre: p.nombre, precio: String(p.precio) }) }
+  // ── áreas de impresión por producto ('cocina' | 'barra', mínimo una) ──
+  // Un combo (hamburguesa + cerveza) marca ambas y se imprime a la vez en cocina y barra.
+  // Productos sin `areas` (demo viejos) se dibujan con el grupo de su sección como referencia.
+  const areasDe = p => (Array.isArray(p.areas) && p.areas.length ? p.areas : null)
+  const nombreArea = id => grupos.find(g => g.id === id)?.nombre || tOr('areas.' + id, id === 'barra' ? 'Barra' : 'Cocina')
+  const alternarArea = (lista, setLista, id) => {
+    const n = lista.includes(id) ? lista.filter(x => x !== id) : [...lista, id]
+    if (!n.length) return // mínimo un área: la última marcada no se desmarca
+    setLista(n)
+  }
+  const checkboxesAreas = (lista, setLista) => (
+    <span className="menu-areas" role="group" aria-label={tOr('areas.label', 'Imprimir en')}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '.82rem' }}>
+      <span aria-hidden="true">🖨</span>
+      {AREAS_PRODUCTO.map(id => (
+        <label key={id} className="menu-area" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }} title={tOr('areas.ayuda', 'Marca todos los grupos donde se imprime este artículo')}>
+          <input type="checkbox" checked={lista.includes(id)} onChange={() => alternarArea(lista, setLista, id)} />
+          {tOr('areas.' + id, id === 'barra' ? 'Barra' : 'Cocina')}
+        </label>
+      ))}
+    </span>
+  )
+
+  const areasPorDefecto = p => {
+    const base = areasDe(p) || [grupoActual(p.seccionId)?.id]
+    const filtradas = base.filter(id => AREAS_PRODUCTO.includes(id))
+    return filtradas.length ? filtradas : ['cocina']
+  }
+  const empezarEditar = p => { setEditandoId(p.id); setEditTmp({ nombre: p.nombre, precio: String(p.precio), areas: areasPorDefecto(p) }) }
   const guardarProducto = e => {
     e.preventDefault()
     const nombre = editTmp.nombre.trim()
     const precio = Number(editTmp.precio)
     if (nombre && Number.isFinite(precio) && precio >= 0) {
-      d({ t: 'producto~', id: editandoId, cambios: { nombre, precio } })
+      d({ t: 'producto~', id: editandoId, cambios: { nombre, precio, areas: editTmp.areas } })
     }
     setEditandoId(null)
   }
@@ -212,16 +241,18 @@ export default function MenuAdmin({ rol }) {
                   <span className="adm-chip">{t('menu.activos', { activos, total: prods.length })}</span>
                   {grupoActual(sec.id) && <span className="adm-chip menu-chip-imp" title={t('menu.imprimirEnTitle')}>🖨 {grupoActual(sec.id).nombre}</span>}
                   <span className="sp" />
-                  <button type="button" className="ghost" title={t('menu.subir')} disabled={i === 0} onClick={() => mover(i, -1)}>▲</button>
-                  <button type="button" className="ghost" title={t('menu.bajar')} disabled={i === secciones.length - 1} onClick={() => mover(i, 1)}>▼</button>
-                  <button type="button" className="info" onClick={() => empezarRenombrar(sec)}>{t('comun.editar')}</button>
-                  {confSeccion === sec.id ? (
-                    <>
-                      <span className="imp-dato">{t('menu.confirmarEliminarSeccion', { n: prods.length })}</span>
-                      <button type="button" className="danger solid" onClick={() => borrarSeccion(sec)}>{t('comun.confirmar')}</button>
-                      <button type="button" className="ghost" onClick={() => setConfSeccion(null)}>{t('comun.cancelar')}</button>
-                    </>
-                  ) : <button type="button" className="danger" onClick={() => setConfSeccion(sec.id)}>{t('comun.eliminar')}</button>}
+                  <span className="cab-acciones">
+                    <button type="button" className="ghost" title={t('menu.subir')} disabled={i === 0} onClick={() => mover(i, -1)}>▲</button>
+                    <button type="button" className="ghost" title={t('menu.bajar')} disabled={i === secciones.length - 1} onClick={() => mover(i, 1)}>▼</button>
+                    <button type="button" className="info" onClick={() => empezarRenombrar(sec)}>{t('comun.editar')}</button>
+                    {confSeccion === sec.id ? (
+                      <>
+                        <span className="imp-dato">{t('menu.confirmarEliminarSeccion', { n: prods.length })}</span>
+                        <button type="button" className="danger solid" onClick={() => borrarSeccion(sec)}>{t('comun.confirmar')}</button>
+                        <button type="button" className="ghost" onClick={() => setConfSeccion(null)}>{t('comun.cancelar')}</button>
+                      </>
+                    ) : <button type="button" className="danger" onClick={() => setConfSeccion(sec.id)}>{t('comun.eliminar')}</button>}
+                  </span>
                 </>
               )}
             </header>
@@ -237,6 +268,7 @@ export default function MenuAdmin({ rol }) {
                       <input autoFocus value={editTmp.nombre} onChange={e => setEditTmp({ ...editTmp, nombre: e.target.value })} placeholder={t('menu.nombre')} />
                       <input className="adm-precio" type="number" min="0" step="0.50" value={editTmp.precio}
                         onChange={e => setEditTmp({ ...editTmp, precio: e.target.value })} placeholder={t('menu.precio')} />
+                      {checkboxesAreas(editTmp.areas, a => setEditTmp(x => ({ ...x, areas: a })))}
                       <button type="submit" className="success">{t('comun.guardar')}</button>
                       <button type="button" className="ghost" onClick={() => setEditandoId(null)}>{t('comun.cancelar')}</button>
                     </form>
@@ -244,6 +276,12 @@ export default function MenuAdmin({ rol }) {
                     <>
                       <span className="adm-prod-nombre">{p.nombre}{p.activo ? '' : t('menu.oculto')}</span>
                       <span className="adm-prod-precio">{money(p.precio)}</span>
+                      {/* Áreas de impresión: combos → cocina+barra a la vez; sin áreas → grupo de la sección. */}
+                      <span className="adm-chip menu-chip-areas" title={areasDe(p) ? tOr('areas.title', 'Áreas donde se imprime este artículo') : tOr('areas.porSeccion', 'Sin áreas propias: usa el grupo de la sección')}>
+                        {areasDe(p)
+                          ? areasDe(p).map(nombreArea).join(' + ')
+                          : `${grupoActual(p.seccionId)?.nombre ?? '—'} · ${tOr('areas.porSeccionCorto', 'por sección')}`}
+                      </span>
                       <button type="button" className="info" onClick={() => empezarEditar(p)}>{t('comun.editar')}</button>
                       <button type="button" className={p.activo ? 'warning' : 'success'} onClick={() => d({ t: 'producto~', id: p.id, cambios: { activo: !p.activo } })}>
                         {p.activo ? t('menu.desactivar') : t('menu.activar')}
@@ -289,6 +327,7 @@ export default function MenuAdmin({ rol }) {
                 <input autoFocus value={nuevoProd.nombre} onChange={e => setNuevoProd({ ...nuevoProd, nombre: e.target.value })} placeholder={t('menu.nombreProducto')} />
                 <input className="adm-precio" type="number" min="0" step="0.50" value={nuevoProd.precio}
                   onChange={e => setNuevoProd({ ...nuevoProd, precio: e.target.value })} placeholder={t('menu.precioMoneda', { moneda })} />
+                {checkboxesAreas(nuevoProd.areas, a => setNuevoProd(x => ({ ...x, areas: a })))}
                 <button type="submit" className="success">{t('menu.agregar')}</button>
                 <button type="button" className="ghost" onClick={() => setAgregarEn(null)}>{t('comun.cancelar')}</button>
               </form>

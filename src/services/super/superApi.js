@@ -7,6 +7,7 @@
 // de ./cliente.js (sin ese header) sigue para listado/exportación/importación/cuota: RPCs sueltas
 // que no dependen del GUC.
 import { sb, rpcSuper, esUuid, mensajeError, CONFIG_FALTA, SIN_SESION } from './cliente.js'
+import { MONEDA } from '../../config.js'
 import { sb as sbSesion, fijarEmpresaSesion } from '../supabase.js'
 
 // ─────────────── claves de localStorage que ya usa la app (acuerdo con el otro carril) ───────────────
@@ -57,7 +58,7 @@ export async function importarEmpresa(datos, codigo, clave) {
   return nuevoId
 }
 
-// ─────────── cuota del plan por empresa (RPCs de la setup.sql.sql) ───────────
+// ─────────── cuota del plan por empresa (RPCs de setup.sql) ───────────
 
 // verCuota(id): { max_productos (null = sin límite), plan ('gratis'|'pago'), productos_actuales }.
 // La RPC solo responde a un super; cualquier otro usuario recibe 'requiere super'.
@@ -68,13 +69,23 @@ export async function verCuota(id) {
   return {
     max_productos: d.max_productos === undefined ? null : d.max_productos,
     plan: String(d.plan || 'gratis'),
+    max_miembros: d.max_miembros === undefined ? null : d.max_miembros,
     productos_actuales: Number(d.productos_actuales || 0),
+    miembros_actuales: Number(d.miembros_actuales || 0),
   }
+}
+
+// cambiarPlan(id, 'gratis'|'pago'): un clic Básico ⇄ Premium con los valores por defecto del plan.
+export async function cambiarPlan(id, plan) {
+  if (!esUuid(id)) throw new Error('El identificador de la empresa no es válido.')
+  if (plan !== 'gratis' && plan !== 'pago') throw new Error('El plan debe ser «gratis» (Básico) o «pago» (Premium).')
+  await rpcSuper('super_cambiar_plan', { p_empresa: id, p_plan: plan })
+  return true
 }
 
 // ajustarCuota(id, { maxProductos, plan, notas }): fija el máximo de artículos a la venta y el plan.
 // p_max_productos null (campo vacío) o plan 'pago' ⇒ sin límite, según setup.sql.
-export async function ajustarCuota(id, { maxProductos = null, plan = 'gratis', notas = '' } = {}) {
+export async function ajustarCuota(id, { maxProductos = null, maxMiembros = null, plan = 'gratis', notas = '' } = {}) {
   if (!esUuid(id)) throw new Error('El identificador de la empresa no es válido.')
   if (plan !== 'gratis' && plan !== 'pago') throw new Error('El plan debe ser «gratis» o «pago».')
   const vacio = maxProductos === null || maxProductos === undefined || String(maxProductos).trim() === ''
@@ -82,7 +93,12 @@ export async function ajustarCuota(id, { maxProductos = null, plan = 'gratis', n
   if (max !== null && (!Number.isInteger(max) || max < 1)) {
     throw new Error('El máximo de artículos debe ser un número entero positivo o quedarse vacío (sin límite).')
   }
-  await rpcSuper('super_ajustar_empresa', { p_empresa: id, p_max_productos: max, p_plan: plan, p_notas: String(notas || '') })
+  const vacioM = maxMiembros === null || maxMiembros === undefined || String(maxMiembros).trim() === ''
+  const maxM = vacioM ? null : Number(maxMiembros)
+  if (maxM !== null && (!Number.isInteger(maxM) || maxM < 1)) {
+    throw new Error('El máximo de personas debe ser un número entero positivo o quedarse vacío (sin límite).')
+  }
+  await rpcSuper('super_ajustar_empresa', { p_empresa: id, p_max_productos: max, p_plan: plan, p_notas: String(notas || ''), p_max_miembros: maxM })
   return true
 }
 
@@ -192,7 +208,7 @@ function resumir(datos) {
   return {
     nombre: String(empresa.nombre || '—'),
     codigoOriginal: String(empresa.codigo || '—'),
-    moneda: String(empresa.moneda || 'Bs'),
+    moneda: String(empresa.moneda || MONEDA),
     exportadoEn: empresa.exportado_en || datos.exportado_en || null,
     zonas: n('zonas'),
     mesas: n('mesas'),

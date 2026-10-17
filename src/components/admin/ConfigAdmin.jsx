@@ -6,7 +6,8 @@ import ThemeSelect from '../login/ThemeSelect.jsx'
 import ImpresorasAdmin from './ImpresorasAdmin.jsx'
 import EquipoAdmin from './EquipoAdmin.jsx'
 import PlanDatos from './PlanDatos.jsx'
-import { USAR_SUPABASE } from '../../config.js'
+import { USAR_SUPABASE, MONEDA } from '../../config.js'
+import { MONEDAS_COMUNES, MONEDA_MAX, limpiarMoneda } from '../../services/moneda.js'
 import './admin.css'
 
 // Configuración del negocio (solo rol admin): nombre, moneda, IVA y propina sugerida.
@@ -16,12 +17,22 @@ export default function ConfigAdmin({ rol, sesion }) {
   const { t, tOr } = useIdioma()
   const [form, setForm] = useState({
     nombre: s.config?.nombre ?? '',
-    moneda: s.config?.moneda ?? 'Bs',
+    moneda: s.config?.moneda || MONEDA,
     ivaPct: String(s.config?.ivaPct ?? 0),
     propinaPct: String(s.config?.propinaPct ?? 10),
   })
   const [msg, setMsg] = useState('')
   const [verImpresoras, setVerImpresoras] = useState(false)
+  // Equipo: mismo patrón que impresoras (se oculta y sale al tocar), pero la
+  // preferencia se recuerda en este equipo con una clave al estilo 'pos-salon-vista'.
+  const [verEquipo, setVerEquipo] = useState(() => {
+    try { return localStorage.getItem('pos-admin-equipo-abierto') === '1' } catch { return false }
+  })
+  const alternarEquipo = () => {
+    const nuevo = !verEquipo
+    setVerEquipo(nuevo)
+    try { localStorage.setItem('pos-admin-equipo-abierto', nuevo ? '1' : '0') } catch { /* ignore */ }
+  }
 
   const preferencias = (
     <div className="adm-card">
@@ -52,7 +63,7 @@ export default function ConfigAdmin({ rol, sesion }) {
       setMsg(t('config.rangoPct'))
       return
     }
-    d({ t: 'cfg~', cambios: { nombre: form.nombre.trim(), moneda: form.moneda.trim() || 'Bs', ivaPct, propinaPct } })
+    d({ t: 'cfg~', cambios: { nombre: form.nombre.trim(), moneda: limpiarMoneda(form.moneda), ivaPct, propinaPct } })
     setMsg(t('config.guardado'))
     setTimeout(() => setMsg(''), 2500)
   }
@@ -70,9 +81,9 @@ export default function ConfigAdmin({ rol, sesion }) {
         <div className="adm-fila2">
           <label className="adm-campo">
             <span>{t('config.monedaLabel')}</span>
-            <input value={form.moneda} onChange={set('moneda')} placeholder="Bs" list="adm-monedas" />
+            <input value={form.moneda} onChange={set('moneda')} placeholder={MONEDA} maxLength={MONEDA_MAX} list="adm-monedas" />
             <datalist id="adm-monedas">
-              <option value="Bs" /><option value="$" /><option value="Q" /><option value="L" /><option value="C$" />
+              {MONEDAS_COMUNES.map(m => <option key={m} value={m} />)}
             </datalist>
           </label>
           <label className="adm-campo">
@@ -97,8 +108,12 @@ export default function ConfigAdmin({ rol, sesion }) {
       </div>
       {verImpresoras && <ImpresorasAdmin rol={rol} sesion={sesion} />}
       {/* El equipo solo se muestra al rol admin de la sesión (la base valida el permiso igual,
-          pero un cajero no tiene nada que hacer aquí). */}
-      {(sesion ? sesion.rol === 'admin' : rol === 'admin') && <EquipoAdmin rol={rol} sesion={sesion} />}
+          pero un cajero no tiene nada que hacer aquí). Igual que impresoras: la fila plegada
+          vive DENTRO de EquipoAdmin (necesita el conteo de miembros que trae equipo_listar);
+          aquí solo se guarda el estado abierto/oculto y se recuerda en localStorage. */}
+      {(sesion ? sesion.rol === 'admin' : rol === 'admin') && (
+        <EquipoAdmin rol={rol} sesion={sesion} abierto={verEquipo} onToggleAbierto={alternarEquipo} />
+      )}
       {USAR_SUPABASE && sesion?.supabase && <PlanDatos sesion={sesion} />}
     </div>
   )

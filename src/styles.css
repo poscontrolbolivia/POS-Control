@@ -41,8 +41,12 @@
 body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink)}
 button,select,input,textarea{font:inherit;color:inherit}
 
-/* ── botones: base neutra con borde visible ── */
-button{border:1.5px solid var(--line-fuerte);background:var(--card);border-radius:10px;padding:8px 12px;cursor:pointer;min-height:40px;color:var(--ink);transition:transform .12s ease,box-shadow .12s ease,filter .12s ease,background .12s ease}
+/* ── botones: base neutra con borde visible ──
+   LEY DE FORMAS (17-10-2026, pedido del dueño): ningún botón cuadrado, rectangular
+   ni "ovalado hacia abajo". border-radius:999px da PÍLDORA cuando el botón es más
+   ancho que alto y CÍRCULO exacto cuando es cuadrado, así que con min-width =
+   min-height (40px) es imposible que salga un óvalo vertical. */
+button{border:1.5px solid var(--line-fuerte);background:var(--card);border-radius:999px;padding:8px 12px;cursor:pointer;min-height:40px;min-width:40px;color:var(--ink);transition:transform .12s ease,box-shadow .12s ease,filter .12s ease,background .12s ease}
 button:hover:not(:disabled){background:var(--card-2)}
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 button:disabled{opacity:.5;cursor:not-allowed}
@@ -80,6 +84,11 @@ input[type=checkbox],input[type=radio]{min-height:0;accent-color:var(--ac)}
 .top{display:flex;gap:12px;align-items:center;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}.demo{color:var(--mut);font-size:.85rem;flex:1}
 .salon{display:block;padding:12px}
 .barra{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}.sp{flex:1}.fila{display:flex;align-items:center}
+/* Lo que sigue a un spacer es la ACCIÓN de la cabecera: siempre al borde derecho,
+   también cuando el spacer se oculta en móvil (admin.css/.cocina-cab) o cuando el
+   contenido baja de línea. Sin esta regla los botones tipo «✎ Editar mapa»,
+   «↻ Actualizar» o «＋ Ingreso» quedaban en el medio a la izquierda. */
+.sp+*{margin-left:auto}
 .tab{border-radius:999px}.tab.on{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:650}
 
 /* ── salón: piso más oscuro que las tarjetas + mesas con borde y relleno fuertes ── */
@@ -99,12 +108,15 @@ input[type=checkbox],input[type=radio]{min-height:0;accent-color:var(--ac)}
 .pt.enviada{background:var(--enviada-bg);border-color:var(--enviada-bd)}.pt.porcobrar{background:var(--porcobrar-bg);border-color:var(--porcobrar-bd)}
 .panel{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:14px;align-self:start}.panel.vacio{color:var(--mut);text-align:center;padding:40px 14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
-.prod{display:flex;flex-direction:column;gap:4px;padding:12px;text-align:left;background:var(--card-2);border-color:var(--line-fuerte)}
+/* Azulejos de carta (`.prod`, `.vd-prod`): son más altos que anchos (≈104×135), así
+   que la píldora 999 los volvería óvalo vertical. Excepción documentada: tarjeta. */
+.prod{display:flex;flex-direction:column;gap:4px;padding:12px;text-align:left;background:var(--card-2);border-color:var(--line-fuerte);border-radius:16px}
 .prod:hover:not(:disabled){border-color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,var(--card))}
 .prod small{color:var(--mut)}
 .items{list-style:none;margin:12px 0;padding:0}.items li{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
 .items .n{flex:1}.items li.anulado{opacity:.5;text-decoration:line-through}.items li.enviado .n::before{content:'🔥 '}.items li.vacio{color:var(--mut);justify-content:center}
-.qty{display:flex;gap:6px;align-items:center}.qty button,.x{min-height:32px;padding:2px 9px}.pr{min-width:78px;text-align:right}
+/* ± y ✕ de las listas: con min-width = min-height (32px) el radio 999 los vuelve círculos. */
+.qty{display:flex;gap:6px;align-items:center}.qty button,.x{min-height:32px;min-width:32px;padding:2px 9px}.pr{min-width:78px;text-align:right}
 .total{display:flex;justify-content:space-between;font-size:1.3rem;margin:10px 0}
 .tag{padding:2px 10px;border-radius:999px;background:var(--libre);font-size:.8rem;font-weight:650;border:1px solid var(--line)}
 .tag.abierta{background:var(--libre-bg);color:var(--libre-ink);border-color:var(--libre-bd)}
@@ -135,7 +147,7 @@ html .topbar-menu{--pc:var(--btn-yellow);font-size:1.15rem;line-height:1;padding
 html .topbar-salir:hover:not(:disabled),html .topbar-menu:hover:not(:disabled){filter:brightness(.95);transform:translateY(-1px);background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,0)),var(--pc)}
 .topbar-acc{display:flex;align-items:center;gap:8px;margin-left:auto}
 .topbar-mods.cerrado{display:none}
-@media(max-width:640px){.topbar-salir-txt{display:none}html .topbar-salir{padding:6px 12px}}
+@media(max-width:640px){.topbar-salir-txt{display:none}html .topbar-salir{padding:6px 12px;min-width:38px}}
 
 /* Preferencias (idioma y tema) dentro de Configuración */
 .pref-fila{display:flex;flex-wrap:wrap;gap:14px;align-items:center}

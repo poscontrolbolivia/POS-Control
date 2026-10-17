@@ -1,0 +1,38 @@
+/* AuditoriaPage — tabla de public.auditoria (puerto del AuditPage de Catering).
+   Solo clases propias (.aud-*): la tabla viste las .sheet/.th-* de styles/DataTable.css y
+   el armazón .adm-* de admin.css. Todo con tokens de styles.css (--card, --mut, --ac,
+   --porcobrar-*…), así obedece los temas claro / night / forest sin fondos blancos fijos. */
+
+.aud-card{gap:12px}
+.aud-cab{align-items:flex-start}
+.aud-desc{margin:4px 0 0}
+
+/* Botones del encabezado (Refrescar / Ver todo), equivalentes a .head-actions del origen. */
+.aud-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* Barra de filtros: buscador en cliente + rango (p_dias) + acción + actor + contador. */
+.aud-filtros{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.aud-buscar{flex:1 1 220px;min-width:180px}
+.aud-filtro{display:flex;flex-direction:column;gap:4px}
+.aud-filtro span{font-size:.8rem;color:var(--mut);font-weight:600}
+.aud-filtro select{min-height:40px}
+.aud-contador{color:var(--mut);font-size:.85rem;font-weight:650;white-space:nowrap}
+
+/* Estado inicial: todavía no se pulsó Refrescar. */
+.aud-pulse{color:var(--mut);padding:6px 2px;margin:0}
+
+/* Error de la RPC: rojo del propio tema (--porcobrar-*), no un rojo fijo. */
+.aud-error{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:var(--porcobrar-bg);border:1px solid var(--porcobrar-bd);color:var(--porcobrar-ink);
+  border-radius:12px;padding:10px 12px;font-size:.9rem;font-weight:600}
+
+/* Rol bajo el nombre en la columna «Quién» (equivalente al .muted del origen). */
+.aud-muted{color:var(--mut);font-weight:500}
+
+@media (max-width:640px){
+  .aud-cab{flex-direction:column}
+  .aud-head{width:100%}
+  .aud-head button{flex:1}
+  .aud-contador{margin-left:0}
+}

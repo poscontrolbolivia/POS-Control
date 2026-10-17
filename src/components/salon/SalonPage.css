@@ -49,15 +49,15 @@
 .ztab .n { font-style: normal; color: var(--mut); font-size: .75rem; margin-left: 5px; }
 .ztab.on .n { color: #eaf5ef; }
 .ztools { display: inline-flex; align-items: center; gap: 1px; padding: 0 4px 0 2px; border-left: 1px solid var(--line); }
-.zona-strip > button { flex: none; }
 .salon .tab.mas { color: var(--ac); border-style: dashed; }
 
-/* botones de icono (subir / bajar / renombrar / borrar / ✓ / ✕) */
+/* botones de icono (subir / bajar / renombrar / borrar / ✓ / ✕) — 30×30 con radio
+   999px = CÍRCULO perfecto (antes radio 8px: cuadrito). */
 button.ico {
   min-height: 30px;
   min-width: 30px;
   padding: 2px 6px;
-  border-radius: 8px;
+  border-radius: 999px;
   line-height: 1;
   background: transparent;
   border-color: transparent;
@@ -80,7 +80,7 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 .pista { color: var(--mut); font-size: .8rem; margin: 0 0 0 4px; align-self: center; }
 .campo { display: inline-flex; flex-direction: column; gap: 2px; font-size: .75rem; color: var(--mut); }
 .campo input, .campo select { min-width: 8rem; }
-.grupo { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: var(--mut); border: 1px solid var(--line); border-radius: 10px; padding: 3px 6px; background: var(--card); }
+.grupo { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: var(--mut); border: 1px solid var(--line); border-radius: 999px; padding: 3px 6px; background: var(--card); }
 .grupo b { font-size: .85rem; color: var(--ink); min-width: 1.6rem; text-align: center; }
 .barra.mesa-edit { gap: 10px; padding: 8px 10px; border: 1px dashed var(--ac); border-radius: 12px; background: var(--card); }
 
@@ -166,7 +166,8 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 /* ─────────────────────────────  ESCRITORIO (≥769px)  ─────────────────────── */
 @media (min-width: 769px) {
   .zonas-scroll { flex-wrap: wrap; }
-  .salon .lienzo { max-width: 100%; }
+  /* El tope de ancho del mapa en PC lo pone la regla de TAREA 1 (max-width derivado
+     del alto disponible); aquí no se toca para no pisarla. */
   .salon .mesa { font-size: clamp(.68rem, 1.5vw, .95rem); }
 }
 
@@ -188,11 +189,17 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
     padding-bottom: 4px;
   }
   .zonas-scroll > * { flex: none; }
-  .zona-strip > button { order: 2; } /* el botón de edición va fuera del scroll */
+  /* Vista (🗺/☰) a la izquierda de la segunda fila y el botón de edición al borde
+     DERECHO de esa misma fila (antes caía al medio-izquierda). */
+  .zona-strip .vista-sel { order: 2; }
+  .zona-strip > button { order: 3; margin-left: auto; } /* el botón de edición va fuera del scroll */
 
   /* Objetivos táctiles ≥44px y barra colapsada a iconos. Todo bajo .salon para no
-     contaminar el Topbar ni los otros módulos (styles.css es compartido). */
-  .salon button { min-height: 44px; }
+     contaminar el Topbar ni los otros módulos (styles.css es compartido).
+     min-width = min-height: al ocultar el texto (.txt, más abajo) el botón queda
+     SOLO con el glifo y, sin el ancho mínimo, era más alto que ancho ⇒ óvalo hacia
+     abajo. Con 44×44 y radio 999 es un círculo perfecto. */
+  .salon button { min-height: 44px; min-width: 44px; }
   .salon .ztab .tab { min-height: 44px; padding: 8px 14px; font-size: .95rem; }
   .salon button.ico { min-height: 44px; min-width: 44px; font-size: 1rem; }
   .salon .tab.mas { min-height: 44px; padding: 8px 14px; }
@@ -253,12 +260,20 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
   .zconf-txt { display: none; }
 }
 
-/* Tableta / móvil apaisado con puntero grueso: objetivos táctiles sin achicar tipos. */
+/* Tableta / móvil apaisado con puntero grueso: objetivos táctiles sin achicar tipos.
+   El min-width acompaña al min-height para que ningún botón quede más alto que ancho. */
 @media (min-width: 769px) and (pointer: coarse) {
   .salon .ztab .tab { min-height: 44px; }
   .salon button.ico { min-height: 44px; min-width: 44px; }
-  .salon .barra button { min-height: 44px; }
+  .salon .barra button { min-height: 44px; min-width: 44px; }
 }
+
+/* Botones-acción de las barras del salón, SIEMPRE al borde derecho (PC y móvil):
+   «✎ Editar mapa / ✓ Terminar edición» en la franja y «＋ mesa» en su barra, cuya
+   pista de ayuda pasa a la izquierda. */
+.zona-strip > button { margin-left: auto; flex: none; }
+.salon .barra:has(> .pista) > button { order: 2; margin-left: auto; }
+.salon .barra > .pista { order: 1; flex: 1; margin: 0; }
 
 /* Accesibilidad: foco visible en los controles del mapa. */
 .zona-strip :focus-visible,
@@ -279,11 +294,11 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 .me-campo>span{font-size:.8rem;font-weight:700;color:var(--ink)}
 .me-ancho2{grid-column:span 2}
 .me-campo input,.me-campo select,.me-campo>button{width:100%;min-height:44px}
-.me-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1.5px solid var(--line-fuerte);border-radius:10px;overflow:hidden}
-.me-opc{border:0;border-radius:0;min-height:44px;padding:4px 6px;background:var(--card);font-weight:600;font-size:.88rem}
+.me-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1.5px solid var(--line-fuerte);border-radius:999px;overflow:hidden}
+.me-opc{border:0;border-radius:0;min-height:44px;min-width:44px;padding:4px 6px;background:var(--card);font-weight:600;font-size:.88rem}
 .me-opc+.me-opc{border-left:1.5px solid var(--line-fuerte)}
 .me-opc.on{background:var(--ac);color:#fff}
-.me-step{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;border:1.5px solid var(--line-fuerte);border-radius:10px;overflow:hidden;background:var(--card)}
+.me-step{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;border:1.5px solid var(--line-fuerte);border-radius:999px;overflow:hidden;background:var(--card)}
 .me-step button{border:0;border-radius:0;min-height:44px;padding:0;font-size:1.2rem;background:var(--card-2)}
 .me-step b{text-align:center;color:var(--ink)}
 .badge-heredada{position:absolute;bottom:3px;left:5px;font-size:.7rem;font-weight:800;background:var(--btn-violet);color:#fff;border-radius:999px;padding:0 6px}
@@ -294,7 +309,7 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 /* ── v0.9 · vista lista de mesas + comensales ocultos en móvil ── */
 .vista-sel{display:inline-flex;gap:6px;flex:0 0 auto}
 .mesas-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.mesa-item{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;padding:10px 12px;border-radius:14px;border:2px solid var(--line-fuerte);text-align:left;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.mesa-item{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;padding:10px 22px;border-radius:999px;border:2px solid var(--line-fuerte);text-align:left;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .mesa-item .nombre{font-size:1.05rem}
 .mesa-item .mi-est{font-size:.8rem;font-weight:600;opacity:.85}
 .mesa-item .importe{font-weight:700}
@@ -308,3 +323,82 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
   .vista-sel .txt{display:none}
   .salon .mesa .pax{display:none}
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   v0.9 · carril UX: mapa que cabe en pantalla (PC y móvil), edición móvil con el
+   mapa arriba, y selector de forma solo con la figura.
+   Todo va AL FINAL del archivo: carga antes que styles.css, así que las reglas
+   que empatan con las globales (.lienzo) se prefijan .salon para ganar.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* TAREA 1 — el lienzo cabe COMPLETO en la ventanilla sin scrollear, sin deformar
+   el 1000:600. Truco: el max-width se DERIVA del mismo descuento por la proporción
+   (×1000/600); con width:100% + aspect-ratio inline manda uno solo de los dos
+   límites y el otro lado sale de la proporción ⇒ nunca recorte asimétrico.
+   --lienzo-descuento mide lo que hay fuera del mapa en PC, MEDIDO en el navegador
+   (17-10-2026, ventanillas 1366×768 y 1280×800, franja de salones en una línea):
+   241 px encima del lienzo (topbar + .zona-strip + .barra de tabs/vistas/Editar mapa)
+   + 18 de la .leyenda + ~26 de gaps y padding ⇒ 285. Con el 262 viejo la leyenda
+   quedaba cortada y la página scrolleaba 19 px. El suelo
+   max(200px,…) evita mapas invisibles en pantallas muy bajas y conserva la
+   proporción porque el ancho se deriva de ese mismo suelo. Los arrastres/taps leen
+   getBoundingClientRect (aCoord en SalonPage.jsx), así que siguen funcionando a
+   cualquier tamaño: no hay ancho hardcodeado que arreglar. */
+.salon .lienzo{
+  --lienzo-descuento:285px;
+  height:auto;
+  max-height:max(200px,calc(100vh - var(--lienzo-descuento)));
+  max-height:max(200px,calc(100dvh - var(--lienzo-descuento)));
+  max-width:calc(max(200px,calc(100vh - var(--lienzo-descuento))) * 1000 / 600);
+  max-width:calc(max(200px,calc(100dvh - var(--lienzo-descuento))) * 1000 / 600);
+  margin:0 auto;
+}
+/* En edición (PC) el formulario de la mesa (≈430 px de alto) dejaba de robar sitio
+   vertical al mapa: se coloca en una columna derecha y la columna izquierda conserva
+   barras + mapa + leyenda. Sin esto la página scrolleaba 177 px y el mapa se cortaba
+   (medido 17-10-2026). Con la franja ya en una línea, por encima del lienzo hay
+   264 px medidos (topbar + franja + barra de vistas + barra ＋mesa) y por debajo
+   40 (leyenda 18 + gap 10 + padding 12). Con 300 la leyenda rozaba el borde y la
+   página scrolleaba 4 px; 315 deja colchón y el mapa sigue siendo el más alto
+   posible en 1366×768, 1280×800 y 1600×900 (scroll 0 en los tres). */
+@media (min-width:901px){
+  .salon .mapa-col.editando{position:relative;padding-right:352px}
+  .salon .mapa-col.editando .mesa-edit{position:absolute;top:0;right:0;width:344px;margin:0}
+  .salon .mapa-col.editando .lienzo{--lienzo-descuento:315px}
+  /* Editando, cada salón de la franja lleva ▲▼✎🗑 y mide ~210 px: en 1024 la franja
+     envolvía a 4 líneas (170 px de alto) y empujaba el mapa fuera de la ventanilla
+     (63 px de scroll medidos). En edición la franja no envuelve: cabe en una línea y
+     se desliza en horizontal; el mapa recupera los ~120 px. Es solo en PC y solo en
+     edición: en móvil la franja sigue creciendo hacia abajo (norma ≤768px arriba). */
+  .salon .mapa-col.editando .zonas-scroll{flex-wrap:nowrap;overflow-x:auto}
+  .salon .mapa-col.editando .zonas-scroll>*{flex:none}
+}
+
+/* TAREA 2 — en móvil/tablet (≤900px), MIENTRAS se edita (clase .editando que
+   SalonPage.jsx pone en <section class="mapa-col"> solo con edit && admin), el
+   mapa va ARRIBA del formulario de edición: el editor de mesa deja de ser hoja
+   fija inferior y fluye debajo del lienzo (flex-column + order). En PC nada
+   cambia: el DOM no se toca y estas reglas solo existen ≤900px. */
+@media (max-width:900px){
+  .salon .mapa-col.editando{display:flex;flex-direction:column;gap:8px}
+  /* franja/barras/avisos quedan orden 0 (arriba); mapa → 3; editor → 4; leyenda → 5.
+     El descuento 340 cubre topbar + franja + barras en móvil/tablet (en el teléfono
+     el mapa va a ancho completo y gana el ancho: 340 no lo achica). */
+  .salon .mapa-col.editando .lienzo{order:3;align-self:center;width:100%;--lienzo-descuento:340px}
+  .salon .mapa-col.editando .mesa-edit{
+    order:4;position:static;z-index:auto;margin:0;
+    border:2px solid var(--ac);border-radius:14px;box-shadow:none;
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    max-height:44vh;overflow-y:auto;
+  }
+  .salon .mapa-col.editando .mesa-edit::before{display:none} /* ya no es hoja: sin asa */
+  .salon .mapa-col.editando .leyenda{order:5}
+  /* El colchón inferior de 110px de la hoja fija sobraba con el editor en el flujo;
+     sin :has simplemente queda un hueco extra: inofensivo. */
+  .salon.salon:has(.mapa-col.editando){padding-bottom:12px}
+}
+
+/* TAREA 3 — el selector de forma queda SOLO con la figura (el nombre vive en
+   title/aria-label). Sin palabra, el glifo se agranda para seguir siendo legible
+   dentro del botón de 44px y el hueco que dejaba el texto se cierra con padding. */
+.me-opc{font-size:1.2rem;line-height:1;padding:4px}

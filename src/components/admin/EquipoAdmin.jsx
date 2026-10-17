@@ -14,8 +14,17 @@ import './admin.css'      // clases .adm-* del área de administración (las com
 import './EquipoAdmin.css'
 
 // Roles tal y como los guarda la base (escritos en español). La etiqueta visible pasa por
-// tOr('rol.' + rol, rol), que son claves que ya existen en los tres diccionarios.
-const ROLES = ['admin', 'cajero', 'mesero']
+// tOr('rol.' + rol, ...): admin/cajero/mesero ya tienen clave en los tres diccionarios;
+// cocina y barra llegan con su literal en español hasta que el carril de i18n las añada.
+const ROLES = ['admin', 'cajero', 'mesero', 'cocina', 'barra']
+// Fallback legible del rol cuando 'rol.*' aún no está en los diccionarios.
+const ROL_ETIQUETA = { admin: 'Administrador', cajero: 'Cajero', mesero: 'Mesero', cocina: 'Cocina', barra: 'Barra' }
+// El badge se colorea con la clase .eq-rol-<rol> (EquipoAdmin.css). Esa hoja aún no tiene
+// clase para los roles nuevos, así que el color de cocina/barra va en línea (mismos
+// colores planos de la paleta) para que no queden grises; el carril de CSS puede
+// migrarlos a .eq-rol-cocina / .eq-rol-barra y entonces se borra este mapa.
+const ROL_INLINE = { cocina: { background: '#b02a2a', color: '#fff' }, barra: { background: '#0e92a3', color: '#fff' } }
+const rolEtiqueta = (rol, tOr) => (rol ? tOr('rol.' + rol, ROL_ETIQUETA[rol] || rol) : '—')
 const MIN_CLAVE = 4 // mismo mínimo que exige la base; se valida aquí para no ir de vacío
 const CORREO_OK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
@@ -56,7 +65,22 @@ function fecha(iso, idiom) {
   return d.toLocaleDateString(IDIOMA_LOCALE[idiom] || 'es', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-export default function EquipoAdmin({ rol, sesion }) {
+// Fila con la que se ve el bloque cuando está plegado (desde ConfigAdmin se alterna con
+// abierto/onToggleAbierto, mismo patrón de "Configurar impresoras"): título + chip de
+// cuántos hay + botón "Mostrar equipo". La usa tanto el modo base como el modo demo.
+function EquipoFilaColapsada({ n, error, onToggle, tOr }) {
+  return (
+    <div className="adm-fila">
+      <b>👥 {tOr('equipo.titulo', 'Equipo')}</b>
+      <span className="adm-chip">{n} {n === 1 ? tOr('equipo.una', 'persona') : tOr('equipo.varias', 'personas')}</span>
+      {error && <span className="adm-chip" title={error}>⚠️ {tOr('equipo.error', 'Error al cargar el equipo')}</span>}
+      <span className="sp" />
+      <button type="button" className="ghost" onClick={onToggle}>{tOr('equipo.mostrar', 'Mostrar equipo')}</button>
+    </div>
+  )
+}
+
+export default function EquipoAdmin({ rol, sesion, abierto = true, onToggleAbierto = () => {} }) {
   const { modo } = useStore()
   const { tOr, idiom } = useIdioma()
 
@@ -100,8 +124,9 @@ export default function EquipoAdmin({ rol, sesion }) {
     }
   }
 
-  // La lista se lee al hacerse visible el bloque (montaje), no en cada tecla: el panel de
-  // configuración se renderiza muchas veces mientras se escribe y equipo_listar es una consulta.
+  // La lista se lee al montar (ya no "al hacerse visible": el bloque vive plegado pero
+  // montado, y el chip de la fila plegada muestra ese conteo), no en cada tecla: el panel
+  // de configuración se renderiza muchas veces mientras se escribe y equipo_listar es una consulta.
   useEffect(() => {
     if (esAdmin && enBase) cargar()
     // eslint-disable-next-line
@@ -109,7 +134,14 @@ export default function EquipoAdmin({ rol, sesion }) {
 
   if (!esAdmin) return null
 
-  if (!enBase) return <EquipoDemo sesion={sesion} />
+  if (!enBase) return <EquipoDemo sesion={sesion} abierto={abierto} onToggleAbierto={onToggleAbierto} />
+
+  // Plegado: solo la fila de resumen (el equipo_listar del montaje ya nos da el conteo del
+  // chip; posponer la carga abriría un "cargando…" al desplegar — se eligió lo más simple).
+  // Los hooks de arriba se llaman SIEMPRE: el plegado es un return condicional, no un hook.
+  if (!abierto) {
+    return <EquipoFilaColapsada n={miembros.length} error={error} onToggle={onToggleAbierto} tOr={tOr} />
+  }
 
   const set = k => e => { setForm(f => ({ ...f, [k]: e.target.value })); setValidando('') }
 
@@ -199,9 +231,12 @@ export default function EquipoAdmin({ rol, sesion }) {
         <h3>{tOr('equipo.titulo', 'Equipo')}</h3>
         <span className="adm-chip">{miembros.length} {miembros.length === 1 ? tOr('equipo.una', 'persona') : tOr('equipo.varias', 'personas')}</span>
         <span className="sp" />
-        <button type="button" className="ghost" disabled={cargando || ocupado} onClick={() => cargar()}>
-          {cargando ? tOr('equipo.cargando', 'Cargando…') : tOr('equipo.actualizar', 'Actualizar')}
-        </button>
+        <span className="cab-acciones">
+          <button type="button" className="ghost" disabled={cargando || ocupado} onClick={() => cargar()}>
+            {cargando ? tOr('equipo.cargando', 'Cargando…') : tOr('equipo.actualizar', 'Actualizar')}
+          </button>
+          <button type="button" className="ghost" onClick={onToggleAbierto}>{tOr('equipo.ocultar', 'Ocultar equipo')}</button>
+        </span>
       </div>
       <p className="adm-sub eq-nota">
         {tOr('equipo.subtitulo', 'Las personas de esta lista entran a')} <b>{sesion?.empresa || tOr('equipo.tuNegocio', 'tu negocio')}</b>{' '}
@@ -239,7 +274,7 @@ export default function EquipoAdmin({ rol, sesion }) {
                     </div>
                     <div className="eq-celda">
                       <span className="eq-cab-movil">{tOr('equipo.colRol', 'Rol')}</span>
-                      <span className={'eq-rol eq-rol-' + (m.rol || 'otro')}>{tOr('rol.' + m.rol, m.rol || '—')}</span>
+                      <span className={'eq-rol eq-rol-' + (m.rol || 'otro')} style={ROL_INLINE[m.rol]}>{rolEtiqueta(m.rol, tOr)}</span>
                     </div>
                     <div className="eq-celda">
                       <span className="eq-cab-movil">{tOr('equipo.colAlta', 'Alta')}</span>
@@ -308,7 +343,7 @@ export default function EquipoAdmin({ rol, sesion }) {
           <label className="adm-campo">
             <span>{tOr('equipo.invitar.rol', 'Rol')}</span>
             <select value={form.rol} onChange={set('rol')}>
-              {ROLES.map(r => <option key={r} value={r}>{tOr('rol.' + r, r)}</option>)}
+              {ROLES.map(r => <option key={r} value={r}>{rolEtiqueta(r, tOr)}</option>)}
             </select>
           </label>
           <label className="adm-campo">
@@ -338,7 +373,8 @@ export default function EquipoAdmin({ rol, sesion }) {
 
 // Modo demo: los usuarios viven en el estado local (store.usuariosDemo) y son los que entran por el
 // login de prueba. Mismas reglas que la base: usuario único, no quitarse a sí mismo, quedar un admin.
-function EquipoDemo({ sesion }) {
+// Comparte con el modo base el plegado (abierto/onToggleAbierto desde ConfigAdmin).
+function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
   const { s, d } = useStore()
   const { t, tOr } = useIdioma()
   const usuarios = s.usuariosDemo || []
@@ -374,11 +410,16 @@ function EquipoDemo({ sesion }) {
     d({ t: 'usuario-', usuario: u.usuario }); setConfirma(null); setAviso(tOr('equipo.revocadoOk', 'Esa persona ya no puede entrar.'))
   }
 
+  // Plegado (mismo patrón que el modo base; los hooks de arriba se llaman siempre).
+  if (!abierto) return <EquipoFilaColapsada n={usuarios.length} onToggle={onToggleAbierto} tOr={tOr} />
+
   return (
     <section className="adm-card adm-equipo eq-bloque">
       <div className="adm-card-cab">
         <h3>{tOr('equipo.titulo', 'Equipo')}</h3>
         <span className="adm-chip">{usuarios.length}</span>
+        <span className="sp" />
+        <button type="button" className="ghost" onClick={onToggleAbierto}>{tOr('equipo.ocultar', 'Ocultar equipo')}</button>
       </div>
       <p className="adm-sub eq-nota">{t('equipo.demoNota')}</p>
       {error && <div className="eq-error" role="alert">⚠️ {error}</div>}
@@ -387,7 +428,7 @@ function EquipoDemo({ sesion }) {
         {usuarios.map(u => (
           <div key={u.usuario} className="eq-fila">
             <div className="eq-persona"><span className="eq-nombre">{u.nombre}</span><span className="eq-correo">{u.usuario}</span></div>
-            <div className="eq-celda"><span className={'eq-rol eq-rol-' + u.rol}>{tOr('rol.' + u.rol, u.rol)}</span></div>
+            <div className="eq-celda"><span className={'eq-rol eq-rol-' + u.rol} style={ROL_INLINE[u.rol]}>{rolEtiqueta(u.rol, tOr)}</span></div>
             <div className="eq-celda" />
             <div className="eq-acciones">
               <button type="button" className="info" onClick={() => { setError(''); setClaveFila(c => (c?.usuario === u.usuario ? null : { usuario: u.usuario, clave: generarClave() })) }}>
@@ -418,7 +459,7 @@ function EquipoDemo({ sesion }) {
           <label className="adm-campo"><span>{tOr('equipo.invitar.nombre', 'Nombre')}</span><input value={form.nombre} onChange={set('nombre')} autoComplete="off" /></label>
           <label className="adm-campo"><span>{t('equipo.invitar.usuario')}</span><input value={form.usuario} onChange={set('usuario')} autoComplete="off" /></label>
           <label className="adm-campo"><span>{tOr('equipo.invitar.rol', 'Rol')}</span>
-            <select value={form.rol} onChange={set('rol')}>{ROLES.map(r => <option key={r} value={r}>{tOr('rol.' + r, r)}</option>)}</select>
+            <select value={form.rol} onChange={set('rol')}>{ROLES.map(r => <option key={r} value={r}>{rolEtiqueta(r, tOr)}</option>)}</select>
           </label>
           <label className="adm-campo"><span>{tOr('equipo.invitar.clave', 'Clave inicial')}</span>
             <span className="eq-clave-fila">
