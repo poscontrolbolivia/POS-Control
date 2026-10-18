@@ -1,14 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useIdioma } from '../i18n/index.jsx'
-import SelectorIdioma from '../i18n/SelectorIdioma.jsx'
+import LanguageSelect from '../components/login/LanguageSelect.jsx'
 import BrandMark from '../components/login/BrandMark.jsx'
 import LegalBackButton from '../components/LegalBackButton.jsx'
 import './LegalPage.css'
 
-// Términos y condiciones (ruta /terminos). Mismo esqueleto que el de Catering Control:
-// índice con anclas, secciones numeradas y un "En resumen:" antes de las cláusulas largas.
-// La diferencia es de fondo: POS Control añade la sección del plan gratuito con límite de
-// artículos, que es la pata comercial del modelo.
 const SECCIONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
 export default function TerminosPage() {
@@ -17,7 +13,7 @@ export default function TerminosPage() {
     <div className="legal-wrap">
       <div className="legal-cab">
         <LegalBackButton />
-        <SelectorIdioma />
+        <LanguageSelect />
       </div>
       <div className="legal-card">
         <div className="legal-marca">

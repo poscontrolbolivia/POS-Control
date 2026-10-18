@@ -1,2 +1,5 @@
 node_modules
 dist
+print-agent/simulado/
+public/agente.mjs
+public/instalar-agente.bat

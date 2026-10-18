@@ -1,16 +1,21 @@
 {
   "name": "pos-control",
   "private": true,
-  "version": "0.18.0",
+  "version": "0.20.1",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-agent.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-agent.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "iconos": "node scripts/gen-iconos.mjs",
-    "idiomas": "node scripts/check-i18n.mjs",
-    "test:aislamiento": "node tests/aislamiento.mjs",
-    "test:cuotas": "node tests/cuotas.mjs"
+    "agent": "node scripts/copy-agent.mjs",
+    "icons": "node scripts/gen-icons.mjs",
+    "i18n": "node scripts/check-i18n.mjs",
+    "test": "node scripts/check-i18n.mjs && node tests/soldOut.mjs",
+    "test:soldout": "node tests/soldOut.mjs",
+    "test:isolation": "node tests/isolation.mjs",
+    "test:quotas": "node tests/quotas.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

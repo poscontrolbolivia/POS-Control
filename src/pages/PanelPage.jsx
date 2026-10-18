@@ -1,41 +1,31 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { useStore } from '../services/store.jsx'
-import { puede } from '../services/permisos.js'
-import { suscribirVista } from '../services/notificaciones.js'
+import { useStore } from '../context/StoreContext.jsx'
+import { puede } from '../services/permissions.js'
+import { suscribirVista } from '../services/notifications.js'
 import { useIdioma } from '../i18n/index.jsx'
 import Topbar from '../components/panel/Topbar.jsx'
-import SalonPage from '../components/salon/SalonPage.jsx'
-import CajaPage from '../components/caja/CajaPage.jsx'
-import VentaDirecta from '../components/venta/VentaDirecta.jsx'
-import CocinaPage from '../components/cocina/CocinaPage.jsx'
-import MenuAdmin from '../components/admin/MenuAdmin.jsx'
-import ConfigAdmin from '../components/admin/ConfigAdmin.jsx'
-import { iniciarEstacion, detenerEstacion, estacionRecordada, actualizarConfig } from '../services/estacion.js'
+import HallPage from '../components/panel/hall/HallPage.jsx'
+import CashPage from '../components/panel/cash/CashPage.jsx'
+import QuickSalePage from '../components/panel/quicksale/QuickSalePage.jsx'
+import KitchenPage from '../components/panel/kitchen/KitchenPage.jsx'
+import MenuPage from '../components/panel/menu/MenuPage.jsx'
+import SettingsPage from '../components/panel/settings/SettingsPage.jsx'
+import { iniciarEstacion, detenerEstacion, estacionRecordada, actualizarConfig } from '../services/station.js'
 
-// Pantallas que no todo el mundo abre: se descargan solo al entrar (el mesero no baja Inventario ni Super).
-const AuditoriaPage = lazy(() => import('../components/auditoria/AuditoriaPage.jsx'))
-const InventarioPage = lazy(() => import('../components/inventario/InventarioPage.jsx'))
-const SuperPage = lazy(() => import('../components/super/SuperPage.jsx'))
-const EstacionPage = lazy(() => import('../components/estacion/EstacionPage.jsx'))
+const AuditPage = lazy(() => import('../components/panel/audit/AuditPage.jsx'))
+const InventoryPage = lazy(() => import('../components/panel/inventory/InventoryPage.jsx'))
+const SuperPage = lazy(() => import('../components/panel/super/SuperPage.jsx'))
+const StationPage = lazy(() => import('../components/panel/station/StationPage.jsx'))
 
-// Los avisos del sistema (al pulsarlos) y los atajos del ícono de la PWA llegan como
-// '#salon', '#cocina', '#caja'. '#cocina' es ahora la pantalla de área (antes no existía
-// y abría el salón).
 const VISTAS = { '#salon': 'salon', '#cocina': 'cocina', '#caja': 'caja', '#estacion': 'estacion', '#venta': 'venta', '#menu': 'menu', '#config': 'config', '#auditoria': 'auditoria', '#inventario': 'inventario' }
 
-// Cocina y barra no verán el salón, la caja ni el mostrador: su única pantalla de trabajo
-// es su cola de área (más Arriba, para idioma/tema).
 const EN_PANTALLA = ['cocina', 'barra']
 
-// Panel de la app (la ruta /panel). Es el equivalente al PanelPage.jsx de Catering Control:
-// el shell con la barra de arriba y el módulo activo. Los ids de módulo NO se traducen (son
-// estado de navegación); solo la etiqueta visible.
 export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   const { s } = useStore()
   const { t, tOr } = useIdioma()
   const enPantalla = EN_PANTALLA.includes(sesion.rol)
-  // Un super sin empresa (dueño de la plataforma sin membresías) arranca en su panel; un super
-  // "operando" otra empresa arranca en el salón de ESA empresa.
+
   const [modulo, setModulo] = useState(
     sesion.es_super && !sesion.empresaId ? 'super' : enPantalla ? 'cocina' : 'salon'
   )
@@ -51,11 +41,9 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   if (sesion.supabase && (sesion.rol === 'admin' || sesion.rol === 'cajero')) modulos.push({ id: 'estacion', nombre: t('app.mod.estacion') })
   if (puede(sesion.rol, 'ver_inventario')) modulos.push({ id: 'inventario', nombre: tOr('app.mod.inventario', 'Inventario') })
   if (puede(sesion.rol, 'ver_auditoria')) modulos.push({ id: 'auditoria', nombre: tOr('app.mod.auditoria', 'Auditoría') })
-  modulos.push({ id: 'config', nombre: t('app.mod.config') }) // todos: idioma y tema; el resto solo admin
+  modulos.push({ id: 'config', nombre: t('app.mod.config') })
   if (sesion.es_super) modulos.push({ id: 'super', nombre: tOr('app.mod.super', 'Super') })
 
-  // Estación de impresión: si esta PC quedó configurada como estación, arranca sola al entrar
-  // (y sigue imprimiendo aunque se cambie de módulo). Se apaga al salir de la sesión.
   const configRef = useRef(s.config)
   configRef.current = s.config
   useEffect(() => { actualizarConfig(() => configRef.current || {}) }, [s.config])
@@ -64,9 +52,8 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
     if (!puedeEstacion) return undefined
     if (estacionRecordada()) iniciarEstacion(() => configRef.current || {})
     return () => detenerEstacion({ recordar: true })
-  }, [puedeEstacion, sesion.empresaId]) // eslint-disable-line
+  }, [puedeEstacion, sesion.empresaId])
 
-  // El hash solo cambia el módulo si ese módulo está habilitado para este rol.
   const permitidos = modulos.map(m => m.id).join(',')
   useEffect(() => {
     const aplicar = hash => {
@@ -74,8 +61,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
       if (destino && permitidos.split(',').includes(destino)) setModulo(destino)
     }
     aplicar(window.location.hash)
-    // 'hashchange' cubre el caso en que la app YA está abierta y se pulsa un aviso o un atajo:
-    // cambiar solo el fragmento no recarga el documento, así que el mount no se repite.
+
     const alCambiar = () => aplicar(window.location.hash)
     window.addEventListener('hashchange', alCambiar)
     const dejarEscucha = suscribirVista((_destino, hash) => aplicar(hash))
@@ -89,7 +75,6 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
     <div className="app">
       <Topbar sesion={{ ...sesion, empresa: sesion.empresa || s.config.nombre }} modulo={modulo} modulos={modulos}
         onModulo={setModulo} onSalir={onSalir} aviso={aviso || undefined} />
-      {/* Aviso permanente mientras el super opera otra empresa: cubre Salón/Caja/Venta, no solo el panel */}
       {sesion.operando && (
         <div className="topbar-rol" style={{ background: '#8a6d1a', color: '#fff', padding: '6px 14px', borderRadius: 0, display: 'block', width: '100%', textAlign: 'center' }}>
           {tOr('super.banner.viendo', 'Estás viendo la empresa')} <b>{sesion.empresa}</b> —{' '}
@@ -98,15 +83,15 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
       )}
       {s._supCargando && <div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}
       <Suspense fallback={<div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}>
-        {modulo === 'salon' && <SalonPage rol={sesion.rol} sesion={sesion} />}
-        {modulo === 'caja' && <CajaPage rol={sesion.rol} sesion={sesion} />}
-        {modulo === 'venta' && <VentaDirecta rol={sesion.rol} sesion={sesion} />}
-        {modulo === 'cocina' && <CocinaPage rol={sesion.rol} sesion={sesion} />}
-        {modulo === 'menu' && <MenuAdmin rol={sesion.rol} />}
-        {modulo === 'estacion' && <EstacionPage rol={sesion.rol} sesion={sesion} />}
-        {modulo === 'inventario' && <InventarioPage rol={sesion.rol} sesion={sesion} />}
-        {modulo === 'auditoria' && <AuditoriaPage rol={sesion.rol} sesion={sesion} />}
-        {modulo === 'config' && <ConfigAdmin rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'salon' && <HallPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'caja' && <CashPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'venta' && <QuickSalePage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'cocina' && <KitchenPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'menu' && <MenuPage rol={sesion.rol} />}
+        {modulo === 'estacion' && <StationPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'inventario' && <InventoryPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'auditoria' && <AuditPage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'config' && <SettingsPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'super' && sesion.es_super && <SuperPage sesion={sesion} />}
       </Suspense>
     </div>

@@ -1,25 +1,14 @@
-// Tabla simple con buscador arriba y columnas redimensionables a mano.
-// Puerto del components/panel/DataTable.jsx de Catering Control, simplificado para POS:
-// · sin ColumnsModal (no hay mostrar/ocultar/reordenar: se pintan TODAS las `columns`);
-// · sin react-i18next: cadenas visibles con tOr() del i18n propio del destino;
-// · persistencia SOLO local (services/columnPrefs.js → localStorage 'pos-cols-<grupo>').
-// `columns = [{ key, label, render(row), sortable?, sortValue?(row) }]`.
-// El buscador es CONTROLADO por el padre: si pasa `search` + `onSearchChange` se pinta
-// arriba; el padre filtra las filas que entrega en `rows` (así lo hace AuditoriaPage).
 import { useState } from 'react'
 import { useIdioma } from '../../i18n/index.jsx'
 import { getColumnPrefs, saveColumnWidths, startColumnResize, resizeEndedRecently } from '../../services/columnPrefs'
 import '../../styles/DataTable.css'
 
-// Valor bruto con el que se ordena la columna: extractor propio si lo declara,
-// si no la propiedad homónima de la fila (render() puede mostrar otra cosa).
 function rawSortValue(col, row) {
   if (col.sortValue) return col.sortValue(row)
   if (row && Object.prototype.hasOwnProperty.call(row, col.key)) return row[col.key]
   return null
 }
 
-// Números como números (2 < 10); el resto texto local 'es' con numérico natural.
 function compareValues(a, b) {
   const an = typeof a === 'number' ? a : (a !== null && a !== '' && !isNaN(a)) ? Number(a) : null
   const bn = typeof b === 'number' ? b : (b !== null && b !== '' && !isNaN(b)) ? Number(b) : null
@@ -34,9 +23,8 @@ export default function DataTable({ columns, rows, getRowId = (r) => r.id, searc
 
   const widths = colPrefs.widths || {}
 
-  // Tres estados por columna: asc → desc → orden original (sort = null).
   function toggleSort(key) {
-    if (resizeEndedRecently()) return; // clic suelto al terminar de ajustar el ancho de una columna
+    if (resizeEndedRecently()) return;
     setSort((prev) => {
       if (!prev || prev.key !== key) return { key, dir: 'asc' }
       if (prev.dir === 'asc') return { key, dir: 'desc' }
@@ -52,7 +40,7 @@ export default function DataTable({ columns, rows, getRowId = (r) => r.id, searc
     withValue.sort((a, b) => {
       const cmp = compareValues(a.value, b.value)
       if (cmp !== 0) return sort.dir === 'asc' ? cmp : -cmp
-      return a.i - b.i // estable: empates conservan el orden recibido
+      return a.i - b.i
     })
     return withValue.map((x) => x.row)
   })()

@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useIdioma } from '../../i18n/index.jsx'
 
-// Pie legal: siempre muestra el nombre del SOFTWARE (POS Control™), nunca el de una empresa.
 export default function AppFooter() {
   const { t } = useIdioma()
   return (

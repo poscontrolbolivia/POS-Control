@@ -1,8 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Identificador de ESTA compilación: la app lo compara con /version.json (que se publica con cada
-// build) para avisar «hay una versión nueva» sin depender del service worker.
 const BUILD_ID = String(Date.now())
 
 const versionJson = () => ({

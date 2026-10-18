@@ -1,13 +1,13 @@
 import { createRoot } from 'react-dom/client'
-import { StoreProvider } from './services/store.jsx'
+import { StoreProvider } from './context/StoreContext.jsx'
 import { IdiomaProvider } from './i18n/index.jsx'
 import App from './App.jsx'
-import PwaBridge from './components/pwa/PwaBridge.jsx'
-import './styles.css'
-import { aplicarTema, leerTema } from './services/tema.js'
+import PwaBridge from './components/PwaBridge.jsx'
+import './styles/base.css'
+import { aplicarTema, leerTema } from './services/theme.js'
 aplicarTema(leerTema())
 createRoot(document.getElementById('root')).render(
-  // IdiomaProvider por fuera de todo: LoginPage, Topbar, App y PwaBridge leen useIdioma().
+
   <IdiomaProvider>
     <StoreProvider>
       <App />

@@ -1,28 +1,18 @@
-import { leerAvisoLogin } from '../services/sesionPersistente.js'
+import { leerAvisoLogin } from '../services/session.js'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useStore, guardarSesionSup } from '../services/store.jsx'
-import { USAR_SUPABASE, SOPORTE_WHATSAPP } from '../config.js'
-import { sb, rpc, fijarEmpresa, mensajeError } from '../services/supabase.js'
+import { useStore, guardarSesionSup } from '../context/StoreContext.jsx'
+import { USAR_SUPABASE, SOPORTE_WHATSAPP } from '../services/config.js'
+import { sb, rpc, fijarEmpresa, mensajeError } from '../services/supabaseClient.js'
 import { esSuper, entrarEnEmpresa } from '../services/super/superApi.js'
 import { useIdioma } from '../i18n/index.jsx'
-import SelectorIdioma from '../i18n/SelectorIdioma.jsx'
+import LanguageSelect from '../components/login/LanguageSelect.jsx'
 import BrandMark from '../components/login/BrandMark.jsx'
 import ThemeSelect from '../components/login/ThemeSelect.jsx'
 import ShareAppButton from '../components/login/ShareAppButton.jsx'
 import AppFooter from '../components/login/AppFooter.jsx'
 import '../styles/auth.css'
-import '../styles/login.css'
-
-// Login de una sola pantalla (misma apariencia que Catering Control):
-//  · EMPRESA: solo se ELIGE (no se escribe) de la lista de empresas creadas (RPC
-//    public.empresas_para_login, en setup.sql). "Demo" es la empresa de prueba por defecto:
-//    no pide usuario ni clave (se elige con qué rol entrar) y sus datos viven solo en este
-//    navegador. Si la lista no carga, queda solo la Demo.
-//  · Correo + clave (Supabase Auth). Tras 3 fallos seguidos el botón se bloquea 1 minuto con
-//    cuenta regresiva (bloqueo del lado del navegador; Supabase Auth además limita por su lado).
-//  · Pasos secundarios: 'empresas' (usuario con varias), 'alta' (crear negocio), 'recupera'.
-// Props: { onEntrar }
+import './LoginPage.css'
 
 const CODIGO_OK = /^[a-z0-9][a-z0-9._-]{2,23}$/
 const CLAVE_MIN = 6
@@ -34,7 +24,7 @@ const LK = 'pos-login-bloqueo'
 const LK_EMP = 'pos-ultima-empresa'
 
 const leerBloq = () => { try { return JSON.parse(localStorage.getItem(LK)) || {} } catch { return {} } }
-const guardarBloq = o => { try { localStorage.setItem(LK, JSON.stringify(o)) } catch { /* sin almacenamiento */ } }
+const guardarBloq = o => { try { localStorage.setItem(LK, JSON.stringify(o)) } catch {  } }
 
 const Ojo = ({ off }) => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -46,16 +36,16 @@ const Ojo = ({ off }) => (
 export default function LoginPage({ onEntrar }) {
   const { s } = useStore()
   const { t, tOr } = useIdioma()
-  const [paso, setPaso] = useState('login') // 'login' | 'empresas' | 'alta' | 'recupera'
-  const [lista, setLista] = useState(undefined) // undefined: cargando · null: sin RPC · []: sin empresas
-  const [sel, setSel] = useState(DEMO)          // id de empresa elegida o DEMO (por defecto)
+  const [paso, setPaso] = useState('login')
+  const [lista, setLista] = useState(undefined)
+  const [sel, setSel] = useState(DEMO)
   const [demoRol, setDemoRol] = useState('admin')
   const [usuario, setUsuario] = useState('')
   const [clave, setClave] = useState('')
   const [verClave, setVerClave] = useState(false)
   const [error, setError] = useState('')
-  // Si el guardia detectó que la sesión ya no sirve (token vencido/revocado), se explica aquí.
-  useEffect(() => { if (leerAvisoLogin()) setError(t('login.sesionVencida')) }, []) // eslint-disable-line
+
+  useEffect(() => { if (leerAvisoLogin()) setError(t('login.sesionVencida')) }, [])
   const [busy, setBusy] = useState(false)
   const [restante, setRestante] = useState(0)
   const [empresasUsuario, setEmpresasUsuario] = useState([])
@@ -67,7 +57,6 @@ export default function LoginPage({ onEntrar }) {
   const empresaElegida = lista?.find(x => x.id === sel) || null
   const nombreEmpresa = demo ? t('comun.miNegocio') : (empresaElegida?.nombre || '')
 
-  // Carga la lista de empresas (solo código y nombre; nada de datos del negocio).
   useEffect(() => {
     if (!USAR_SUPABASE) { setLista(null); setSel(DEMO); return }
     let vivo = true
@@ -77,14 +66,13 @@ export default function LoginPage({ onEntrar }) {
         const l = Array.isArray(f) ? f : []
         setLista(l)
         let previa = ''
-        try { previa = localStorage.getItem(LK_EMP) || '' } catch { /* noop */ }
+        try { previa = localStorage.getItem(LK_EMP) || '' } catch {  }
         setSel(l.find(x => x.id === previa)?.id || DEMO)
       })
       .catch(() => { if (vivo) setLista(null) })
     return () => { vivo = false }
   }, [])
 
-  // Cuenta regresiva del bloqueo por intentos fallidos (clave = empresa + usuario).
   const claveBloq = useMemo(() => `${sel}|${usuario.trim().toLowerCase()}`, [sel, usuario])
   useEffect(() => {
     const tick = () => {
@@ -96,7 +84,6 @@ export default function LoginPage({ onEntrar }) {
     return () => clearInterval(id)
   }, [claveBloq])
 
-  // Devuelve cuántos intentos quedan (0 = recién bloqueado).
   const registrarFallo = () => {
     const o = leerBloq()
     const n = (o[claveBloq]?.n || 0) + 1
@@ -127,7 +114,7 @@ export default function LoginPage({ onEntrar }) {
     if (!emp) { setError(t('login.faltaEmpresa')); return }
     setBusy(true)
     try {
-      try { localStorage.setItem(LK_EMP, emp.id) } catch { /* noop */ }
+      try { localStorage.setItem(LK_EMP, emp.id) } catch {  }
       const { data, error: errSign } = await sb.auth.signInWithPassword({ email: usuario.trim(), password: clave })
       if (errSign) {
         if (errSign.code === 'invalid_credentials' || /invalid login/i.test(errSign.message || '')) { setError(mensajeFallo(registrarFallo())); return }
@@ -137,12 +124,10 @@ export default function LoginPage({ onEntrar }) {
       await trasLogin(data.user, emp)
     } catch (err) {
       setError(mensajeError(err))
-      try { await sb.auth.signOut() } catch { /* noop */ }
+      try { await sb.auth.signOut() } catch {  }
     } finally { setBusy(false) }
   }
 
-  // Tras CUALQUIER login de Supabase se resuelven las membresías. Con empresa elegida, el
-  // usuario debe pertenecer a ELLA (el super de plataforma entra sin membresía).
   const trasLogin = async (user, elegida) => {
     setUserRef(user)
     const { data: memb, error: errM } = await sb.from('membresias').select('empresa_id, rol').eq('user_id', user.id)
@@ -161,9 +146,8 @@ export default function LoginPage({ onEntrar }) {
       const superUsuario = await esSuper().catch(() => false)
       if (!superUsuario) throw new Error(t('login.noPerteneceEmpresa'))
       await listo(null, 'super', user)
-      // El super eligió una empresa en la lista: entra directo (sin pasar por el botón «Entrar»
-      // del panel). Si algo falla se queda en el panel Super y desde ahí puede reintentar.
-      try { await entrarEnEmpresa({ id: elegida.id, nombre: elegida.nombre }) } catch { /* se queda en el panel */ }
+
+      try { await entrarEnEmpresa({ id: elegida.id, nombre: elegida.nombre }) } catch {  }
       return
     }
     if (!filas.length) {
@@ -202,12 +186,10 @@ export default function LoginPage({ onEntrar }) {
     } catch (err) {
       const msg = mensajeError(err)
       setError(msg.includes('alta_codigo_tomado') ? t('alta.codigoTomado') : msg)
-      try { await sb.auth.signOut() } catch { /* noop */ }
+      try { await sb.auth.signOut() } catch {  }
     } finally { setBusy(false) }
   }
 
-  // listo(): cierra el login. `es_super` solo decide si App pinta el módulo Super; el permiso
-  // real lo comprueba la base en cada RPC.
   const listo = async (emp, rol, user) => {
     fijarEmpresa(emp?.id ?? null)
     const superUsuario = await esSuper().catch(() => false)
@@ -234,7 +216,7 @@ export default function LoginPage({ onEntrar }) {
           <div className="lg-mark"><BrandMark size={72} /></div>
           <div className="lg-info">
             <h1>POS Control</h1>
-            <div className="lg-tools"><ThemeSelect /><SelectorIdioma /><ShareAppButton /></div>
+            <div className="lg-tools"><ThemeSelect /><LanguageSelect /><ShareAppButton /></div>
           </div>
         </div>
 

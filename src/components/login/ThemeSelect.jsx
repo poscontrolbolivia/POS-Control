@@ -1,4 +1,4 @@
-import { useTema } from '../../services/tema.js'
+import { useTema } from '../../services/theme.js'
 import { useIdioma } from '../../i18n/index.jsx'
 
 export default function ThemeSelect() {

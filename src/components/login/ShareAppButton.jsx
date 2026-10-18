@@ -11,16 +11,15 @@ const CheckIcon = (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
 )
 
-// Comparte el enlace de la app: panel nativo (celular) o copia al portapapeles (PC).
 export default function ShareAppButton({ marca = 'POS Control' }) {
   const { t } = useIdioma()
-  const [estado, setEstado] = useState('idle') // idle | copiado | error
+  const [estado, setEstado] = useState('idle')
   const url = location.origin
   const avisar = e => { setEstado(e); setTimeout(() => setEstado('idle'), 2200) }
 
   const compartir = async () => {
     if (navigator.share) {
-      try { await navigator.share({ title: marca, text: t('login.textoCompartir', { marca }), url }) } catch { /* canceló */ }
+      try { await navigator.share({ title: marca, text: t('login.textoCompartir', { marca }), url }) } catch {  }
       return
     }
     try { await navigator.clipboard.writeText(url); avisar('copiado') } catch { avisar('error') }

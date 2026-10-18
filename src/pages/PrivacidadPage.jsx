@@ -1,19 +1,17 @@
 import { Link } from 'react-router-dom'
 import { useIdioma } from '../i18n/index.jsx'
-import SelectorIdioma from '../i18n/SelectorIdioma.jsx'
+import LanguageSelect from '../components/login/LanguageSelect.jsx'
 import BrandMark from '../components/login/BrandMark.jsx'
 import LegalBackButton from '../components/LegalBackButton.jsx'
 import './LegalPage.css'
 
-// Política de privacidad (ruta /privacidad). Escrita en positivo: lo primero que lee un
-// negocio es que aquí NO se guardan datos de sus comensales, solo la operación.
 export default function PrivacidadPage() {
   const { t } = useIdioma()
   return (
     <div className="legal-wrap">
       <div className="legal-cab">
         <LegalBackButton />
-        <SelectorIdioma />
+        <LanguageSelect />
       </div>
       <div className="legal-card">
         <div className="legal-marca">

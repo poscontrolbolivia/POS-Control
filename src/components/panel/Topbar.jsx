@@ -3,19 +3,15 @@ import { useState } from 'react'
 import BrandMark from '../login/BrandMark.jsx'
 import '../../styles/auth.css'
 
-// Barra superior: empresa, usuario/rol, selector de módulo, selector de idioma y salida.
-// Props: { sesion:{usuario,rol,nombre,empresa,es_super}, modulo, modulos, onModulo(id), onSalir, aviso }
-// modulos: ['Salón', ...] o [{id, nombre}, ...] — las etiquetas ya llegan traducidas de App.jsx.
 export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir, aviso }) {
   const { t, tOr } = useIdioma()
-  // Menú plegable (☰): en escritorio arranca abierto; en móvil cerrado para dejar espacio.
+
   const [abierto, setAbierto] = useState(() => typeof window === 'undefined' || window.innerWidth > 850)
   const elegir = id => { onModulo?.(id); if (typeof window !== 'undefined' && window.innerWidth <= 850) setAbierto(false) }
   const items = modulos.map(m => (typeof m === 'string' ? { id: m, nombre: m } : m))
   const rol = (sesion?.rol || '').toLowerCase()
   const conectado = Boolean(sesion?.supabase)
-  // El rol se guarda en la base en español ('admin', 'cajero', 'mesero'); se traduce solo
-  // la etiqueta. Si llega un rol nuevo (p. ej. el de super administración) se muestra tal cual.
+
   const rolVisto = rol ? tOr('rol.' + rol, rol) : t('topbar.invitado')
 
   return (

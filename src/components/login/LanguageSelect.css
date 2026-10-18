@@ -1,0 +1,2 @@
+.sel-idioma{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--mut)}
+.sel-idioma select{min-height:32px;padding:2px 8px;font-size:16px;border-radius:8px;width:auto}

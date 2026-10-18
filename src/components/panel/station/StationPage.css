@@ -1,0 +1,15 @@
+.est-aviso{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.est-nombre{font-size:1.05rem}
+.est-fallo{background:#fde3e0;color:#c0392b}
+.est-cola{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.est-job{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+.est-job.error{border-color:#c0392b}
+.est-hora{font-variant-numeric:tabular-nums;opacity:.7;font-size:.85rem}
+.est-titulo{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}
+.est-error{color:#c0392b;font-size:.85rem;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.est-guia ol,.est-guia p{margin:6px 0}
+.est-guia h4{margin:12px 0 4px}
+.est-code{display:block;padding:8px 10px;border-radius:8px;background:var(--libre);font-size:.8rem;overflow-x:auto;white-space:pre}
+
+.imp-salida{display:flex;flex-direction:column;gap:8px}
+.imp-url input{min-width:240px}

@@ -1,6 +1,3 @@
-/* Estilos del login y de la barra superior (pages/LoginPage + components/panel/Topbar).
-   Usa variables de styles.css. */
-
 .auth-pantalla{
   min-height:100vh;display:flex;align-items:center;justify-content:center;
   background:var(--bg);padding:16px;
@@ -13,8 +10,7 @@
 .auth-marca{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:4px}
 .auth-marca h1{margin:0;font-size:1.4rem;color:var(--ac);letter-spacing:.3px}
 .auth-logo{font-size:1.8rem}
-/* La marca es el ícono de la PWA (img): redondeado para que no parezca un parche cuadrado
-   sobre la tarjeta, y sin deformarse aunque el contenedor sea rectangular. */
+
 .brand-mark{display:inline-block;vertical-align:middle;border-radius:22%;object-fit:cover;flex:none}
 .auth-legal{margin:0;text-align:center;font-size:.76rem;color:var(--mut)}
 .auth-legal a{color:var(--mut);text-decoration:underline}
@@ -42,23 +38,20 @@
 }
 .auth-demo code{background:var(--libre);border-radius:6px;padding:2px 6px}
 
-/* Pie de la pantalla 1: "Crear mi negocio" y "Probar el demo" van lado a lado. */
 .auth-pie{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
 .auth-ayuda{margin:0;font-size:.78rem;color:var(--mut);text-align:left}
-/* Un <a> no hereda los estilos de botón: styles.css limita .primary/.big a <button>,
-   así que el enlace de WhatsApp reproduce aquí el aspecto del botón primario. */
+
 a.auth-btn{
   display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;
   background:var(--ac);border:1px solid var(--ac);color:#fff;
 }
-/* Opciones de la pantalla de recuperación: cada rol con su propio bloque. */
+
 .auth-bloque{
   display:flex;flex-direction:column;gap:8px;padding:12px;
   background:var(--libre);border:1px solid var(--line);border-radius:12px;
 }
 .auth-bloque-titulo{margin:0;font-weight:700;font-size:.92rem}
 
-/* Topbar */
 .topbar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   padding:8px 14px;background:var(--card);border-bottom:1px solid var(--line);
