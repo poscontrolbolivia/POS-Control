@@ -1,6 +1,6 @@
-// Ticket / comanda imprimible (IA-2b). Exportaciones nombradas: imprimirTicket, imprimirCuenta, precalcularCambio.
-// imprimirTicket → diálogo de impresión vía iframe oculto (opción manual).
-// imprimirCuenta → modo silencioso por Web Serial + ESC/POS (impresora térmica USB) con fallback al diálogo.
+// Ticket / comanda imprimible. Exportaciones nombradas: imprimirCuenta, imprimirComandas, precalcularCambio.
+// Todo sale por services/despacho.js: impresora de ESTE equipo (USB o impresora de Windows vía agente)
+// o la cola de la estación (teléfonos). NUNCA se abre el cuadro de impresión del navegador.
 //
 // IDIOMA: estas funciones NO son componentes de React, así que no pueden usar el hook
 // useIdioma(); leen el idioma activo con tGlobal() del carril IDIOMAS. El comprobante que
@@ -8,13 +8,11 @@
 // ancho de línea (32 columnas en 58 mm, 48 en 80 mm), que siguen calculados igual.
 import { MONEDA } from '../../config'
 import { totalCuenta, totalFinal, pagadoCuenta } from '../../services/store.jsx'
-import { imprimirSilencioso, estadoImpresora } from '../../services/impresora.js'
 import { gruposDe, grupoTickets, repartirPorGrupo, areasDelItem } from '../../services/impresion.js'
-import { modoImpresion, encolarImpresion } from '../../services/colaImpresion.js'
-import { tGlobal, existeClave, idiomaActivo } from '../../i18n/index.jsx'
+import { despachar } from '../../services/despacho.js'
+import { tGlobal, existeClave } from '../../i18n/index.jsx'
 
 const round2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100
-const esc = x => String(x ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const cap = x => x ? x.charAt(0).toUpperCase() + x.slice(1) : ''
 
 // Cambio a partir de líneas de pago crudas (monto = recibido). El cambio solo sale del efectivo;
@@ -44,114 +42,8 @@ const prefijoAreas = (i, config) => {
   return areas.length > 1 ? `[${areas.map(a => nombreArea(a, config)).join('+')}] ` : ''
 }
 
-// cuenta: {tipo, numero, mesaIds, items, pagos, descuento, propina, cerradaEn...}
-// comanda=true → solo ítems pendientes/enviados con sus notas, sin totales ni pagos (para cocina).
-export function imprimirTicket({ cuenta, config = {}, titulo, ancho = 58, comanda = false } = {}) {
-  if (!cuenta || typeof document === 'undefined') return
-  const moneda = config?.moneda || MONEDA
-  const m = n => `${moneda} ${round2(n).toFixed(2)}`
-  const chars = ancho >= 70 ? 42 : 32
-  const sep = () => `<div class="sep">${'-'.repeat(chars)}</div>`
-  const fila = (l, r, cls = '') => `<div class="f${cls}"><span>${esc(l)}</span><span>${esc(r)}</span></div>`
+// ---------- contenido en líneas de texto plano (térmica ESC/POS y estación) ----------
 
-  const ts = cuenta.cerradaEn || cuenta.abiertaEn || Date.now()
-  const fecha = new Date(ts).toLocaleString()
-
-  // Dónde: "Turno #n" (venta directa) o mesa(s)
-  const destino = cuenta.tipo === 'directa'
-    ? fila(tGlobal('ticket.turno'), '#' + (cuenta.numero ?? '—'))
-    : fila(tGlobal('ticket.mesa'), cuenta.mesaTexto || (cuenta.mesaIds || []).join(', ') || '—')
-
-  const itemsVivos = (cuenta.items || []).filter(i => i.estado !== 'anulado')
-  const itemsCocina = itemsVivos.filter(i => i.estado === 'pendiente' || i.estado === 'enviado')
-
-  let cuerpo = ''
-
-  if (comanda) {
-    // Comanda de cocina/barra: cantidad, nombre (con prefijo de área si va a varios grupos) y notas.
-    cuerpo += itemsCocina.length
-      ? itemsCocina.map(i => `<div class="f"><span><b>${esc(prefijoAreas(i, config))}${i.qty}x ${esc(i.nombre)}</b></span></div>`
-        + (i.nota ? `<div class="notax">** ${esc(i.nota)} **</div>` : '')).join('')
-      : `<div class="c">${tGlobal('ticket.sinPedidos')}</div>`
-    cuerpo += `${sep()}` + fila(tGlobal('ticket.emitido'), fecha)
-  } else {
-    const anulados = (cuenta.items || []).filter(i => i.estado === 'anulado')
-    const lineas = itemsVivos.map(i => fila(`${i.qty} x ${i.nombre}`, m(i.precio * i.qty))
-      + (i.nota ? `<div class="nota">· ${esc(i.nota)}</div>` : '')).join('')
-    const lineaAnuladas = anulados.map(i => fila(`${i.qty} x ${i.nombre} ${tGlobal('ticket.anulado')}`, m(0), ' tachado')
-      + (i.motivo ? `<div class="nota">· ${tGlobal('ticket.motivo')} ${esc(i.motivo)}</div>` : '')).join('')
-    const sub = totalCuenta(cuenta)
-    const desc = round2(cuenta.descuento || 0)
-    const prop = round2(cuenta.propina || 0)
-    const total = totalFinal(cuenta)
-
-    cuerpo += (lineas + lineaAnuladas) || `<div class="c">${tGlobal('ticket.sinItems')}</div>`
-    cuerpo += `${sep()}`
-    if (desc || prop) {
-      cuerpo += fila(tGlobal('ticket.subtotal'), m(sub))
-      if (desc) cuerpo += fila(tGlobal('ticket.descuento'), '-' + m(desc))
-      if (prop) cuerpo += fila(tGlobal('ticket.propina'), m(prop))
-    }
-    cuerpo += `<div class="f total"><span>${tGlobal('ticket.total')}</span><span>${m(total)}</span></div>`
-
-    const pagos = cuenta.pagos || []
-    if (pagos.length) {
-      const porMetodo = {}
-      pagos.forEach(p => { const k = p.metodo || 'otro'; porMetodo[k] = round2((porMetodo[k] || 0) + (Number(p.monto) || 0)) })
-      cuerpo += `${sep()}`
-      Object.entries(porMetodo).forEach(([met, monto]) => { cuerpo += fila(nombreMetodo(met), m(monto)) })
-      const cambios = round2(pagos.reduce((acc, p) => acc + (Number(p.cambio) || 0), 0))
-      const cambio = cambios || Math.max(0, round2(pagadoCuenta(cuenta) - total))
-      if (cambio > 0.009) cuerpo += fila(tGlobal('ticket.cambio'), m(cambio))
-    }
-    cuerpo += `<div class="c gracias">${esc(tGlobal('ticket.gracias'))}</div>`
-  }
-
-  const cabecera = `<h1>${esc(titulo || config?.nombre || 'POS Control')}</h1>`
-    + `<div class="c">${esc(fecha)}</div>` + destino
-    + (cuenta.abiertaPor ? fila(tGlobal('ticket.atendio'), cuenta.abiertaPor) : '')
-    + `${sep()}`
-
-  const html = `<!doctype html><html lang="${idiomaActivo()}"><head><meta charset="utf-8"><title>${esc(titulo || config?.nombre || tGlobal('ticket.titulo'))}</title>
-<style>
-@page{size:${ancho}mm auto;margin:0}
-*{box-sizing:border-box}
-body{margin:0;width:${ancho}mm;font-family:'Courier New',Courier,monospace;font-size:${ancho >= 70 ? '13px' : '11px'};line-height:1.35;color:#000;background:#fff;padding:2mm}
-h1{font-size:${ancho >= 70 ? '16px' : '14px'};text-align:center;margin:0 0 2mm;text-transform:uppercase}
-.c{text-align:center;margin:1px 0}
-.f{display:flex;justify-content:space-between;gap:6px}
-.f span:last-child{white-space:nowrap}
-.sep{text-align:center;overflow:hidden;margin:1.5mm 0;letter-spacing:0}
-.nota{font-style:italic;padding-left:8px}
-.notax{font-weight:700;padding-left:8px}
-.tachado{opacity:.6;text-decoration:line-through}
-.total{font-size:${ancho >= 70 ? '16px' : '14px'};font-weight:700;margin:2px 0}
-.gracias{margin-top:3mm;font-weight:700}
-</style></head><body>${cabecera}${cuerpo}</body></html>`
-
-  const iframe = document.createElement('iframe')
-  iframe.setAttribute('aria-hidden', 'true')
-  iframe.setAttribute('title', comanda ? tGlobal('ticket.comanda') : tGlobal('ticket.titulo'))
-  Object.assign(iframe.style, { position: 'fixed', top: '0', left: '-10000px', width: '0', height: '0', border: '0', visibility: 'hidden' })
-  document.body.appendChild(iframe)
-  const win = iframe.contentWindow
-  win.document.open()
-  win.document.write(html)
-  win.document.close()
-
-  let retirado = false
-  const limpiar = () => { if (!retirado) { retirado = true; setTimeout(() => iframe.remove(), 400) } }
-  win.onafterprint = limpiar
-  setTimeout(() => {
-    try { win.focus(); win.print() } catch (e) { console.error('No se pudo imprimir el ticket:', e) }
-    limpiar()
-  }, 150)
-  setTimeout(limpiar, 60000) // red de seguridad si el navegador no dispara onafterprint
-}
-
-// ---------- modo silencioso (impresora térmica ESC/POS) ----------
-
-// Mismos contenidos que el ticket HTML, pero en líneas de texto plano para la térmica.
 // ancho = columnas (32 para 58 mm, 48 para 80 mm) → se mantiene igual que antes.
 function lineasPlanas({ cuenta, config = {}, titulo, comanda = false, ancho = 32 }) {
   const moneda = config?.moneda || MONEDA
@@ -224,46 +116,15 @@ const trabajoDe = ({ cuenta, config, titulo, comanda, grupoId, cols }) => ({
   payload: { lineas: lineasPlanas({ cuenta, config, titulo, comanda, ancho: cols }), ancho: cols, corte: true, beep: Boolean(config?.impresoraBeep) },
 })
 
-// Imprime UNA cuenta/ticket/comanda. Reglas:
-//  · COMANDA (comanda=true): va SIEMPRE en silencio al puerto del grupo indicado (`grupo`), nunca abre
-//    el diálogo del navegador ni pide elegir impresora. Sin impresora conectada → 'sin-impresora'.
-//  · TICKET / PRE-CUENTA: si config.impresion === 'silenciosa' y el grupo de tickets (Caja) tiene
-//    impresora → silencioso; si no → diálogo del navegador (pedido explícito del usuario).
-//  · fallo de escritura → 'error' (el servicio deja el error visible en estadoImpresora(grupo)).
-export async function imprimirCuenta({ cuenta, config = {}, titulo, comanda = false, grupo, ancho, fallbackDialog = true } = {}) {
+// Imprime UNA cuenta/ticket/comanda/arqueo por el camino del despacho (ver services/despacho.js).
+// Devuelve 'silencioso' (salió aquí) | 'encolado' (la estación lo imprimirá) | 'sin-impresora' | 'error'.
+export async function imprimirCuenta({ cuenta, config = {}, titulo, comanda = false, grupo, ancho } = {}) {
   if (!cuenta) return null
-  const g = comanda ? gruposDe(config).find(x => x.id === grupo) : grupoTickets(config)
+  const g = comanda ? gruposDe(config).find(x => x.id === grupo) : (grupoTickets(config) || gruposDe(config)[0])
   const grupoId = g?.id || grupo || 'general'
   const cols = Number(ancho) || Number(g?.ancho) || Number(config?.impresoraAncho) || 32
-  const mm = cols >= 42 ? 80 : 58 // para el diálogo de respaldo (imprimirTicket recibe milímetros)
-  const silenciosa = comanda || config?.impresion === 'silenciosa' || config?.imprimacion === 'silenciosa'
-  // ESTACIÓN DE IMPRESIÓN: este equipo no imprime; deja el trabajo en la cola y la PC del local lo saca.
-  if (silenciosa && modoImpresion(config) === 'estacion') {
-    try {
-      await encolarImpresion([trabajoDe({ cuenta, config, titulo, comanda, grupoId, cols })])
-      return 'encolado'
-    } catch { return 'error' }
-  }
-  if (silenciosa) {
-    if (!estadoImpresora(grupoId).conectada) {
-      if (!comanda && fallbackDialog) imprimirTicket({ cuenta, config, titulo, comanda, ancho: mm })
-      return 'sin-impresora'
-    }
-    try {
-      await imprimirSilencioso({
-        grupo: grupoId,
-        lineas: lineasPlanas({ cuenta, config, titulo, comanda, ancho: cols }),
-        ancho: cols,
-        corte: true,
-        beep: Boolean(config?.impresoraBeep),
-      })
-      return 'silencioso'
-    } catch {
-      return 'error'
-    }
-  }
-  imprimirTicket({ cuenta, config, titulo, comanda, ancho: mm })
-  return 'manual'
+  const [resultado] = await despachar([trabajoDe({ cuenta, config, titulo, comanda, grupoId, cols })], config)
+  return resultado
 }
 
 // Envía la comanda REPARTIDA por grupo (bebida → Barra, comida → Cocina…) sin preguntar nada.
@@ -277,23 +138,9 @@ export async function imprimirComandas({ cuenta, items, productos = [], config =
     return a && !i.areas ? { ...i, areas: a } : i
   })
   const reparto = repartirPorGrupo(itemsAreas, productos, config)
-  const salida = []
-  if (modoImpresion(config) === 'estacion') {
-    // Un solo envío con todas las partes (Cocina, Barra…): o llegan todas a la cola o ninguna.
-    const trabajos = reparto.map(({ grupo, items: its }) => trabajoDe({
-      cuenta: { ...cuenta, items: its }, config, titulo: `${titulo} · ${grupo.nombre}`, comanda: true,
-      grupoId: grupo.id, cols: Number(grupo.ancho) || Number(config?.impresoraAncho) || 32,
-    }))
-    let resultado = 'encolado'
-    try { if (trabajos.length) await encolarImpresion(trabajos) } catch { resultado = 'error' }
-    return reparto.map(({ grupo, items: its }) => ({ grupo, resultado, n: its.length }))
-  }
-  for (const { grupo, items: its } of reparto) {
-    const resultado = await imprimirCuenta({
-      cuenta: { ...cuenta, items: its }, config, comanda: true, grupo: grupo.id,
-      titulo: `${titulo} · ${grupo.nombre}`, fallbackDialog: false,
-    })
-    salida.push({ grupo, resultado, n: its.length })
-  }
-  return salida
+  const resultados = await despachar(reparto.map(({ grupo, items: its }) => trabajoDe({
+    cuenta: { ...cuenta, items: its }, config, titulo: `${titulo} · ${grupo.nombre}`, comanda: true,
+    grupoId: grupo.id, cols: Number(grupo.ancho) || Number(config?.impresoraAncho) || 32,
+  })), config)
+  return reparto.map(({ grupo, items: its }, i) => ({ grupo, resultado: resultados[i], n: its.length }))
 }

@@ -32,7 +32,12 @@ export function grupoDeSeccion(config, seccionId) {
  * Un combo puede ir a VARIOS grupos a la vez; en modo demo los productos viejos no traen
  * `areas` y caen al reparto clásico por sección.
  */
-export const AREAS_PRODUCTO = ['cocina', 'barra']
+// v0.18: las áreas ya no son fijas. Son los grupos de comanda de la empresa (Configuración → Impresoras):
+// crear «Heladería» ahí la vuelve casilla del producto, impresora propia y vista en la pantalla de cocina.
+export const areasDeComanda = config => gruposDeComanda(config).map(g => g.id)
+export const nombreDeArea = (config, id, respaldo) => gruposDeComanda(config).find(g => g.id === id)?.nombre || respaldo || id
+/** Id reservado: vista de cocina para ítems cuya área ya no existe (área borrada). */
+export const SIN_AREA = '_sin_area'
 
 /** Áreas efectivas de un ítem: snapshot del ítem → áreas del producto → null (fallback por sección). */
 export function areasDelItem(item, productos = []) {

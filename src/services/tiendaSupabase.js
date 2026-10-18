@@ -19,12 +19,14 @@ const mapProducto = p => ({
   id: p.id, nombre: p.nombre, seccionId: p.seccion_id, precio: N(p.precio), activo: p.activo, imagen_path: p.imagen_path ?? null,
   // Áreas de impresión (text[] 'cocina'|'barra'): si la fila vieja no trae, default de la columna.
   areas: Array.isArray(p.areas) && p.areas.length ? p.areas : ['cocina'],
+  opciones: Array.isArray(p.opciones) ? p.opciones : [], // notas rápidas («término medio»…)
 })
 
 const mapItem = i => ({
   id: i.id, productoId: i.producto_id, nombre: i.nombre_snapshot, precio: N(i.precio_snapshot),
   qty: N(i.qty), estado: i.estado, nota: i.nota || '', motivo: i.anulacion_motivo ?? i.motivo_anulacion,
   areas: Array.isArray(i.areas) && i.areas.length ? i.areas : undefined, // snapshot cocina/barra
+  areasListas: Array.isArray(i.areas_listas) ? i.areas_listas : [], // áreas que ya lo sacaron (parcial en combos)
   enviadoEn: ts(i.enviado_en), creadaEn: ts(i.creada_en),
   // Flujo de salida/anulación (estados 'listo' | 'anulacion'): el reducer optimista ignora
   // estas claves y la re-sincronización las restaura desde la base, así sobreviven el round-trip.
@@ -111,13 +113,14 @@ function armarCuentas(cuentas, items, pagos, cms, nombres) {
     numero: c.numero ?? undefined,
     mesaIds: (mesasBy[c.id] || []).map(cm => cm.mesa_id),
     estado: c.estado,
+    etiqueta: c.etiqueta || '', // subcuenta de mesa dividida: 'a', 'b'…
     comensales: N(c.comensales),
     propina: N(c.propina),
     descuento: N(c.descuento),
     nota: c.nota ?? undefined,
-    abiertaPor: nombres[c.abierta_por] || c.abierta_por,
+    abiertaPor: nombres[c.abierta_por] || undefined, // nunca el UUID: si el perfil no se ve, no se muestra nada
     abiertaEn: ts(c.abierta_en),
-    cerradaPor: c.cerrada_por ? (nombres[c.cerrada_por] || c.cerrada_por) : undefined,
+    cerradaPor: c.cerrada_por ? (nombres[c.cerrada_por] || undefined) : undefined,
     cerradaEn: ts(c.cerrada_en),
     items: (itemsBy[c.id] || []).map(mapItem),
     pagos: (pagosBy[c.id] || []).map(mapPago),
@@ -247,7 +250,7 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     case 'item+': {
       // El snapshot de `areas` (cocina/barra) en cuenta_items lo hace la RPC agregar_items
       // leyendo productos.areas; el adaptador solo lo mapea de vuelta (mapItem).
-      const itemsDb = await rpc('agregar_items', { p_cuenta_id: rid(mapa, a.cuentaId), p_items: [{ producto_id: a.p.id, qty: 1 }] })
+      const itemsDb = await rpc('agregar_items', { p_cuenta_id: rid(mapa, a.cuentaId), p_items: [{ producto_id: a.p.id, qty: 1, ...(a.nota ? { nota: a.nota } : {}) }] })
       const c = cuentaRecien(estado.cuentas, x => x.id === a.cuentaId || x.id === rid(mapa, a.cuentaId))
       if (c) remapItems(mapa, c.items, itemsDb)
       return refrescarNegocio(E)
@@ -293,6 +296,12 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     case 'unir':
       await rpc('unir_mesas', { p_cuenta_id: rid(mapa, a.cuentaId), p_mesa_ids: a.mesaIds })
       return refrescarNegocio(E)
+    case 'dividir': {
+      const dbId = await rpc('dividir_cuenta', { p_cuenta_id: rid(mapa, a.cuentaId) })
+      const locId = (a._nuevos?.cuentas || [])[0]
+      if (locId && locId !== dbId) mapa.set(locId, dbId)
+      return refrescarNegocio(E)
+    }
     case 'separar': {
       const dbId = await rpc('separar_mesa', { p_cuenta_id: rid(mapa, a.cuentaId), p_mesa_id: a.mesaId })
       const locId = (a._nuevos?.cuentas || [])[0]
@@ -397,12 +406,12 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     }
     case 'producto+': {
       const locId = (a._nuevos?.productos || [])[0] || E.productos[E.productos.length - 1]?.id
-      const { error } = await sb.from('productos').insert({ id: locId, empresa_id: empresaId, nombre: a.producto.nombre, seccion_id: a.producto.seccionId ?? null, precio: a.producto.precio, activo: true, imagen_path: a.producto.imagen_path ?? null, areas: Array.isArray(a.producto.areas) && a.producto.areas.length ? a.producto.areas : ['cocina'] })
+      const { error } = await sb.from('productos').insert({ id: locId, empresa_id: empresaId, nombre: a.producto.nombre, seccion_id: a.producto.seccionId ?? null, precio: a.producto.precio, activo: true, imagen_path: a.producto.imagen_path ?? null, areas: Array.isArray(a.producto.areas) && a.producto.areas.length ? a.producto.areas : ['cocina'], opciones: Array.isArray(a.producto.opciones) ? a.producto.opciones : [] })
       if (error) throw new Error(error.message)
       return E
     }
     case 'producto~': {
-      const row = { nombre: a.cambios.nombre, precio: a.cambios.precio, activo: a.cambios.activo, seccion_id: a.cambios.seccionId, imagen_path: a.cambios.imagen_path, areas: a.cambios.areas }
+      const row = { nombre: a.cambios.nombre, precio: a.cambios.precio, activo: a.cambios.activo, seccion_id: a.cambios.seccionId, imagen_path: a.cambios.imagen_path, areas: a.cambios.areas, opciones: a.cambios.opciones }
       Object.keys(row).forEach(k => { if (row[k] === undefined) delete row[k] })
       const { error } = await sb.from('productos').update(row).eq('id', rid(mapa, a.id))
       if (error) throw new Error(error.message)
@@ -420,6 +429,11 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     }
 
     // ── config: update de empresas (RLS admin) ──
+    // Borrar un área (grupo de comanda): la quita de los productos; los ítems ya enviados quedan «Sin área».
+    case 'area-': {
+      await rpc('retirar_area', { p_area: a.id, p_reemplazo: a.reemplazo || 'cocina' })
+      return refrescarNegocio(E)
+    }
     case 'cfg~': {
       const { nombre, moneda, ivaPct, propinaPct, ...resto } = a.cambios || {}
       const row = {}

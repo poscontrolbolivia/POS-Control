@@ -6,10 +6,11 @@ import { useStore } from '../../services/store.jsx'
 import { useIdioma } from '../../i18n/index.jsx'
 import { gruposDe } from '../../services/impresion.js'
 import { modoImpresion, gestionarImpresion } from '../../services/colaImpresion.js'
-import { soporteSerial, conectarImpresora, estadoImpresora, reutilizarImpresoras } from '../../services/impresora.js'
+import { reutilizarImpresoras } from '../../services/impresora.js'
+import SalidaImpresora from '../impresion/SalidaImpresora.jsx'
 import {
-  estadoEstacion, suscribirEstacion, iniciarEstacion, detenerEstacion, salidaDe, fijarSalida,
-  grupoListo, imprimirTrabajo, refrescarLista, dispararCiclo,
+  estadoEstacion, suscribirEstacion, iniciarEstacion, detenerEstacion,
+  grupoListo, refrescarLista, dispararCiclo,
 } from '../../services/estacion.js'
 import '../admin/admin.css'
 import './estacion.css'
@@ -23,7 +24,6 @@ export default function EstacionPage({ rol, sesion }) {
   const grupos = gruposDe(cfg)
   const [, refrescar] = useReducer(x => x + 1, 0)
   const [msgs, setMsgs] = useState({})
-  const [ocupado, setOcupado] = useState('')
   const [guia, setGuia] = useState(false)
   const st = estadoEstacion()
   const permitido = rol === 'admin' || rol === 'cajero'
@@ -47,34 +47,6 @@ export default function EstacionPage({ rol, sesion }) {
 
   const pendientesDe = id => (st.jobs || []).filter(j => j.grupo === id && (j.estado === 'pendiente' || j.estado === 'imprimiendo')).length
   const fallosDe = id => (st.jobs || []).filter(j => j.grupo === id && j.estado === 'error').length
-
-  const conectar = async g => {
-    setOcupado(g.id)
-    try { await conectarImpresora({ grupo: g.id, baud: g.baud }); nota(g.id, t('impresoras.conectadaOk'), true); dispararCiclo() }
-    catch (e) {
-      const cancelada = String(e?.name || '') === 'NotFoundError'
-      nota(g.id, cancelada ? t('impresoras.cancelada') : `${t('impresoras.noConecta')} ${String(e?.message || e)}`, false)
-    } finally { setOcupado(''); refrescar() }
-  }
-
-  const probar = async g => {
-    setOcupado(g.id)
-    try {
-      await imprimirTrabajo(g.id, {
-        ancho: Number(g.ancho) || 32,
-        lineas: [
-          { texto: 'POS CONTROL', negrita: true, centrado: true, tam: 2 },
-          { texto: g.nombre.toUpperCase(), negrita: true, centrado: true },
-          { texto: '', guion: true },
-          { texto: `${t('impresoras.pruebaLinea')}\tOK`, guion: true },
-          { texto: cfg.nombre || t('comun.miNegocio'), centrado: true },
-          { texto: new Date().toLocaleString(), centrado: true },
-        ],
-      })
-      nota(g.id, t('impresoras.pruebaOk'), true)
-    } catch (e) { nota(g.id, String(e?.message || e), false) }
-    finally { setOcupado(''); refrescar() }
-  }
 
   const accion = async (a, id) => {
     try { await gestionarImpresion(a, id); await refrescarLista(); if (a === 'reintentar') dispararCiclo() }
@@ -122,12 +94,9 @@ export default function EstacionPage({ rol, sesion }) {
 
       <div className="imp-grupos">
         {grupos.map(g => {
-          const est = estadoImpresora(g.id)
-          const salida = salidaDe(g.id)
           const listo = grupoListo(g.id)
           const pend = pendientesDe(g.id)
           const fallos = fallosDe(g.id)
-          const m = msgs[g.id]
           return (
             <section key={g.id} className={'imp-grupo' + (g.tickets ? ' tickets' : '')}>
               <header className="imp-grupo-cab">
@@ -137,25 +106,7 @@ export default function EstacionPage({ rol, sesion }) {
                 {pend > 0 && <span className="adm-chip">{t('estacion.enCola', { n: pend })}</span>}
                 {fallos > 0 && <span className="adm-chip est-fallo">{t('estacion.conFallo', { n: fallos })}</span>}
               </header>
-              <div className="imp-opciones">
-                <label className="adm-campo"><span>{t('estacion.salidaLabel')}</span>
-                  <select value={salida} onChange={e => { fijarSalida(g.id, e.target.value); dispararCiclo() }}>
-                    <option value="serial">{t('estacion.salidaSerial')}</option>
-                    <option value="windows">{t('estacion.salidaWindows')}</option>
-                  </select>
-                </label>
-              </div>
-              <div className="adm-fila">
-                {salida === 'serial' && (
-                  <button type="button" className="primary" disabled={!soporteSerial() || ocupado === g.id} onClick={() => conectar(g)}>
-                    {est.conectada ? t('estacion.cambiarImpresora') : t('impresoras.conectar')}
-                  </button>
-                )}
-                <button type="button" className="success" disabled={!listo || ocupado === g.id} onClick={() => probar(g)}>{t('impresoras.probar')}</button>
-              </div>
-              {salida === 'serial' && !soporteSerial() && <div className="imp-err">⚠️ {t('estacion.noSerial')}</div>}
-              {salida === 'serial' && est.error && <div className="imp-err">❌ {est.error}</div>}
-              {m && <div className={'adm-msg' + (m.ok ? ' ok' : ' warn')}>{m.ok ? '✅ ' : '⚠️ '}{m.txt}</div>}
+              <SalidaImpresora g={g} cfg={cfg} onCambio={refrescar} />
             </section>
           )
         })}

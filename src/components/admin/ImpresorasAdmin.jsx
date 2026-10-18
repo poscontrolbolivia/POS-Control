@@ -1,5 +1,6 @@
 // Administración de impresoras (solo rol admin), por GRUPOS: Cocina, Barra, Caja…
-// Cada grupo tiene su propia impresora térmica (Web Serial + ESC/POS), ancho de papel y velocidad.
+// Cada grupo tiene su ancho de papel y su salida EN ESTA PC (térmica USB/serie, o una impresora de
+// Windows elegida por nombre vía el agente: ver components/impresion/SalidaImpresora.jsx).
 // Las secciones del menú se asignan a un grupo (aquí o al crear/editar la sección en Menú): al enviar
 // una comanda, cada parte sale directo a la impresora de su grupo, sin diálogos.
 // NO se traduce: los nombres técnicos (Web Serial, Chrome, Edge) ni los modelos (POS-580, Xprinter).
@@ -7,10 +8,8 @@
 import { useEffect, useReducer, useState } from 'react'
 import { useStore, nuevoId } from '../../services/store.jsx'
 import { useIdioma } from '../../i18n/index.jsx'
-import {
-  soporteSerial, conectarImpresora, reutilizarImpresoras, estadoImpresora,
-  suscribirImpresora, imprimirSilencioso, fijarBaud,
-} from '../../services/impresora.js'
+import { soporteSerial, reutilizarImpresoras, suscribirImpresora, fijarBaud } from '../../services/impresora.js'
+import SalidaImpresora from '../impresion/SalidaImpresora.jsx'
 import { gruposDe, gruposDeComanda, grupoDeSeccion, slugGrupo } from '../../services/impresion.js'
 import './admin.css'
 
@@ -21,8 +20,6 @@ export default function ImpresorasAdmin({ rol, sesion }) {
   const grupos = gruposDe(cfg)
   const [, refrescar] = useReducer(x => x + 1, 0)
   const [nuevo, setNuevo] = useState(null)       // nombre del grupo que se está creando
-  const [msgs, setMsgs] = useState({})            // grupoId → { txt, ok }
-  const [ocupadoId, setOcupadoId] = useState(null)
   const [conf, setConf] = useState(null)          // grupo con la confirmación de borrado abierta
   const soportado = soporteSerial()
 
@@ -43,49 +40,8 @@ export default function ImpresorasAdmin({ rol, sesion }) {
   const guardar = cambios => d({ t: 'cfg~', cambios })
   const guardarGrupos = lista => guardar({ gruposImpresion: lista })
   const cambiarGrupo = (id, cambios) => guardarGrupos(grupos.map(g => (g.id === id ? { ...g, ...cambios } : g)))
-  const nota = (id, txt, ok) => {
-    setMsgs(m => ({ ...m, [id]: { txt, ok } }))
-    setTimeout(() => setMsgs(m => { const n = { ...m }; delete n[id]; return n }), 6000)
-  }
-  const modoTickets = cfg.impresion === 'silenciosa' || cfg.imprimacion === 'silenciosa' ? 'silenciosa' : 'manual'
   const seccionesOrden = [...(s.secciones || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0))
   const usos = id => seccionesOrden.filter(sec => grupoDeSeccion(cfg, sec.id)?.id === id).length
-
-  const conectar = async g => {
-    setOcupadoId(g.id)
-    try {
-      await conectarImpresora({ grupo: g.id, baud: g.baud })
-      nota(g.id, t('impresoras.conectadaOk'), true)
-    } catch (e) {
-      const cancelada = String(e?.name || '') === 'NotFoundError' // el usuario cerró el selector sin elegir
-      nota(g.id, cancelada ? t('impresoras.cancelada') : `${t('impresoras.noConecta')} ${String(e?.message || e)}`, false)
-    } finally { setOcupadoId(null); refrescar() }
-  }
-
-  const probar = async g => {
-    setOcupadoId(g.id)
-    try {
-      await imprimirSilencioso({
-        grupo: g.id,
-        lineas: [
-          // 'POS CONTROL' es el nombre del producto: va tal cual en el papel.
-          { texto: 'POS CONTROL', negrita: true, centrado: true, tam: 2 },
-          { texto: g.nombre.toUpperCase(), negrita: true, centrado: true },
-          { texto: '', guion: true },
-          { texto: `${t('impresoras.pruebaLinea')}\tOK`, guion: true },
-          { texto: cfg.nombre || t('comun.miNegocio'), centrado: true },
-          { texto: (Number(g.ancho) || 32) >= 42 ? t('impresoras.ancho80') : t('impresoras.ancho58'), centrado: true },
-          { texto: new Date().toLocaleString(), centrado: true },
-        ],
-        ancho: Number(g.ancho) || 32,
-        corte: true,
-        beep: Boolean(cfg.impresoraBeep),
-      })
-      nota(g.id, t('impresoras.pruebaOk'), true)
-    } catch (e) {
-      nota(g.id, String(e?.message || e), false)
-    } finally { setOcupadoId(null); refrescar() }
-  }
 
   const crearGrupo = () => {
     const nombre = (nuevo || '').trim().slice(0, 40)
@@ -102,6 +58,8 @@ export default function ImpresorasAdmin({ rol, sesion }) {
     const mapa = { ...(cfg.impresoraPorSeccion || {}) }
     Object.keys(mapa).forEach(k => { if (mapa[k] === g.id) delete mapa[k] })
     guardar({ gruposImpresion: restantes, impresoraPorSeccion: mapa })
+    // Los productos que imprimían ahí pasan al primer grupo que quede; las comandas ya enviadas no se pierden.
+    d({ t: 'area-', id: g.id, reemplazo: gruposDeComanda({ gruposImpresion: restantes })[0]?.id || 'cocina' })
     setConf(null)
   }
 
@@ -136,20 +94,13 @@ export default function ImpresorasAdmin({ rol, sesion }) {
 
       <div className="imp-grupos">
         {grupos.map(g => {
-          const est = estadoImpresora(g.id)
-          const claveChip = !soportado ? 'impresoras.estadoNoSoportado' : est.error ? 'impresoras.estadoError' : est.conectada ? 'impresoras.estadoOk' : 'impresoras.estadoOff'
-          const clsChip = !soportado || est.error ? 'err' : est.conectada ? 'ok' : 'off'
           const n = usos(g.id)
-          const m = msgs[g.id]
-          const ocupado = ocupadoId === g.id
           return (
             <section key={g.id} className={'imp-grupo' + (g.tickets ? ' tickets' : '')}>
               <header className="imp-grupo-cab">
                 <input className="imp-nombre" value={g.nombre} maxLength={40} aria-label={t('impresoras.nombreGrupo')}
                   onChange={e => cambiarGrupo(g.id, { nombre: e.target.value })} />
                 <span className="adm-chip">{g.tickets ? t('impresoras.grupoTickets') : t('impresoras.grupoComanda')}</span>
-                <span className={'imp-chip ' + clsChip}>{t(claveChip)}</span>
-                {est.cola > 0 && <span className="adm-chip">{t('impresoras.cola', { n: est.cola })}</span>}
               </header>
               <div className="imp-opciones">
                 <label className="adm-campo"><span>{t('impresoras.anchoLabel')}</span>
@@ -166,9 +117,8 @@ export default function ImpresorasAdmin({ rol, sesion }) {
                   </select>
                 </label>
               </div>
+              <SalidaImpresora g={g} cfg={cfg} onCambio={refrescar} />
               <div className="adm-fila">
-                <button type="button" className="primary" disabled={!soportado || ocupado} onClick={() => conectar(g)}>{t('impresoras.conectar')}</button>
-                <button type="button" className="success" disabled={!soportado || !est.conectada || ocupado} onClick={() => probar(g)}>{t('impresoras.probar')}</button>
                 <span className="sp" />
                 {conf === g.id ? (
                   <>
@@ -183,8 +133,6 @@ export default function ImpresorasAdmin({ rol, sesion }) {
                 )}
               </div>
               {!g.tickets && <p className="imp-dato" style={{ margin: 0 }}>{t('impresoras.seccionesDelGrupo', { n })}</p>}
-              {est.error && <div className="imp-err">❌ {est.error}</div>}
-              {m && <div className={'adm-msg' + (m.ok ? ' ok' : ' warn')}>{m.ok ? '✅ ' : '⚠️ '}{m.txt}</div>}
             </section>
           )
         })}
@@ -218,8 +166,6 @@ export default function ImpresorasAdmin({ rol, sesion }) {
       <div className="imp-bloque">
         <span className="imp-label">{t('impresoras.ticketsLabel')}</span>
         <div className="adm-fila">
-          <label className="imp-radio"><input type="radio" name="imp-modo" checked={modoTickets === 'silenciosa'} onChange={() => guardar({ impresion: 'silenciosa' })} /> {t('impresoras.modoSilencioso')}</label>
-          <label className="imp-radio"><input type="radio" name="imp-modo" checked={modoTickets !== 'silenciosa'} onChange={() => guardar({ impresion: 'manual' })} /> {t('impresoras.modoManual')}</label>
           <label className="imp-radio"><input type="checkbox" checked={Boolean(cfg.impresoraBeep)} onChange={e => guardar({ impresoraBeep: e.target.checked })} /> {t('impresoras.beep')}</label>
         </div>
         <p className="adm-sub" style={{ margin: 0 }}>{t('impresoras.notaComandas', { boton: t('pedido.enviarCocina') })}</p>

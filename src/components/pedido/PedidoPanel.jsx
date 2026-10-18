@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { useStore, cuentaActiva, totalCuenta, totalFinal, pagadoCuenta } from '../../services/store.jsx'
+import { useStore, cuentaActiva, cuentasDeMesa, totalCuenta, totalFinal, pagadoCuenta } from '../../services/store.jsx'
 import { puede } from '../../services/permisos'
 import { useMoneda } from '../../services/moneda.js'
 import { LADO_VISUAL_PX, urlImagenProducto } from '../../services/imagenProducto.js'
 import { useIdioma } from '../../i18n/index.jsx'
 import { imprimirCuenta, imprimirComandas } from '../ticket/Ticket.jsx'
+import { nombreDeArea } from '../../services/impresion.js'
 import './PedidoPanel.css'
 
 const cap = x => (x ? String(x).charAt(0).toUpperCase() + String(x).slice(1) : '')
 // Etiqueta legible de un área de impresión (chips en la fila del ítem).
-const nombreArea = (id, tOr) => tOr('areas.' + id, id === 'barra' ? 'Barra' : cap(id))
+const nombreArea = (id, tOr, config) => nombreDeArea(config, id, tOr('areas.' + id, cap(id)))
 
 // Miniato 45×45 (hueco siempre reservado con la inicial → ninguna fila/til se desplaza
 // cuando falta la imagen). Estilos en línea: styles.css está fuera del alcance de este carril.
@@ -81,16 +82,23 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
   const [borrando, setBorrando] = useState(null)    // {id, motivo, texto} borrar producto con motivo
   const [nota, setNota] = useState(null)            // {id, texto} nota inline
   const [aviso, setAviso] = useState('')            // aviso breve dentro de la ventana
+  const [cuentaSelId, setCuentaSelId] = useState(null) // subcuenta elegida cuando la mesa está dividida (2a/2b)
+  const [menu, setMenu] = useState(false)             // menú «⋯» de la mesa
+  const [modo, setModo] = useState(null)              // null | 'eliminar' | 'mover' (herramienta activa)
+  const [previa, setPrevia] = useState(null)          // {p, sel, texto}: opciones rápidas antes de agregar
   const avisoTimer = useRef(null)
   const avisar = msg => { setAviso(msg); clearTimeout(avisoTimer.current); avisoTimer.current = setTimeout(() => setAviso(''), 6000) }
   useEffect(() => () => clearTimeout(avisoTimer.current), [])
+  useEffect(() => { setCuentaSelId(null); setModo(null); setMenu(false); setPrevia(null) }, [mesa?.id])
 
   if (!mesa && !cuenta) return null
   if (bloqueado) return null
 
-  const c = cuenta ?? cuentaActiva(s, mesa.id)
-  const titulo = c?.tipo === 'directa' ? t('pedido.turnoNumero', { n: c.numero }) : (mesa?.nombre ?? t('pedido.cuenta'))
-  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null) }
+  const hermanas = mesa ? cuentasDeMesa(s, mesa.id) : []   // 1 cuenta normal; 2+ si la mesa se dividió
+  const c = cuenta ?? hermanas.find(x => x.id === cuentaSelId) ?? hermanas[0]
+  const sufijo = c?.tipo === 'mesa' && hermanas.length > 1 && c.etiqueta ? c.etiqueta : '' // «Mesa 2» + «a»
+  const titulo = c?.tipo === 'directa' ? t('pedido.turnoNumero', { n: c.numero }) : ((mesa?.nombre ?? t('pedido.cuenta')) + sufijo)
+  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null) }
   const cerrar = () => { reset(); onClose() }
   const toggle = id => { setMarcados(m => (m.includes(id) ? m.filter(x => x !== id) : [...m, id])); setCanje('') }
   const nombreMesa = id => s.mesas.find(m => m.id === id)?.nombre ?? t('pedido.mesaCorta')
@@ -101,16 +109,23 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
       <h3 className="pm-titulo">{titulo}</h3>
       <p>{t('pedido.mesaLibre', { cap: mesa?.cap })}</p>
       {puede(rol, 'abrir_mesa') && (apertura ? (
-        <div className="barra" style={{ alignItems: 'flex-end' }}>
-          <label className="pm-campo pm-campo-pax">{t('pedido.comensales')}
-            <input type="number" min="1" value={apertura.comensales} style={{ width: 90 }} autoFocus
+        <div className="pm-apertura">
+          <span className="pm-pax">{t('pedido.comensales')}
+            <button type="button" className="x" aria-label="−" disabled={(Number(apertura.comensales) || 1) <= 1}
+              onClick={() => setApertura({ ...apertura, comensales: Math.max(1, (Number(apertura.comensales) || 1) - 1) })}>−</button>
+            <input type="number" min="1" max="99" inputMode="numeric" value={apertura.comensales} autoFocus onFocus={e => e.target.select()}
               onChange={e => setApertura({ ...apertura, comensales: e.target.value })} />
-          </label>
-          <button className="success" onClick={() => {
-            d({ t: 'abrir', mesaId: mesa.id, comensales: Math.max(1, Number(apertura.comensales) || 1), usuario })
-            setApertura(null)
-          }}>{t('comun.confirmar')}</button>
-          <button className="ghost" onClick={() => setApertura(null)}>{t('comun.cancelar')}</button>
+            <button type="button" className="x" aria-label="+" disabled={(Number(apertura.comensales) || 1) >= 99}
+              onClick={() => setApertura({ ...apertura, comensales: Math.min(99, (Number(apertura.comensales) || 1) + 1) })}>+</button>
+          </span>
+          <span className="pm-abrio">👤 {t('pedido.abriraComo', { usuario })}</span>
+          <div className="pm-apertura-acc">
+            <button className="success" onClick={() => {
+              d({ t: 'abrir', mesaId: mesa.id, comensales: Math.min(99, Math.max(1, Number(apertura.comensales) || 1)), usuario })
+              setApertura(null)
+            }}>{t('comun.confirmar')}</button>
+            <button className="ghost" onClick={() => setApertura(null)}>{t('comun.cancelar')}</button>
+          </div>
         </div>
       ) : <button className="success big" onClick={() => setApertura({ comensales: mesa?.cap ?? 1 })}>{t('pedido.abrirCuenta')}</button>)}
     </Ventana>
@@ -129,19 +144,32 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
   const vivos = c.items.filter(i => i.estado !== 'anulado')
 
   // ---------- mover / intercambiar con otra mesa ----------
-  const cuentaDestino = destino ? cuentaActiva(s, destino) : null
+  // Destinos: cualquier OTRA cuenta de mesa abierta (incluida la hermana 2b) o una mesa libre.
+  const nombreDeCuenta = x => {
+    const hnas = s.cuentas.filter(y => y.estado !== 'cerrada' && y.mesaIds.some(m => x.mesaIds.includes(m))).length
+    return x.mesaIds.map(nombreMesa).join(' + ') + (hnas > 1 && x.etiqueta ? x.etiqueta : '')
+  }
+  const destinos = [
+    ...s.cuentas.filter(x => x.id !== c.id && x.estado !== 'cerrada' && x.tipo === 'mesa')
+      .sort((x, y) => nombreDeCuenta(x).localeCompare(nombreDeCuenta(y), undefined, { numeric: true }))
+      .map(x => ({ key: 'c:' + x.id, nombre: nombreDeCuenta(x), label: `${nombreDeCuenta(x)} · ${money(totalCuenta(x))}`, cuenta: x })),
+    ...s.mesas.filter(m => !s.cuentas.some(x => x.estado !== 'cerrada' && x.mesaIds.includes(m.id)))
+      .map(m => ({ key: 'm:' + m.id, nombre: m.nombre, label: `${m.nombre} · ${t('pedido.libre')}`, mesaId: m.id })),
+  ]
+  const destinoSel = destinos.find(x => x.key === destino)
+  const cuentaDestino = destinoSel?.cuenta || null
   const itemsDestino = (cuentaDestino?.items || []).filter(i => i.estado !== 'anulado')
   const mover = () => {
-    if (!destino || !marcados.length) return
-    d({ t: 'mover', cuentaId: c.id, itemIds: marcados, mesaDestino: destino, usuario })
+    if (!destinoSel || !marcados.length) return
+    d({ t: 'mover', cuentaId: c.id, itemIds: marcados, ...(destinoSel.cuenta ? { cuentaDestinoId: destinoSel.cuenta.id } : { mesaDestino: destinoSel.mesaId }), usuario })
     setMarcados([]); setDestino(''); setCanje('')
-    avisar(t('pedido.movidoOk', { mesa: nombreMesa(destino) }))
+    avisar(t('pedido.movidoOk', { mesa: destinoSel.nombre }))
   }
   const intercambiar = () => {
     if (!cuentaDestino || marcados.length !== 1 || !canje) return
     d({ t: 'intercambiar', cuentaA: c.id, itemA: marcados[0], cuentaB: cuentaDestino.id, itemB: canje, usuario })
     setMarcados([]); setDestino(''); setCanje('')
-    avisar(t('pedido.intercambiadoOk', { mesa: nombreMesa(destino) }))
+    avisar(t('pedido.intercambiadoOk', { mesa: destinoSel?.nombre || '' }))
   }
 
   // ---------- borrar producto (con motivo) ----------
@@ -208,8 +236,10 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
   // ---------- impresión ----------
   const imprimirTicketCuenta = async () => {
     if (!c.items.length) return avisar(t('pedido.cuentaVacia'))
-    const r = await imprimirCuenta({ cuenta: c, config: s.config, titulo: t('pedido.ticketTitulo', { titulo }), fallbackDialog: true })
+    const r = await imprimirCuenta({ cuenta: c, config: s.config, titulo: t('pedido.ticketTitulo', { titulo }) })
     if (r === 'error') avisar(t('pedido.avisoFalloImpresora'))
+    else if (r === 'sin-impresora') avisar(t('pedido.avisoSinImpresoraTicket'))
+    else if (r === 'encolado') avisar(t('pedido.ticketEnviadoEstacion'))
   }
   // Resumen del envío por grupo: "Cocina ✔ · Barra: sin impresora conectada".
   const resumenEnvio = salida => salida.map(({ grupo, resultado, n }) => (
@@ -234,6 +264,18 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
   }
 
   const chico = { minHeight: 32, padding: '2px 10px' }
+  const abrirModo = m => { setModo(m); setMenu(false); setMarcados([]); setDestino(''); setCanje(''); setBorrando(null) }
+  const dividir = () => { setMenu(false); d({ t: 'dividir', cuentaId: c.id, usuario }); setModo('mover'); avisar(t('pedido.divididaOk')) }
+  const hayMenu = editable && (vivos.length > 0 || (puedeUnir && c.tipo === 'mesa'))
+  // Notas rápidas: una nota es una lista «término medio, inglés» separada por comas.
+  const tokens = txt => String(txt || '').split(',').map(x => x.trim()).filter(Boolean)
+  const alternarToken = (txt, o) => { const t0 = tokens(txt); return (t0.includes(o) ? t0.filter(x => x !== o) : [...t0, o]).join(', ') }
+  const agregarProd = p => ((p.opciones || []).length ? setPrevia({ p, sel: [], texto: '' }) : d({ t: 'item+', cuentaId: c.id, p }))
+  const confirmarPrevia = () => {
+    const nota = [...previa.sel, previa.texto.trim()].filter(Boolean).join(', ').slice(0, 120)
+    d({ t: 'item+', cuentaId: c.id, p: previa.p, ...(nota ? { nota } : {}) })
+    setPrevia(null)
+  }
   const hayPendientes = c.items.some(i => i.estado === 'pendiente')
 
   // ---------- render ----------
@@ -242,7 +284,42 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
       <div className="fila pm-cab">
         <h3 className="pm-titulo">{titulo}</h3>
         <span className={'tag ' + c.estado}>{estadoVisto}</span>
+        {hayMenu && (
+          <div className="pm-mas">
+            <button type="button" className="pm-mas-btn" aria-haspopup="menu" aria-expanded={menu} title={t('pedido.masOpciones')} aria-label={t('pedido.masOpciones')} onClick={() => setMenu(v => !v)}>⋯</button>
+            {menu && (
+              <>
+                <div className="pm-mas-fondo" onClick={() => setMenu(false)} />
+                <ul className="pm-mas-menu" role="menu">
+                  {vivos.length > 0 && <li><button type="button" role="menuitem" onClick={() => abrirModo('eliminar')}>🗑 {t('pedido.menuEliminar')}</button></li>}
+                  {puedeMover && vivos.length > 0 && <li><button type="button" role="menuitem" onClick={() => abrirModo('mover')}>↔ {t('pedido.menuMover')}</button></li>}
+                  {puedeUnir && c.tipo === 'mesa' && hermanas.length < 8 && <li><button type="button" role="menuitem" onClick={dividir}>✂ {t('pedido.menuDividir')}</button></li>}
+                  {puedeUnir && c.tipo === 'mesa' && c.mesaIds.length < s.mesas.length && <li><button type="button" role="menuitem" onClick={() => { setMenu(false); setUniendo(true) }}>🔗 {t('pedido.menuUnir')}</button></li>}
+                  {puedeUnir && c.mesaIds.length > 1 && c.mesaIds.map(id => (
+                    <li key={id}><button type="button" role="menuitem" onClick={() => { setMenu(false); d({ t: 'separar', cuentaId: c.id, mesaId: id, usuario }) }}>⛓ {t('pedido.menuSeparar', { mesa: nombreMesa(id) })}</button></li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
       </div>
+      {!cuenta && hermanas.length > 1 && (
+        <div className="barra pm-subcuentas" role="tablist">
+          {hermanas.map(x => (
+            <button key={x.id} type="button" role="tab" aria-selected={x.id === c.id} className={'tab' + (x.id === c.id ? ' on' : '')} onClick={() => { setCuentaSelId(x.id); setMarcados([]); setDestino('') }}>
+              {mesa.nombre}{x.etiqueta} · {money(totalFinal(x))}
+            </button>
+          ))}
+        </div>
+      )}
+      {modo && (
+        <div className="pm-modo" role="status">
+          <span>{modo === 'eliminar' ? t('pedido.modoEliminar') : t('pedido.modoMover')}</span>
+          <button type="button" className="ghost" onClick={() => abrirModo(null)}>{t('pedido.modoListo')}</button>
+        </div>
+      )}
+
       <div className="pm-sub fila" style={{ gap: 10, flexWrap: 'wrap' }}>
         {c.tipo === 'mesa' && editable && puede(rol, 'abrir_mesa') ? (
           <span className="pm-pax">{t('pedido.comensales')}
@@ -251,25 +328,20 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
             <button type="button" className="x" disabled={(c.comensales || 1) >= 99} aria-label="+" onClick={() => d({ t: 'comensales~', cuentaId: c.id, comensales: Math.min(99, (c.comensales || 1) + 1) })}>+</button>
           </span>
         ) : (c.comensales ? <span className="pm-pax-info">{t('pedido.comensalesInfo', { comensales: c.comensales })}</span> : null)}
-        {c.abiertaPor ? <span>{t('pedido.abrio', { usuario: c.abiertaPor })}</span> : null}
+        {c.abiertaPor ? (
+          <span className="pm-abrio" title={t('pedido.abrio', { usuario: c.abiertaPor })}>
+            👤 {c.abiertaEn
+              ? t('pedido.abrioHora', { usuario: c.abiertaPor, hora: new Date(c.abiertaEn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
+              : t('pedido.abrio', { usuario: c.abiertaPor })}
+          </span>
+        ) : null}
       </div>
       {aviso && <div className="pm-aviso" role="status">{aviso}<button type="button" className="ico" onClick={() => setAviso('')} aria-label={t('comun.cancelar')}>✕</button></div>}
 
-      {/* mesas unidas: chips con separar */}
-      {c.mesaIds.length > 0 && (
+      {/* mesas unidas: solo informativo; separar y unir viven en el menú ⋯ */}
+      {c.mesaIds.length > 1 && (
         <div className="barra" style={{ gap: 6 }}>
-          {c.mesaIds.map(id => (
-            <span key={id} className="pm-chip">
-              {nombreMesa(id)}
-              {c.mesaIds.length > 1 && puedeUnir && (
-                <button className="x" style={{ minWidth: 0, minHeight: 0, padding: '0 6px', border: 'none', background: 'none', color: '#c0392b' }}
-                  title={t('pedido.separarTitle', { mesa: nombreMesa(id) })} onClick={() => d({ t: 'separar', cuentaId: c.id, mesaId: id, usuario })}>✕</button>
-              )}
-            </span>
-          ))}
-          {puedeUnir && !uniendo && c.mesaIds.length < s.mesas.length && (
-            <button className="ghost" style={chico} onClick={() => setUniendo(true)}>{t('pedido.unirMesas')}</button>
-          )}
+          {c.mesaIds.map(id => <span key={id} className="pm-chip">{nombreMesa(id)}</span>)}
         </div>
       )}
       {uniendo && (
@@ -301,7 +373,7 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
             <div className="barra pm-tabs">{secciones.map(x => <button key={x.id} className={x.id === secActiva ? 'tab on' : 'tab'} onClick={() => setSec(x.id)}>{x.nombre}</button>)}</div>
             <div className="grid">
               {s.productos.filter(p => p.activo && p.seccionId === secActiva).map(p => (
-                <button key={p.id} className="prod" onClick={() => d({ t: 'item+', cuentaId: c.id, p })}>
+                <button key={p.id} className="prod" onClick={() => agregarProd(p)}>
                   <Thumb producto={p} />
                   {p.nombre}<small>{money(p.precio)}</small>
                 </button>
@@ -312,23 +384,26 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
 
         {/* ── columna derecha: cuenta ── */}
         <section className="pm-cuenta">
-          {puedeMover && editable && vivos.length > 0 && <p className="pm-hint">☑ {t('pedido.marcaHint')}</p>}
+          
           <ul className="items">
             {c.items.map(i => (
               <li key={i.id} className={i.estado + ' pm-item'}>
                 <Thumb producto={s.productos.find(x => x.id === i.productoId)} nombreFallback={i.nombre} />
-                {puedeMover && editable && i.estado !== 'anulado' && <input type="checkbox" checked={marcados.includes(i.id)} onChange={() => toggle(i.id)} aria-label={t('pedido.moverTitle')} />}
+                {modo === 'mover' && puedeMover && editable && i.estado !== 'anulado' && <input type="checkbox" checked={marcados.includes(i.id)} onChange={() => toggle(i.id)} aria-label={t('pedido.moverTitle')} />}
                 <span className="n">
                   {i.nombre}
                   {i.estado === 'anulado' && t('pedido.anuladoTag')}
                   {i.estado === 'listo' && <em> · {tOr('estadoItem.listo', 'Listo')}</em>}
+                  {i.estado === 'enviado' && Array.isArray(i.areasListas) && i.areasListas.length > 0 && (
+                    <em> · {tOr('estadoItem.parcial', 'Parcial')}: {i.areasListas.map(x => nombreDeArea(s.config, x, x)).join(', ')}</em>
+                  )}
                   {i.estado === 'anulacion' && <em> · {tOr('estadoItem.anulacion', 'Anulación pedida')}</em>}
                   {i.nota && <em> · {i.nota}</em>}
                   {i.motivo && (i.estado === 'anulado' || i.estado === 'anulacion') && <em> · {i.motivo}</em>}
                   {/* Áreas del ítem (snapshot cuenta_items.areas): combo → Cocina + Barra a la vez. */}
                   {Array.isArray(i.areas) && i.areas.length > 0 && (
                     <span className="pm-chip" style={{ marginLeft: 6, fontSize: '.72rem' }} title={tOr('areas.title', 'Áreas donde se imprime este artículo')}>
-                      🖨 {i.areas.map(a => nombreArea(a, tOr)).join(' + ')}
+                      🖨 {i.areas.map(a => nombreArea(a, tOr, s.config)).join(' + ')}
                     </span>
                   )}
                 </span>
@@ -336,11 +411,18 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
                   <span className="qty"><button onClick={() => d({ t: 'qty', cuentaId: c.id, itemId: i.id, d: -1 })}>−</button>{i.qty}<button onClick={() => d({ t: 'qty', cuentaId: c.id, itemId: i.id, d: 1 })}>+</button></span>
                 ) : <span>×{i.qty}</span>}
                 <span className="pr">{money(i.precio * i.qty)}</span>
-                {editable && i.estado !== 'anulado' && i.estado !== 'anulacion' && <button className="x danger solid" title={t('pedido.borrarProducto')} aria-label={t('pedido.borrarProducto')} onClick={() => pedirBorrar(i)}>🗑</button>}
+                {modo === 'eliminar' && editable && i.estado !== 'anulado' && i.estado !== 'anulacion' && <button className="x danger solid" title={t('pedido.borrarProducto')} aria-label={t('pedido.borrarProducto')} onClick={() => pedirBorrar(i)}>🗑</button>}
                 {editable && i.estado === 'pendiente' && <button className="x" title={t('pedido.notaTitle')} onClick={() => setNota(n => (n?.id === i.id ? null : { id: i.id, texto: i.nota || '' }))}>✎</button>}
 
                 {nota?.id === i.id && (
-                  <form className="pm-sub-fila" onSubmit={e => { e.preventDefault(); d({ t: 'nota', cuentaId: c.id, itemId: i.id, nota: nota.texto }); setNota(null) }}>
+                  <form className="pm-sub-fila" style={{ flexWrap: 'wrap' }} onSubmit={e => { e.preventDefault(); d({ t: 'nota', cuentaId: c.id, itemId: i.id, nota: nota.texto.slice(0, 120) }); setNota(null) }}>
+                    {(s.productos.find(x => x.id === i.productoId)?.opciones || []).length > 0 && (
+                      <div className="pm-opciones" style={{ width: '100%' }}>
+                        {s.productos.find(x => x.id === i.productoId).opciones.map(o => (
+                          <button key={o} type="button" className={'tab' + (tokens(nota.texto).includes(o) ? ' on' : '')} onClick={() => setNota({ ...nota, texto: alternarToken(nota.texto, o) })}>{o}</button>
+                        ))}
+                      </div>
+                    )}
                     <input autoFocus value={nota.texto} placeholder={t('pedido.notaPrompt')} onChange={e => setNota({ ...nota, texto: e.target.value })} style={{ flex: 1 }} />
                     <button type="submit" className="primary" style={chico}>{t('comun.guardar')}</button>
                     <button type="button" className="ghost" style={chico} onClick={() => setNota(null)}>✕</button>
@@ -370,20 +452,17 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
           </ul>
 
           {/* mover / intercambiar con otra mesa */}
-          {puedeMover && editable && marcados.length > 0 && (
+          {modo === 'mover' && puedeMover && editable && (
             <div className="pm-caja pm-mover">
               <b>{t('pedido.moverTitulo')}</b>
               <label className="pm-campo">{t('pedido.destino')}
                 <select value={destino} onChange={e => { setDestino(e.target.value); setCanje('') }}>
                   <option value="">{t('pedido.elegirMesa')}</option>
-                  {s.mesas.filter(m => !c.mesaIds.includes(m.id)).map(m => {
-                    const mc = cuentaActiva(s, m.id)
-                    return <option key={m.id} value={m.id}>{m.nombre} · {mc ? money(totalCuenta(mc)) : t('pedido.libre')}</option>
-                  })}
+                  {destinos.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
                 </select>
               </label>
               <div className="barra" style={{ margin: 0 }}>
-                <button className="teal" disabled={!destino} onClick={mover}>{t('pedido.moverN', { n: marcados.length })}</button>
+                <button className="teal" disabled={!destino || !marcados.length} onClick={mover}>{t('pedido.moverN', { n: marcados.length })}</button>
               </div>
               {destino && marcados.length === 1 && (
                 itemsDestino.length ? (
@@ -488,6 +567,25 @@ export default function PedidoPanel({ rol, sesion, mesa, cuenta, onClose, bloque
           <p className="pm-sub" style={{ marginTop: 6 }}>{t('pedido.pagadoEstado', { pagado: money(pagadoCuenta(c)), estado: estadoVisto })}</p>
         </section>
       </div>
+      {previa && (
+        <div className="pm-previa-fondo" onClick={() => setPrevia(null)}>
+          <div className="pm-previa" role="dialog" aria-label={previa.p.nombre} onClick={e => e.stopPropagation()}>
+            <b>{previa.p.nombre}</b>
+            <div className="pm-opciones">
+              {previa.p.opciones.map(o => (
+                <button key={o} type="button" className={'tab' + (previa.sel.includes(o) ? ' on' : '')}
+                  onClick={() => setPrevia(v => ({ ...v, sel: v.sel.includes(o) ? v.sel.filter(x => x !== o) : [...v.sel, o] }))}>{o}</button>
+              ))}
+            </div>
+            <input value={previa.texto} maxLength={60} placeholder={t('pedido.notaExtra')} onChange={e => setPrevia(v => ({ ...v, texto: e.target.value }))} />
+            <div className="barra" style={{ margin: 0 }}>
+              <button type="button" className="success" onClick={confirmarPrevia}>{t('pedido.agregarConNota')}</button>
+              <button type="button" className="ghost" onClick={() => { d({ t: 'item+', cuentaId: c.id, p: previa.p }); setPrevia(null) }}>{t('pedido.sinNota')}</button>
+              <button type="button" className="ghost" onClick={() => setPrevia(null)}>{t('comun.cancelar')}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </Ventana>
   )
 }

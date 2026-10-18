@@ -92,8 +92,14 @@
   .eq-fila{grid-template-columns:minmax(0,1fr);gap:4px;padding:12px 0}
   .eq-celda{gap:8px}
   .eq-acciones{width:100%;justify-content:flex-start;margin-top:6px}
-  .eq-acciones button{flex:1;min-width:0;min-height:44px}
+  .eq-acciones button{flex:1;min-width:44px;min-height:44px}
   .eq-campos{grid-template-columns:1fr}
   .eq-clave-fila input{min-width:0;flex:1 1 100%}
   .eq-clave-fila button{flex:1}
 }
+
+/* ── v0.18 · áreas que ve cada persona de cocina/barra (píldoras; la elegida en azul con degradado) ── */
+.eq-areas{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.eq-area{min-height:44px;padding:6px 16px;border:0;border-radius:999px;color:#fff;font-weight:650;--pc:var(--btn-slate,#64748b);background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,0)),var(--pc);box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 30%,transparent);opacity:.8}
+.eq-area.on{--pc:var(--btn-blue,#3867f4);opacity:1}
+.eq-areas-todas{color:var(--mut);font-size:.8rem}

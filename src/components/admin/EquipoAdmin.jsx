@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../../services/store.jsx'
 import { useIdioma } from '../../i18n/index.jsx'
 import { rpc, mensajeError } from '../../services/supabase.js'
+import { gruposDeComanda } from '../../services/impresion.js'
 import './admin.css'      // clases .adm-* del área de administración (las comparte con ConfigAdmin)
 import './EquipoAdmin.css'
 
@@ -81,8 +82,9 @@ function EquipoFilaColapsada({ n, error, onToggle, tOr }) {
 }
 
 export default function EquipoAdmin({ rol, sesion, abierto = true, onToggleAbierto = () => {} }) {
-  const { modo } = useStore()
+  const { s: tienda, modo } = useStore()
   const { tOr, idiom } = useIdioma()
+  const gruposC = gruposDeComanda(tienda?.config)   // áreas = grupos de comanda (Configuración → Impresoras)
 
   const [miembros, setMiembros] = useState([])
   const [cargando, setCargando] = useState(false)
@@ -201,6 +203,19 @@ export default function EquipoAdmin({ rol, sesion, abierto = true, onToggleAbier
   }
 
   // ── Revocar: dos toques (primer toque pregunta, el segundo ejecuta) ──
+  // Áreas que ve una persona de cocina/barra (vacío = todas). Solo admin; la base lo exige.
+  const alternarArea = async (m, id) => {
+    if (ocupado) return
+    const actual = Array.isArray(m.areas) ? m.areas : []
+    const nuevas = actual.includes(id) ? actual.filter(x => x !== id) : [...actual, id]
+    setAviso(''); setError('')
+    try {
+      await rpc('equipo_poner_areas', { p_usuario_id: m.usuario_id, p_areas: nuevas }, { conEmpresa: false })
+      setAviso(tOr('equipo.areas.guardado', 'Áreas actualizadas.'))
+      await cargar(true)
+    } catch (err) { setError(textoError(err, tOr)) }
+  }
+
   const quitar = async m => {
     if (ocupado) return
     setAviso(''); setError(''); setQuitandoId(m.usuario_id)
@@ -271,6 +286,15 @@ export default function EquipoAdmin({ rol, sesion, abierto = true, onToggleAbier
                     <div className="eq-persona">
                       <span className="eq-nombre">{m.nombre || tOr('equipo.sinNombre', 'sin nombre')}</span>
                       <span className="eq-correo">{m.correo}</span>
+                      {(m.rol === 'cocina' || m.rol === 'barra') && gruposC.length > 0 && (
+                        <div className="eq-areas" role="group" aria-label={tOr('equipo.areas.titulo', 'Áreas que ve')}>
+                          {gruposC.map(g => {
+                            const on = Array.isArray(m.areas) && m.areas.includes(g.id)
+                            return <button key={g.id} type="button" className={'eq-area' + (on ? ' on' : '')} aria-pressed={on} disabled={ocupado} onClick={() => alternarArea(m, g.id)}>{g.nombre}</button>
+                          })}
+                          {!(Array.isArray(m.areas) && m.areas.length) && <small className="eq-areas-todas">{tOr('equipo.areas.todas', 'Todas las áreas')}</small>}
+                        </div>
+                      )}
                     </div>
                     <div className="eq-celda">
                       <span className="eq-cab-movil">{tOr('equipo.colRol', 'Rol')}</span>

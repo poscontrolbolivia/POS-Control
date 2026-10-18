@@ -44,7 +44,7 @@
   overflow: hidden; /* recorta las herramientas redondeadas del lado derecho */
 }
 .ztab.on { border-color: var(--ac); }
-.ztab .tab { border: 0; border-radius: 0; background: transparent; padding: 6px 12px; min-height: 34px; }
+.ztab .tab { border: 0; border-radius: 999px; background: transparent; padding: 6px 12px; min-height: 34px; }
 .ztab.on .tab { background: var(--ac); color: #fff; }
 .ztab .n { font-style: normal; color: var(--mut); font-size: .75rem; margin-left: 5px; }
 .ztab.on .n { color: #eaf5ef; }
@@ -133,6 +133,7 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 .salon .mesa .pax { font-size: .9em; line-height: 1.15; color: var(--mut); white-space: nowrap; }
 .salon .mesa .pax.alerta { color: #b3402f; font-weight: 700; }
 .salon .mesa .importe { font-size: .9em; line-height: 1.15; }
+.salon .mesa .abrio { font-size: .75em; line-height: 1.1; color: var(--mut); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .salon .mesa .etiqueta-zona {
   font-size: .8em;
   line-height: 1.1;
@@ -172,6 +173,9 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 }
 
 /* ────────────────────────────────  MÓVIL (≤768px)  ───────────────────────── */
+/* Acción de la franja (✎ Editar mapa / ✓ Terminar edición): siempre arriba a la derecha */
+.zona-strip > button { margin-left: auto; flex: none; }
+
 @media (max-width: 768px) {
   /* Colchón inferior: las barras fijas (mesa-edit / pax-bar) no deben tapar la
      leyenda ni la última fila del mapa al llegar al final del scroll. */
@@ -294,12 +298,11 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 .me-campo>span{font-size:.8rem;font-weight:700;color:var(--ink)}
 .me-ancho2{grid-column:span 2}
 .me-campo input,.me-campo select,.me-campo>button{width:100%;min-height:44px}
-.me-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1.5px solid var(--line-fuerte);border-radius:999px;overflow:hidden}
-.me-opc{border:0;border-radius:0;min-height:44px;min-width:44px;padding:4px 6px;background:var(--card);font-weight:600;font-size:.88rem}
-.me-opc+.me-opc{border-left:1.5px solid var(--line-fuerte)}
+.me-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.me-opc{border:1.5px solid var(--line-fuerte);border-radius:999px;min-height:44px;min-width:44px;padding:4px 6px;background:var(--card);font-weight:600;font-size:.88rem}
 .me-opc.on{background:var(--ac);color:#fff}
-.me-step{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;border:1.5px solid var(--line-fuerte);border-radius:999px;overflow:hidden;background:var(--card)}
-.me-step button{border:0;border-radius:0;min-height:44px;padding:0;font-size:1.2rem;background:var(--card-2)}
+.me-step{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:6px}
+.me-step button{border-radius:50%;width:44px;min-height:44px;padding:0;font-size:1.2rem;background:var(--card-2)}
 .me-step b{text-align:center;color:var(--ink)}
 .badge-heredada{position:absolute;bottom:3px;left:5px;font-size:.7rem;font-weight:800;background:var(--btn-violet);color:#fff;border-radius:999px;padding:0 6px}
 .salon .salon-aviso.sin-turno{background:color-mix(in srgb,var(--btn-yellow) 22%,var(--card));border-color:var(--btn-yellow);color:var(--ink)}
@@ -314,6 +317,7 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 .mesa-item .mi-est{font-size:.8rem;font-weight:600;opacity:.85}
 .mesa-item .importe{font-weight:700}
 .mesa-item .etiqueta-zona{font-size:.72rem;opacity:.75}
+.mesa-item .mi-quien{font-size:.78rem;font-weight:600;opacity:.9;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mesa-item.libre{background:var(--libre-bg);border-color:var(--libre-bd);color:var(--libre-ink)}
 .mesa-item.ocupada{background:var(--ocupada-bg);border-color:var(--ocupada-bd);color:var(--ocupada-ink)}
 .mesa-item.enviada{background:var(--enviada-bg);border-color:var(--enviada-bd);color:var(--enviada-ink)}

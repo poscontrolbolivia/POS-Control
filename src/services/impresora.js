@@ -168,7 +168,7 @@ export function lineaATexto(l, ancho = 32) {
   return l?.guion ? guion(t, cols) : t.slice(0, cols)
 }
 
-function generarBytes({ lineas = [], ancho = 32, corte = true, beep = false } = {}) {
+export function generarBytes({ lineas = [], ancho = 32, corte = true, beep = false } = {}) {
   const b = [ESC, 0x40, ESC, 0x74, 0x00] // ESC @ inicializar + ESC t 0 (tabla PC437)
   for (const l of lineas) {
     const tam = Math.min(4, Math.max(1, Number(l.tam) || 1)) // multiplicador GS ! (ancho x alto)

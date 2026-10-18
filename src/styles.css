@@ -110,7 +110,7 @@ input[type=checkbox],input[type=radio]{min-height:0;accent-color:var(--ac)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
 /* Azulejos de carta (`.prod`, `.vd-prod`): son más altos que anchos (≈104×135), así
    que la píldora 999 los volvería óvalo vertical. Excepción documentada: tarjeta. */
-.prod{display:flex;flex-direction:column;gap:4px;padding:12px;text-align:left;background:var(--card-2);border-color:var(--line-fuerte);border-radius:16px}
+.prod{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 18px;text-align:center;background:var(--card-2);border-color:var(--line-fuerte);border-radius:999px}
 .prod:hover:not(:disabled){border-color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,var(--card))}
 .prod small{color:var(--mut)}
 .items{list-style:none;margin:12px 0;padding:0}.items li{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}

@@ -1,4 +1,4 @@
-# HANDOFF · POS Control v0.14.1
+# HANDOFF · POS Control v0.18.0
 
 Estado actual en una pantalla. El historial detallado está en `CHANGELOG.md`.
 
@@ -6,6 +6,9 @@ Estado actual en una pantalla. El historial detallado está en `CHANGELOG.md`.
 Vite + React 19 + Supabase, PWA multiempresa en español (i18n es/en/pt, 982 claves, `node scripts/check-i18n.mjs`).
 Backend: UN solo archivo, `supabase/setup.sql` (idempotente, atómico). **Se pega COMPLETO en el SQL Editor tras cada cambio.**
 Docs: `docs/CONTRATO.md` (tablas y RPCs), `docs/GUIA.md`, `docs/NOMBRES.md`.
+
+## Última entrega (v0.18.0: una vista por área y «ya salió» por área, bloque A de la petición; ver CHANGELOG. Siguen los bloques B y C)
+Menú «⋯» de la mesa, subcuentas 2a/2b (`dividir_cuenta`) y opciones rápidas por producto: ver CHANGELOG. Requiere pegar `setup.sql` completo (sección 009). Sin probar en Supabase real ni en teléfono.
 
 ## Planes
 - Básico: 20 artículos activos + 3 personas (admin incluido). Premium: sin límite. El comercio no ve números, solo un aviso genérico.

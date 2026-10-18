@@ -2,6 +2,73 @@
 
 Historial completo (antes vivía en HANDOFF.md). Lo más nuevo arriba.
 
+# v0.18.0 · Bloque B: áreas configurables (p. ej. «Heladería»)
+- **Área = grupo de comanda** (Configuración → Impresoras, `config.gruposImpresion` sin el de tickets). Crear «Heladería» ahí le da: casilla «Imprimir en» en cada producto (Menú), impresora propia y pestaña «Vista Heladería» en la pantalla de cocina. Una sola lista que mantener. `AREAS_PRODUCTO` desaparece; helpers nuevos en `services/impresion.js` (`areasDeComanda`, `nombreDeArea`, `SIN_AREA`).
+- **SQL**: se quita el CHECK fijo `{'cocina','barra'}`; ahora `private.areas_validas()` solo exige el formato del id (slug `[a-z0-9_-]{1,40}`) y al menos un área. `cola_de_area(p_area, p_empresa_id, p_validas)` acepta cualquier área (se borra la firma de 2 argumentos).
+- **Áreas borradas**: los ítems ya enviados a un área que dejó de existir NO se pierden ni bloquean el cobro: aparecen en una pestaña «⚠️ Sin área» (solo si hay) que se marca ítem por ítem. Renombrar un área solo cambia su nombre (el id no cambia). Al borrar un grupo, la RPC `retirar_area(p_area, p_reemplazo)` lo quita de los productos (si se quedan sin ninguna pasan al primer grupo) y de las personas.
+- **Quién ve qué vista**: `membresias.areas text[]` (vacío = todas). Solo limita a los roles `cocina`/`barra`; admin/cajero/mesero y el super abren cualquiera. Se asigna en Configuración → Equipo (píldoras por persona, `equipo_poner_areas`); la base lo exige en `cola_de_area`, `marcar_salida` y `deshacer_salida` (`private.exigir_area`). `mis_areas()` la lee la pantalla de cocina. `equipo_listar` devuelve `areas` (se hace `drop function` de la firma anterior).
+- Verificado: sintaxis JSX, `check-i18n` (1020 claves) y las funciones nuevas ejecutadas contra el Supabase real dentro de una transacción revertida (compilan; la restricción de formato rechaza «Heladería!»). NO probado: el navegador, ni el flujo completo con comandas reales, ni `npm run build` (sin red para instalar paquetes). **Pegar `setup.sql` completo.**
+
+---
+
+# v0.17.1 · comensales y «quién abrió» otra vez visibles
+- **Causa del bug**: una regla de `PedidoPanel.css` (`@media(max-width:820px){.pm-pax,.pm-pax-info,.pm-campo-pax{display:none}}`) escondía en celular/ventana angosta el campo de comensales al abrir la mesa, el −/+ de la cuenta y el texto informativo. Se quitó.
+- **Abrir mesa**: el formulario ahora tiene − [n] + grandes (≥44 px), el número se selecciona al enfocar (1–99) y muestra «Abrirás la mesa como {usuario}».
+- **Quién abrió la mesa**: chip «👤 Abrió {nombre} · {hora}» arriba de la cuenta; en el Salón, la lista del celular muestra «👥 n/cap · 👤 nombre» y la tarjeta del mapa (PC) el nombre. Antes salía un texto pequeño y, si el perfil no era visible, el UUID: ahora nunca se muestra el UUID.
+- Claves i18n nuevas: `pedido.abrioHora`, `pedido.abriraComo` (es/en/pt, 1015 claves).
+- Verificado: sintaxis JSX y `check-i18n`. NO se ejecutó `npm run build` ni el navegador (sin red para instalar paquetes).
+
+---
+
+# v0.17.0 · Bloque A: una vista por área y «ya salió» por área
+- **Una sola vista a la vez**: pestañas «Vista Cocina» / «Vista Barra» (se quita «Ambas» y las dos filas). Cada vista muestra solo las comandas de su área, la más antigua primero, con contador y ✓ por producto. Se recuerda la última vista por equipo; los roles `cocina`/`barra` arrancan en la suya.
+- **«Ya salió» por ítem Y por área**: tabla nueva `cuenta_item_areas (item_id, empresa_id, area, listo_en, listo_por)` (RLS solo lectura; escriben las RPC). `cuenta_items.estado` pasa a `'listo'` solo cuando TODAS sus áreas están sacadas; si se deshace una vuelve a `'enviado'`. Un combo hamburguesa+cerveza marcado en Cocina sigue pendiente en Barra.
+- **«Sacadas» independiente por vista** (cada área ve y deshace solo lo suyo, con su propio contador).
+- `marcar_salida(p_item_ids, p_area, p_empresa_id)` y `deshacer_salida(...)` reciben el área (`null` = todas, compatible con llamadas antiguas); se hace `drop function` de las firmas viejas. `cola_de_area` devuelve por ítem `estado` DE ESA ÁREA (+ `estado_item`, `areas_listas`, `listo_en` del área).
+- Nueva columna `cuenta_items.areas_listas` (copia para el salón): en la cuenta, un ítem sacado solo por un área se ve «Parcial: Cocina».
+- Migración incluida en `setup.sql`: ítems ya `listo` → todas sus áreas marcadas. Realtime también sobre `cuenta_item_areas` (si falla, queda el sondeo de 4 s).
+- Verificado: `setup.sql` completo y las 3 funciones pasan el parser de PostgreSQL (pglast); `check-i18n` (1013 claves) y `npm run build` verdes. **NO probado**: la base real de Supabase ni el navegador (el cambio de firma de las RPC y la publicación realtime hay que comprobarlos pegando `setup.sql`).
+- Pendiente (bloques B y C de la petición): áreas configurables (grupos de impresión), devoluciones de platos servidos. Los roles `cocina`/`barra` aún pueden abrir cualquier vista (restricción por membresía llega con el bloque B).
+
+---
+
+# v0.16.0 · tablero de cocina y barra
+- **Dos filas**: Cocina arriba y Barra abajo, cada una con sus comandas en tarjetas compactas (la más antigua primero). Pestañas «Ambas / Cocina / Barra» (los roles cocina y barra arrancan en la suya; se recuerda por equipo). Con las dos filas visibles cada una se desplaza por dentro, así ninguna empuja a la otra fuera de pantalla.
+- **Producto por producto**: círculo ✓ grande en cada línea marca «ya salió» solo ese producto, aunque la cuenta tenga más; ↩ deshace; ⊘ pide anulación (flujo de aprobación intacto). Un combo (cocina+barra) aparece en ambas filas con la etiqueta «+ Barra».
+- **Contador por comanda** mm:ss desde que entró el primer producto aún pendiente (verde < 5 min, ámbar ≥ 5, rojo ≥ 10) y hora de entrada. Las comandas nuevas pulsan un momento.
+- **«✓ Sacadas»**: botón pequeño con contador; abre un panel con las comandas cuyos productos ya salieron todos (hora de salida y ↩ por producto). Una comanda completa sale de su fila y pasa ahí.
+- `cola_de_area` devuelve también `etiqueta` (subcuentas 2a/2b se distinguen en cocina). **Pegar `setup.sql` completo.**
+- Límite conocido: «salió» es por producto, no por área: un combo marcado en una fila queda marcado en la otra. «Sacadas» muestra solo cuentas aún abiertas (al cobrar la cuenta desaparece del servidor).
+- Verificado: build y check-i18n verdes; `cola_de_area` pasa el parser de PostgreSQL. NO se vio en un navegador ni con comandas reales.
+
+---
+
+# v0.15.0 · menú «⋯» de la mesa, subcuentas 2a/2b y opciones rápidas por producto
+- **Menú «⋯» en la mesa** (arriba a la derecha de la cuenta): Eliminar producto, Mover o transferir productos a otra mesa, Dividir mesa (2a / 2b), Unir mesas y Separar mesa unida. Ya no hay botones sueltos: la 🗑 y las casillas de selección solo aparecen al elegir la herramienta (franja «Listo» para salir del modo). Mover permite destino = mesa libre, otra cuenta o la hermana 2b; con 1 producto marcado sigue el intercambio.
+- **Subcuentas**: `cuentas.etiqueta` ('a'…'h') + RPC `dividir_cuenta` (máx. 8). Cada subcuenta se cobra aparte; la mesa se libera al cerrar todas. Pestañas «Mesa 2a · total» dentro de la mesa; en el salón la tarjeta suma las subcuentas y muestra ✂×n. El título (y tickets/comandas) lleva «Mesa 2a» solo mientras haya más de una abierta. `unir_mesas` ahora absorbe TODAS las cuentas de una mesa dividida.
+- **Opciones rápidas por producto**: `productos.opciones text[]` (máx. 20). Se editan en Menú como lista separada por comas («término medio, tres cuartos, inglés»). Al tocar un producto con opciones sale una hoja con botones (varios a la vez) + comentario libre; sin opciones se agrega directo como antes. El ✎ del ítem pendiente también muestra los botones. La nota sale en la comanda (ya la imprimía). `agregar_items` ya no fusiona líneas con notas distintas (antes una nota nueva se perdía al sumar a una línea sin nota).
+- Ya existían en v0.14.x y NO se tocaron: envío simultáneo a cocina+barra por producto (combos, `productos.areas`), mapa arriba del editor y formas solo con figura en móvil (CSS «TAREA 2/3» de SalonPage.css).
+- Verificado: `check-i18n` (1006 claves), `npm run build`, y las funciones nuevas/modificadas (`dividir_cuenta`, `unir_mesas`, `agregar_items`) pasan el parser de PostgreSQL (pglast). NO se probó contra Supabase real ni en un teléfono. **Pegar `setup.sql` completo de nuevo** (sección 009 al final).
+- Pendiente: exportar/importar empresa (super) todavía no copia `opciones` ni `etiqueta`.
+
+---
+
+# v0.14.3 · impresión sin cartel, impresoras de Windows por nombre y teléfonos
+- **Se acabó el cuadro de confirmación**: tickets, pre-cuentas y el arqueo de caja ya no abren `window.print()`. Todo (también las comandas) pasa por `services/despacho.js`: imprime en este equipo si tiene salida lista, si no lo manda a la estación (teléfonos) y, si no hay nada, avisa «sin impresora». Se quitó `imprimirTicket` y la opción «Manual (diálogo)».
+- **Impresoras de Windows asignables por grupo**: nuevo `agente-impresion/` (agente.mjs, iniciar-agente.bat, LEEME.md): programa de la PC que lista las impresoras instaladas y manda los bytes ESC/POS a la elegida por nombre (RAW, sin diálogo). La app lo usa con la nueva salida «Impresora de Windows por nombre» (`services/agenteImpresion.js`).
+- Nuevo componente compartido `SalidaImpresora` (salida + impresora + conectar + probar por grupo) en Impresoras y en Estación; cada PC guarda su asignación.
+- **Teléfonos**: sin salida propia, sus trabajos van a la cola y los imprime la PC con la estación. Una PC con impresora lista imprime directo aunque el negocio use estación.
+- Probado: agente en modo simulado (listar, imprimir, origen no permitido, agente apagado) y despacho de punta a punta. **Sin probar en una PC Windows con impresora real** (el envío RAW usa winspool vía PowerShell).
+
+---
+
+# v0.14.2 · botones siempre redondos y acciones arriba a la derecha
+- Ningún botón queda cuadrado ni rectangular: productos del pedido y de venta directa (`.prod`, `.vd-prod`), pestañas de zona, opciones (`.me-opc`) y +/− (`.me-step`) del editor de mesa pasan a píldora/círculo (radio 999px / 50%). Los botones con solo icono tienen ancho mínimo = alto mínimo (acciones de Equipo en móvil tenían ancho 0 y salían como óvalo vertical).
+- «Editar mapa / Terminar edición» del salón y la acción de las cabeceras de Administración (`.adm-cab`) van siempre al borde derecho, no al medio-izquierda.
+- `supabase/hacer-super-admin.sql`: convierte un usuario ya existente en super admin (cambiar el correo y pegar en el SQL Editor).
+
+---
+
 # v0.14.1 · SQL sin funciones repetidas y moneda por negocio
 - **`setup.sql` limpio (4.9k → 4.7k líneas, mismo comportamiento)**: cada función existe UNA sola vez, en su versión final: `empresa_activa`, `fijar_empresa` (private y public), `mi_rol`, `es_admin`, `es_miembro_de`, `auditar`, `empresa_por_codigo`, `super_exportar_empresa`, `super_importar_empresa` (antes 2-3 definiciones que se pisaban). Van todas en un bloque «Núcleo de acceso» (sección 2), antes de las políticas y RPCs que las usan, junto con las tablas `supers`, `auditoria` (ya con sus 4 columnas legibles) y `empresa_activa_usuario`.
 - Retirada `private.es_super_compat()` (se usa `public.es_super()`); el archivo hace `drop function if exists` para limpiar bases anteriores.

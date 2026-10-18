@@ -1,21 +1,23 @@
 // ESTACIÓN DE IMPRESIÓN: la PC del local (Chrome/Edge, pestaña abierta) reclama los trabajos de la
 // cola de Supabase y los imprime en la impresora de cada grupo (Cocina, Barra, Caja…).
 //   · salida 'serial'  → térmica USB/serie por Web Serial + ESC/POS (services/impresora.js)
-//   · salida 'windows' → impresora de Windows (incluye PDFCreator); con Chrome --kiosk-printing sale sin diálogo
+//   · salida 'agente'  → impresora de Windows elegida POR NOMBRE vía el agente local (sin diálogo; ver agente-impresion/)
+//   · salida 'windows' → diálogo de Windows (PDFCreator, láser…); con Chrome --kiosk-printing sale sin preguntar a la predeterminada
 // Funciona como singleton a nivel de app (arranca desde PanelPage), así que sigue imprimiendo aunque se
 // cambie de módulo. La preferencia (activa + salida por grupo) vive en localStorage de ESE equipo.
 // Aviso inmediato por Supabase Realtime + consulta cada pocos segundos como respaldo.
 import { sb, obtenerEmpresaActiva } from './supabase.js'
 import { gruposDe } from './impresion.js'
-import { estadoImpresora, imprimirSilencioso, reutilizarImpresoras, suscribirImpresora } from './impresora.js'
+import { estadoImpresora, imprimirSilencioso, generarBytes, reutilizarImpresoras, suscribirImpresora } from './impresora.js'
 import { imprimirEnWindows } from './impresionWindows.js'
+import { imprimirPorAgente } from './agenteImpresion.js'
 import { reclamarImpresion, finalizarImpresion, listarImpresion } from './colaImpresion.js'
 
 const LLAVE = 'pos-estacion'
 const SONDEO_MS = 3000          // sin Realtime
 const SONDEO_RT_MS = 12000      // con Realtime conectado (solo respaldo)
 
-const leerPref = () => { try { return { activa: false, salidas: {}, ...JSON.parse(localStorage.getItem(LLAVE) || '{}') } } catch { return { activa: false, salidas: {} } } }
+const leerPref = () => { try { return { activa: false, salidas: {}, impresoras: {}, ...JSON.parse(localStorage.getItem(LLAVE) || '{}') } } catch { return { activa: false, salidas: {}, impresoras: {} } } }
 const guardarPref = p => { try { localStorage.setItem(LLAVE, JSON.stringify(p)) } catch { /* sin almacenamiento */ } }
 
 let pref = leerPref()
@@ -32,22 +34,36 @@ const estado = { realtime: false, error: '', ultimoCiclo: 0, impresos: 0, fallid
 const notificar = () => escuchas.forEach(f => { try { f() } catch { /* ignore */ } })
 export const suscribirEstacion = fn => { escuchas.add(fn); return () => escuchas.delete(fn) }
 
-export const salidaDe = grupoId => (pref.salidas?.[grupoId] === 'windows' ? 'windows' : 'serial')
+const SALIDAS = ['serial', 'agente', 'windows']
+export const salidaDe = grupoId => (SALIDAS.includes(pref.salidas?.[grupoId]) ? pref.salidas[grupoId] : 'serial')
 export function fijarSalida(grupoId, salida) {
-  pref = { ...pref, salidas: { ...pref.salidas, [grupoId]: salida === 'windows' ? 'windows' : 'serial' } }
+  pref = { ...pref, salidas: { ...pref.salidas, [grupoId]: SALIDAS.includes(salida) ? salida : 'serial' } }
+  guardarPref(pref); notificar()
+}
+/** Impresora de Windows (nombre exacto) asignada a un grupo en ESTA PC (salida 'agente'). */
+export const impresoraDe = grupoId => pref.impresoras?.[grupoId] || ''
+export function fijarImpresora(grupoId, nombre) {
+  const impresoras = { ...pref.impresoras }
+  if (nombre) impresoras[grupoId] = nombre; else delete impresoras[grupoId]
+  pref = { ...pref, impresoras }
   guardarPref(pref); notificar()
 }
 
 export const estadoEstacion = () => ({ ...estado, activa: pref.activa, corriendo })
 
-/** ¿Este grupo puede imprimir ahora en esta PC? */
-export const grupoListo = grupoId => salidaDe(grupoId) === 'windows' || estadoImpresora(grupoId).conectada
+/** ¿Este equipo tiene una salida lista para este grupo? (USB conectada, impresora de Windows asignada o diálogo elegido) */
+export const grupoListo = grupoId => {
+  const s = salidaDe(grupoId)
+  return s === 'windows' || (s === 'agente' ? Boolean(impresoraDe(grupoId)) : estadoImpresora(grupoId).conectada)
+}
 
 /** Imprime un trabajo {lineas, ancho, corte, beep} por la salida configurada del grupo. */
 export async function imprimirTrabajo(grupoId, payload) {
   const p = payload || {}
   const ancho = Number(p.ancho) || 32
-  if (salidaDe(grupoId) === 'windows') return imprimirEnWindows({ lineas: p.lineas || [], ancho })
+  const salida = salidaDe(grupoId)
+  if (salida === 'windows') return imprimirEnWindows({ lineas: p.lineas || [], ancho })
+  if (salida === 'agente') return imprimirPorAgente(impresoraDe(grupoId), generarBytes({ lineas: p.lineas || [], ancho, corte: p.corte !== false, beep: Boolean(p.beep) }))
   return imprimirSilencioso({ grupo: grupoId, lineas: p.lineas || [], ancho, corte: p.corte !== false, beep: Boolean(p.beep) })
 }
 

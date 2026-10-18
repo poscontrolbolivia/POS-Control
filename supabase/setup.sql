@@ -841,7 +841,7 @@ begin
      where i.cuenta_id = v_cuenta.id
        and i.producto_id = v_prod.id
        and i.estado = 'pendiente'
-       and coalesce(i.nota, '') = ''
+       and coalesce(i.nota, '') = coalesce(v_it->>'nota', '')
      limit 1;
 
     if found then
@@ -1064,16 +1064,15 @@ begin
       continue;                                    -- ya estaba unida
     end if;
 
-    select c.id into v_absorbida
-      from public.cuentas c
-      join public.cuenta_mesas cm on cm.cuenta_id = c.id
-     where cm.mesa_id = v_mesa
-       and c.empresa_id = v_emp
-       and c.estado <> 'cerrada'
-       and c.id <> v_cuenta.id
-     limit 1;
-
-    if found then
+    for v_absorbida in
+      select c.id
+        from public.cuentas c
+        join public.cuenta_mesas cm on cm.cuenta_id = c.id
+       where cm.mesa_id = v_mesa
+         and c.empresa_id = v_emp
+         and c.estado <> 'cerrada'
+         and c.id <> v_cuenta.id
+    loop
       update public.cuenta_items
          set cuenta_id = v_cuenta.id
        where cuenta_id = v_absorbida and empresa_id = v_emp;
@@ -1083,7 +1082,7 @@ begin
        where id = v_absorbida and empresa_id = v_emp;
       delete from public.cuenta_mesas where cuenta_id = v_absorbida;
       v_absorb := v_absorb || jsonb_build_array(v_absorbida);
-    end if;
+    end loop;
 
     insert into public.cuenta_mesas (empresa_id, cuenta_id, mesa_id)
     values (v_emp, v_cuenta.id, v_mesa)
@@ -3100,8 +3099,9 @@ create trigger trg_alta_empresa_registrado
 -- ----------------------------------------------------------------------------
 -- 2) EQUIPO · LISTAR (solo admin de la empresa activa)
 -- ----------------------------------------------------------------------------
+drop function if exists public.equipo_listar();
 create or replace function public.equipo_listar()
-returns table (usuario_id uuid, nombre text, correo text, rol text, creado_en timestamptz)
+returns table (usuario_id uuid, nombre text, correo text, rol text, creado_en timestamptz, areas text[])
 language plpgsql
 stable
 security definer
@@ -3120,7 +3120,8 @@ begin
            -- columna declarada text (ERROR 42804), así que se funde explícitamente.
            coalesce(u.email::text, ''),
            m.rol,
-           m.creada_en
+           m.creada_en,
+           m.areas
       from public.membresias m
       join auth.users u on u.id = m.user_id
       left join public.perfiles p on p.user_id = m.user_id
@@ -3864,9 +3865,21 @@ alter table public.membresias add constraint membresias_rol_check
 --    (agregar_items y la importación ya copian p.areas).
 -- ----------------------------------------------------------------------------
 alter table public.productos add column if not exists areas text[] not null default array['cocina']::text[];
+-- v0.18 (bloque B): las áreas ya no son solo cocina/barra: son los grupos de impresión de comanda de la
+-- empresa (Configuración → Impresoras), identificados por su id (slug). La base solo exige el FORMATO del id;
+-- qué áreas existen lo decide la empresa (config.gruposImpresion). Un área borrada deja ítems «Sin área»
+-- (visibles en la pantalla de cocina), nunca ítems perdidos ni cobros bloqueados.
+create or replace function private.areas_validas(p text[])
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $fn$
+  select coalesce(array_length(p, 1), 0) > 0
+     and not exists (select 1 from unnest(p) a where a is null or a !~ '^[a-z0-9][a-z0-9_-]{0,39}$');
+$fn$;
 alter table public.productos drop constraint if exists productos_areas_chk;
-alter table public.productos add constraint productos_areas_chk
-  check (areas <@ array['cocina','barra']::text[] and coalesce(array_length(areas, 1), 0) > 0);
+alter table public.productos add constraint productos_areas_chk check (private.areas_validas(areas));
 
 alter table public.cuenta_items add column if not exists areas text[] not null default array['cocina']::text[];
 
@@ -3889,9 +3902,56 @@ alter table public.cuenta_items add column if not exists anulacion_estado_previo
 alter table public.cuenta_items add column if not exists anulacion_resuelta_por uuid;
 alter table public.cuenta_items add column if not exists anulacion_resuelta_en  timestamptz;
 
--- marcar_salida: cocina/barra/admin/cajero pasan ítems 'enviado' → 'listo'.
+-- ############################################################################
+-- v0.17 · «YA SALIÓ» POR ÁREA. Un combo cocina+barra se marca por separado en cada vista.
+--   cuenta_item_areas: una fila por (ítem, área) YA sacada (ausencia = pendiente).
+--   cuenta_items.estado pasa a 'listo' SOLO cuando todas sus áreas están listas; si se deshace
+--   una vuelve a 'enviado' (salón, caja y reglas de anulación siguen leyendo `estado`).
+--   cuenta_items.areas_listas: copia de las áreas ya sacadas (para mostrar «Parcial» en el salón).
+-- ############################################################################
+create table if not exists public.cuenta_item_areas (
+  item_id    uuid not null references public.cuenta_items(id) on delete cascade,
+  empresa_id uuid not null references public.empresas(id) on delete cascade,
+  area       text not null check (length(area) between 1 and 40),
+  listo_en   timestamptz not null default now(),
+  listo_por  uuid references auth.users(id) on delete set null,
+  primary key (item_id, area)
+);
+create index if not exists cuenta_item_areas_emp_idx on public.cuenta_item_areas (empresa_id);
+alter table public.cuenta_item_areas enable row level security;
+drop policy if exists cuenta_item_areas_select on public.cuenta_item_areas;
+create policy cuenta_item_areas_select on public.cuenta_item_areas for select to authenticated
+  using (empresa_id = (select private.empresa_activa()));
+-- Sin políticas de escritura: solo escriben marcar_salida / deshacer_salida (security definer).
+alter table public.cuenta_items add column if not exists areas_listas text[] not null default '{}'::text[];
+
+-- Migración (idempotente): ítems que ya estaban 'listo' → todas sus áreas marcadas.
+insert into public.cuenta_item_areas (item_id, empresa_id, area, listo_en)
+select i.id, i.empresa_id, a, coalesce(i.listo_en, now())
+  from public.cuenta_items i cross join lateral unnest(i.areas) as a
+ where i.estado = 'listo'
+on conflict (item_id, area) do nothing;
+update public.cuenta_items i set areas_listas = i.areas
+ where i.estado = 'listo' and i.areas_listas = '{}'::text[];
+
+-- Realtime para la tabla nueva (si no hay publicación o falla, queda el sondeo de 4 s).
+do $do$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables
+                      where pubname = 'supabase_realtime' and schemaname = 'public'
+                        and tablename = 'cuenta_item_areas') then
+    alter publication supabase_realtime add table public.cuenta_item_areas;
+  end if;
+exception when others then
+  raise notice 'No se pudo añadir cuenta_item_areas a supabase_realtime (%): la cocina usa el sondeo.', sqlerrm;
+end $do$;
+
+-- marcar_salida(ítems, área): marca el ítem como sacado en ESA área (área null = todas).
+drop function if exists public.marcar_salida(jsonb, uuid);
 create or replace function public.marcar_salida(
   p_item_ids   jsonb,
+  p_area       text default null,
   p_empresa_id uuid default null
 )
 returns integer
@@ -3902,6 +3962,7 @@ as $fn$
 declare
   v_emp uuid;
   v_n   integer;
+  v_ids uuid[];
 begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','cocina','barra']::text[]);
@@ -3909,33 +3970,51 @@ begin
   if p_item_ids is null or jsonb_typeof(p_item_ids) <> 'array' then
     raise exception 'Debe enviar una lista de ítems';
   end if;
+  if p_area is not null and (length(btrim(p_area)) = 0 or length(p_area) > 40) then
+    raise exception 'Área inválida';
+  end if;
+  perform private.exigir_area(p_area);
+  v_ids := array(select "value"::uuid from jsonb_array_elements_text(p_item_ids));
 
-  update public.cuenta_items
-     set estado = 'listo', listo_en = now()
-   where empresa_id = v_emp
-     and estado = 'enviado'
-     and id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids));
-
+  -- 1) marca el ítem como sacado en el área pedida (null = en todas sus áreas)
+  insert into public.cuenta_item_areas (item_id, empresa_id, area, listo_por)
+  select i.id, v_emp, a, auth.uid()
+    from public.cuenta_items i cross join lateral unnest(i.areas) as a
+   where i.empresa_id = v_emp and i.estado = 'enviado' and i.id = any(v_ids)
+     and (p_area is null or a = p_area)
+  on conflict (item_id, area) do nothing;
   get diagnostics v_n = row_count;
+
+  -- 2) areas_listas y estado agregado: 'listo' solo con TODAS las áreas sacadas
+  update public.cuenta_items i
+     set areas_listas = array(select ia.area from public.cuenta_item_areas ia
+                               where ia.item_id = i.id and ia.area = any(i.areas) order by ia.area)
+   where i.empresa_id = v_emp and i.id = any(v_ids) and i.estado = 'enviado';
+  update public.cuenta_items i
+     set estado = 'listo', listo_en = now()
+   where i.empresa_id = v_emp and i.id = any(v_ids) and i.estado = 'enviado'
+     and not exists (select 1 from unnest(i.areas) a where a <> all(i.areas_listas));
+
   if v_n > 0 then
     perform private.auditar(v_emp, 'item_salida',
-      jsonb_build_object('items', v_n),
+      jsonb_build_object('items', v_n, 'area', p_area),
       'cuenta_item',
       (select coalesce(string_agg(s.nombre_snapshot, ', '), (v_n)::text || ' ítems')
          from (select ci.nombre_snapshot
                  from public.cuenta_items ci
-                where ci.empresa_id = v_emp
-                  and ci.id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids))
+                where ci.empresa_id = v_emp and ci.id = any(v_ids)
                 limit 6) s));
   end if;
   return v_n;
 end $fn$;
-revoke all on function public.marcar_salida(jsonb, uuid) from public, anon, authenticated;
-grant execute on function public.marcar_salida(jsonb, uuid) to authenticated;
+revoke all on function public.marcar_salida(jsonb, text, uuid) from public, anon, authenticated;
+grant execute on function public.marcar_salida(jsonb, text, uuid) to authenticated;
 
 -- deshacer_salida: 'listo' → 'enviado' (se limpió la salida por error).
+drop function if exists public.deshacer_salida(jsonb, uuid);
 create or replace function public.deshacer_salida(
   p_item_ids   jsonb,
+  p_area       text default null,
   p_empresa_id uuid default null
 )
 returns integer
@@ -3946,6 +4025,7 @@ as $fn$
 declare
   v_emp uuid;
   v_n   integer;
+  v_ids uuid[];
 begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','cocina','barra']::text[]);
@@ -3953,29 +4033,39 @@ begin
   if p_item_ids is null or jsonb_typeof(p_item_ids) <> 'array' then
     raise exception 'Debe enviar una lista de ítems';
   end if;
+  if p_area is not null and (length(btrim(p_area)) = 0 or length(p_area) > 40) then
+    raise exception 'Área inválida';
+  end if;
+  perform private.exigir_area(p_area);
+  v_ids := array(select "value"::uuid from jsonb_array_elements_text(p_item_ids));
 
-  update public.cuenta_items
-     set estado = 'enviado', listo_en = null
-   where empresa_id = v_emp
-     and estado = 'listo'
-     and id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids));
+  -- quita la marca de esa área (null = de todas) y, si el ítem estaba 'listo', vuelve a 'enviado'
+  delete from public.cuenta_item_areas ia using public.cuenta_items i
+   where ia.item_id = i.id and i.empresa_id = v_emp and i.id = any(v_ids)
+     and i.estado in ('enviado','listo') and (p_area is null or ia.area = p_area);
 
+  update public.cuenta_items i
+     set areas_listas = array(select ia.area from public.cuenta_item_areas ia
+                               where ia.item_id = i.id and ia.area = any(i.areas) order by ia.area),
+         estado   = case when i.estado = 'listo' then 'enviado' else i.estado end,
+         listo_en = case when i.estado = 'listo' then null else i.listo_en end
+   where i.empresa_id = v_emp and i.id = any(v_ids) and i.estado in ('enviado','listo');
   get diagnostics v_n = row_count;
+
   if v_n > 0 then
     perform private.auditar(v_emp, 'item_salida_deshacer',
-      jsonb_build_object('items', v_n),
+      jsonb_build_object('items', v_n, 'area', p_area),
       'cuenta_item',
       (select coalesce(string_agg(s.nombre_snapshot, ', '), (v_n)::text || ' ítems')
          from (select ci.nombre_snapshot
                  from public.cuenta_items ci
-                where ci.empresa_id = v_emp
-                  and ci.id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids))
+                where ci.empresa_id = v_emp and ci.id = any(v_ids)
                 limit 6) s));
   end if;
   return v_n;
 end $fn$;
-revoke all on function public.deshacer_salida(jsonb, uuid) from public, anon, authenticated;
-grant execute on function public.deshacer_salida(jsonb, uuid) to authenticated;
+revoke all on function public.deshacer_salida(jsonb, text, uuid) from public, anon, authenticated;
+grant execute on function public.deshacer_salida(jsonb, text, uuid) to authenticated;
 
 -- pedir_anulacion: cualquier rol pide anular un ítem ENVIADO o LISTO (motivo obligatorio).
 -- El ítem queda en 'anulacion' hasta que admin/cajero resuelva con resolver_anulacion.
@@ -4090,9 +4180,11 @@ grant execute on function public.resolver_anulacion(uuid, boolean, text, uuid) t
 
 -- cola_de_area: la pantalla de cocina/barra. Un objeto por cuenta abierta con los
 -- ítems vivos de ESA área (enviado/listo/anulacion), ordenados por enviada_en.
+drop function if exists public.cola_de_area(text, uuid);
 create or replace function public.cola_de_area(
   p_area       text default 'cocina',
-  p_empresa_id uuid default null
+  p_empresa_id uuid default null,
+  p_validas    text[] default null      -- ids de áreas vigentes; solo para la vista '_sin_area'
 )
 returns jsonb
 language plpgsql
@@ -4106,9 +4198,11 @@ begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','mesero','cocina','barra']::text[]);
 
-  if coalesce(p_area, '') not in ('cocina','barra') then
-    raise exception 'El área debe ser cocina o barra';
+  -- p_area = id de un área (slug) o '_sin_area' (ítems cuyas áreas ya no existen en la empresa).
+  if coalesce(p_area, '') <> '_sin_area' and coalesce(p_area, '') !~ '^[a-z0-9][a-z0-9_-]{0,39}$' then
+    raise exception 'Área inválida';
   end if;
+  perform private.exigir_area(p_area);
 
   select coalesce(jsonb_agg(t.cuenta_json order by t.enviada_en nulls last, t.cuenta_id), '[]'::jsonb)
     into v_out
@@ -4125,6 +4219,7 @@ begin
                                                where cm.cuenta_id = cu.id)
                                   then 'mesa' else 'mostrador' end,
                'comensales', cu.comensales,
+               'etiqueta',   cu.etiqueta,
                'abierta_en', cu.abierta_en,
                'enviada_en', min(i.enviado_en),
                'items', coalesce(jsonb_agg(jsonb_build_object(
@@ -4132,10 +4227,18 @@ begin
                           'nombre',           i.nombre_snapshot,
                           'qty',              i.qty,
                           'nota',             i.nota,
-                          'estado',           i.estado,
+                          -- estado POR ÁREA: 'listo' = esta área ya lo sacó (aunque la otra no)
+                          'estado',           case when i.estado = 'anulacion' then 'anulacion'
+                                                   when i.estado = 'listo' or exists (select 1 from public.cuenta_item_areas ia
+                                                          where ia.item_id = i.id and ia.area = p_area) then 'listo'
+                                                   else 'enviado' end,
+                          'estado_item',      i.estado,
                           'areas',            i.areas,
+                          'areas_listas',     i.areas_listas,
                           'enviada_en',       i.enviado_en,
-                          'listo_en',         i.listo_en,
+                          'listo_en',         coalesce((select ia.listo_en from public.cuenta_item_areas ia
+                                                         where ia.item_id = i.id and ia.area = p_area),
+                                                       case when i.estado = 'listo' then i.listo_en end),
                           'anulacion_motivo', i.anulacion_motivo)
                         order by i.enviado_en), '[]'::jsonb)
              ) as cuenta_json
@@ -4143,14 +4246,127 @@ begin
         join public.cuenta_items i on i.cuenta_id = cu.id
        where cu.empresa_id = v_emp
          and cu.estado <> 'cerrada'
-         and i.areas @> array[p_area]::text[]
+         and case when p_area = '_sin_area'
+                  then not (i.areas && coalesce(p_validas, '{}'::text[]))
+                  else i.areas @> array[p_area]::text[] end
          and i.estado in ('enviado','listo','anulacion')
-       group by cu.id, cu.comensales, cu.abierta_en
+       group by cu.id, cu.comensales, cu.abierta_en, cu.etiqueta
     ) t;
   return v_out;
 end $fn$;
-revoke all on function public.cola_de_area(text, uuid) from public, anon, authenticated;
-grant execute on function public.cola_de_area(text, uuid) to authenticated;
+revoke all on function public.cola_de_area(text, uuid, text[]) from public, anon, authenticated;
+grant execute on function public.cola_de_area(text, uuid, text[]) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- E) ÁREAS CONFIGURABLES (bloque B): qué áreas puede ver cada persona de cocina/barra y borrar un área.
+--    membresias.areas: ids de áreas asignadas (vacío = todas). Solo limita a los roles cocina/barra;
+--    admin/cajero/mesero (y el super) abren cualquier vista.
+-- ----------------------------------------------------------------------------
+alter table public.membresias add column if not exists areas text[] not null default '{}'::text[];
+
+create or replace function private.exigir_area(p_area text)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_rol   text;
+  v_areas text[];
+begin
+  if public.es_super() then return; end if;
+  select m.rol, m.areas into v_rol, v_areas
+    from public.membresias m
+   where m.empresa_id = private.empresa_activa() and m.user_id = auth.uid();
+  if v_rol is null or v_rol not in ('cocina','barra') or coalesce(array_length(v_areas, 1), 0) = 0 then
+    return;                                   -- sin restricción
+  end if;
+  if p_area is null or p_area = '_sin_area' or not (p_area = any(v_areas)) then
+    raise exception 'Tu usuario no tiene asignada esa área';
+  end if;
+end $fn$;
+revoke all on function private.exigir_area(text) from public, anon, authenticated;
+
+create or replace function public.mis_areas(p_empresa_id uuid default null)
+returns text[]
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare v_emp uuid;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero','cocina','barra']::text[]);
+  return coalesce((select m.areas from public.membresias m
+                    where m.empresa_id = v_emp and m.user_id = auth.uid()), '{}'::text[]);
+end $fn$;
+revoke all on function public.mis_areas(uuid) from public, anon;
+grant execute on function public.mis_areas(uuid) to authenticated;
+
+create or replace function public.equipo_poner_areas(p_usuario_id uuid, p_areas text[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_ar  text[] := coalesce(p_areas, '{}'::text[]);
+begin
+  perform private.exigir_rol(array['admin']::text[]);
+  v_emp := private.empresa_activa();
+  if exists (select 1 from unnest(v_ar) a where a is null or a !~ '^[a-z0-9][a-z0-9_-]{0,39}$') then
+    raise exception 'Área inválida';
+  end if;
+  update public.membresias set areas = v_ar
+   where empresa_id = v_emp and user_id = p_usuario_id and rol in ('cocina','barra');
+  if not found then
+    raise exception 'Solo se asignan áreas a personas con rol cocina o barra';
+  end if;
+  perform private.auditar(v_emp, 'equipo_areas',
+    jsonb_build_object('usuario', p_usuario_id::text, 'areas', to_jsonb(v_ar)));
+end $fn$;
+revoke all on function public.equipo_poner_areas(uuid, text[]) from public, anon;
+grant execute on function public.equipo_poner_areas(uuid, text[]) to authenticated;
+
+-- Borrar un área: la quita de los productos (si se quedan sin ninguna, pasan a p_reemplazo) y de las
+-- personas. Los ítems YA enviados con esa área NO se tocan: aparecen en la vista «Sin área».
+create or replace function public.retirar_area(
+  p_area       text,
+  p_reemplazo  text default 'cocina',
+  p_empresa_id uuid default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_n   integer;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+  if coalesce(p_area, '') !~ '^[a-z0-9][a-z0-9_-]{0,39}$' or coalesce(p_reemplazo, '') !~ '^[a-z0-9][a-z0-9_-]{0,39}$' then
+    raise exception 'Área inválida';
+  end if;
+  update public.productos
+     set areas = case when coalesce(array_length(array_remove(areas, p_area), 1), 0) > 0
+                      then array_remove(areas, p_area)
+                      else array[p_reemplazo]::text[] end
+   where empresa_id = v_emp and areas @> array[p_area]::text[];
+  get diagnostics v_n = row_count;
+  update public.membresias set areas = array_remove(areas, p_area)
+   where empresa_id = v_emp and areas @> array[p_area]::text[];
+  perform private.auditar(v_emp, 'area_retirada',
+    jsonb_build_object('area', p_area, 'reemplazo', p_reemplazo, 'productos', v_n));
+  return v_n;
+end $fn$;
+revoke all on function public.retirar_area(text, text, uuid) from public, anon;
+grant execute on function public.retirar_area(text, text, uuid) to authenticated;
+
 
 -- ----------------------------------------------------------------------------
 -- D) AUDITORÍA local: el admin de la empresa ya puede leer su auditoria desde la app
@@ -4767,5 +4983,76 @@ where false;   -- ← quita esta línea (where false) para que se ejecute
 -- Limpieza de una versión anterior: esta función ya no existe (se usa public.es_super()).
 drop function if exists private.es_super_compat();
 
-commit;
+-- ############################################################################
+-- ## 009 · subcuentas de mesa (2a / 2b) y opciones rápidas por producto
+-- ############################################################################
+-- Dividir una mesa = crear una segunda cuenta ABIERTA sobre las mismas mesas, con etiqueta de
+-- una letra ('a','b',…). Cada subcuenta se cobra por separado; la mesa queda libre cuando se
+-- cierran todas. Los productos se reparten con mover_items (destino = cuenta).
+alter table public.cuentas add column if not exists etiqueta text;
+alter table public.cuentas drop constraint if exists cuentas_etiqueta_chk;
+alter table public.cuentas add constraint cuentas_etiqueta_chk check (etiqueta is null or etiqueta ~ '^[a-z]$');
 
+-- Opciones rápidas del producto («término medio», «tres cuartos», «inglés»…): se ofrecen como
+-- botones al pedir el artículo y viajan como nota del ítem (sale en la comanda).
+alter table public.productos add column if not exists opciones text[] not null default '{}'::text[];
+alter table public.productos drop constraint if exists productos_opciones_chk;
+alter table public.productos add constraint productos_opciones_chk
+  check (coalesce(array_length(opciones, 1), 0) <= 20);
+
+create or replace function public.dividir_cuenta(
+  p_cuenta_id  uuid,
+  p_empresa_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp    uuid;
+  v_cuenta public.cuentas;
+  v_n      integer;
+  v_max    integer;
+  v_nueva  uuid;
+begin
+  v_emp    := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
+  v_cuenta := private.load_cuenta(p_cuenta_id, array['abierta','precuenta']::text[]);
+  if v_cuenta.tipo <> 'mesa' then
+    raise exception 'solo se puede dividir una cuenta de mesa';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('cuenta:' || v_cuenta.id::text, 0));
+
+  -- cuentas abiertas que comparten alguna mesa con esta (incluida ella misma)
+  select count(*), coalesce(max(ascii(c.etiqueta)), 96)
+    into v_n, v_max
+    from public.cuentas c
+   where c.empresa_id = v_emp and c.estado <> 'cerrada'
+     and exists (select 1
+                   from public.cuenta_mesas a
+                   join public.cuenta_mesas b on b.mesa_id = a.mesa_id
+                  where a.cuenta_id = v_cuenta.id and b.cuenta_id = c.id);
+  if v_n >= 8 then
+    raise exception 'una mesa admite como máximo 8 subcuentas';
+  end if;
+
+  if v_cuenta.etiqueta is null then
+    update public.cuentas set etiqueta = 'a' where id = v_cuenta.id;
+    v_max := greatest(v_max, 97);
+  end if;
+
+  insert into public.cuentas (empresa_id, tipo, estado, comensales, abierta_por, etiqueta)
+  values (v_emp, 'mesa', 'abierta', 1, auth.uid(), chr(v_max + 1))
+  returning id into v_nueva;
+
+  insert into public.cuenta_mesas (empresa_id, cuenta_id, mesa_id)
+  select v_emp, v_nueva, cm.mesa_id from public.cuenta_mesas cm where cm.cuenta_id = v_cuenta.id;
+
+  return v_nueva;
+end $fn$;
+revoke all on function public.dividir_cuenta(uuid, uuid) from public, anon;
+grant execute on function public.dividir_cuenta(uuid, uuid) to authenticated;
+
+commit;

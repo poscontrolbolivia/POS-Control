@@ -4,7 +4,7 @@ import { useStore, totalFinal } from '../../services/store.jsx'
 import { puede } from '../../services/permisos'
 import { MONEDA } from '../../config'
 import { useIdioma } from '../../i18n/index.jsx'
-import { imprimirTicket } from '../ticket/Ticket.jsx'
+import { imprimirCuenta } from '../ticket/Ticket.jsx'
 import './CajaPage.css'
 
 const round2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100
@@ -85,7 +85,7 @@ export default function CajaPage({ rol, sesion }) {
     setCierre(null)
   }
 
-  const imprimirResumen = () => {
+  const imprimirResumen = async () => {
     const { tickets, ventas } = resumen
     const cuentaSintetica = {
       tipo: 'directa', numero: numeroActual, mesaIds: [], estado: 'cerrada',
@@ -97,7 +97,9 @@ export default function CajaPage({ rol, sesion }) {
       })),
       pagos: Object.entries(ventas).filter(([, v]) => v > 0).map(([metodo, monto]) => ({ metodo, monto })),
     }
-    imprimirTicket({ cuenta: cuentaSintetica, config: s.config, titulo: t('caja.arqueoTitulo', { n: numeroActual }) })
+    const r = await imprimirCuenta({ cuenta: cuentaSintetica, config: s.config, titulo: t('caja.arqueoTitulo', { n: numeroActual }) })
+    if (r === 'sin-impresora') alert(t('caja.avisoSinImpresora'))
+    else if (r === 'error') alert(t('caja.avisoFalloImpresora'))
   }
 
   // ── Sin turno abierto: tarjeta de apertura + historial breve ──────────────

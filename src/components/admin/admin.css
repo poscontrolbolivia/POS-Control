@@ -3,6 +3,8 @@
 .adm-panel{max-width:860px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:16px}
 .adm-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .adm-cab h2{margin:0;font-size:1.35rem}
+/* la acción de la cabecera (formulario o botón tras el título) va al borde derecho */
+.adm-cab > form,.adm-cab > button,.adm-cab > .cab-acciones{margin-left:auto}
 .adm-sub{margin:0 0 6px;color:var(--mut);font-size:.9rem}
 .adm-aviso{
   background:var(--card);border:1px solid var(--line);border-radius:14px;
@@ -135,3 +137,5 @@
 .menu-toggle h3{margin:0;font-size:1.1rem}
 .menu-flecha{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--ac);color:#fff;font-size:.8rem}
 .menu-chip-imp{background:color-mix(in srgb,var(--btn-orange) 18%,var(--card));color:var(--ink);border:1px solid color-mix(in srgb,var(--btn-orange) 60%,var(--line))}
+
+.adm-opciones{flex:1 1 220px;min-width:160px}

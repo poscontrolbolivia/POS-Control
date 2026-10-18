@@ -87,10 +87,21 @@ function reducer(s, a) {
     }
 
     case 'item+': return upd(a.cuentaId, c => {
-      const ex = c.items.find(i => i.productoId === a.p.id && i.estado === 'pendiente' && !i.nota)
+      const nota = a.nota || ''
+      const ex = c.items.find(i => i.productoId === a.p.id && i.estado === 'pendiente' && (i.nota || '') === nota)
       if (ex) return { ...c, items: c.items.map(i => (i === ex ? { ...i, qty: i.qty + 1 } : i)) }
-      return { ...c, items: [...c.items, { id: uid(), productoId: a.p.id, nombre: a.p.nombre, precio: a.p.precio, qty: 1, estado: 'pendiente', nota: '' }] }
+      return { ...c, items: [...c.items, { id: uid(), productoId: a.p.id, nombre: a.p.nombre, precio: a.p.precio, qty: 1, estado: 'pendiente', nota }] }
     })
+    case 'dividir': { // segunda cuenta abierta sobre las mismas mesas: 2a / 2b…
+      const c = s.cuentas.find(x => x.id === a.cuentaId)
+      if (!c || c.tipo !== 'mesa') return s
+      const hermanas = s.cuentas.filter(x => x.estado !== 'cerrada' && x.mesaIds.some(m => c.mesaIds.includes(m)))
+      if (hermanas.length >= 8) return s
+      const usadas = hermanas.map(x => x.etiqueta).filter(Boolean)
+      const sig = String.fromCharCode(Math.max(97, ...usadas.map(l => l.charCodeAt(0))) + 1)
+      return { ...s, cuentas: s.cuentas.map(x => (x.id === c.id && !x.etiqueta ? { ...x, etiqueta: 'a' } : x))
+        .concat([nuevaCuenta({ tipo: 'mesa', mesaIds: [...c.mesaIds], etiqueta: sig, abiertaPor: a.usuario })]) }
+    }
     case 'qty': return upd(a.cuentaId, c => ({ ...c, items: c.items.flatMap(i => (i.id !== a.itemId ? [i] : i.qty + a.d <= 0 ? [] : [{ ...i, qty: i.qty + a.d }])) }))
     case 'nota': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.id === a.itemId ? { ...i, nota: a.nota } : i)) }))
     case 'anular': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.id === a.itemId ? { ...i, estado: 'anulado', motivo: a.motivo } : i)) }))
@@ -153,6 +164,10 @@ function reducer(s, a) {
     case 'seccion~': return { ...s, secciones: s.secciones.map(x => (x.id === a.id ? { ...x, ...a.cambios } : x)) }
     case 'seccion-': return { ...s, secciones: s.secciones.filter(x => x.id !== a.id), productos: s.productos.filter(p => p.seccionId !== a.id) }
     case 'producto+': return { ...s, productos: [...s.productos, { id: uid(), activo: true, ...a.producto }] }
+    case 'area-': return { ...s, productos: s.productos.map(p => {
+      const rest = (p.areas || []).filter(x => x !== a.id)
+      return (p.areas || []).includes(a.id) ? { ...p, areas: rest.length ? rest : [a.reemplazo || 'cocina'] } : p
+    }) }
     case 'producto~': return { ...s, productos: s.productos.map(p => (p.id === a.id ? { ...p, ...a.cambios } : p)) }
     case 'producto-': return { ...s, productos: s.productos.filter(p => p.id !== a.id) }
 
@@ -277,7 +292,11 @@ export function StoreProvider({ children }) {
 export const useStore = () => useContext(Ctx)
 export const nuevoId = uid
 
-export const cuentaActiva = (s, mesaId) => s.cuentas.find(c => c.mesaIds.includes(mesaId) && c.estado !== 'cerrada')
+// Cuentas abiertas de una mesa, ordenadas por etiqueta (2a, 2b…). Una mesa normal tiene una sola.
+export const cuentasDeMesa = (s, mesaId) => s.cuentas
+  .filter(c => c.mesaIds.includes(mesaId) && c.estado !== 'cerrada')
+  .sort((x, y) => (x.etiqueta || '').localeCompare(y.etiqueta || ''))
+export const cuentaActiva = (s, mesaId) => cuentasDeMesa(s, mesaId)[0]
 export const totalCuenta = c => (c ? itemsVivos(c).reduce((t, i) => t + i.precio * i.qty, 0) : 0)
 export const totalFinal = c => (c ? Math.max(0, totalCuenta(c) - (c.descuento || 0)) + (c.propina || 0) : 0)
 export const pagadoCuenta = c => (c?.pagos || []).reduce((t, p) => t + p.monto, 0)

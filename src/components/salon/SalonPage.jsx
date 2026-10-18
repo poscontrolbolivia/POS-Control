@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStore, cuentaActiva, totalCuenta, totalFinal, nuevoId } from '../../services/store.jsx'
+import { useStore, cuentaActiva, cuentasDeMesa, totalCuenta, totalFinal, nuevoId } from '../../services/store.jsx'
 import { puede } from '../../services/permisos'
 import { useMoneda } from '../../services/moneda.js'
 import { useIdioma } from '../../i18n/index.jsx'
@@ -17,6 +17,13 @@ const TAM_MIN = 60       // tamaño mínimo en el lienzo normalizado (mesas más
 const MAX_PX_MOVIL = 768 // mismo criterio que los media-query de SalonPage.css
 
 const estadoMesa = c => (!c ? 'libre' : c.estado === 'precuenta' ? 'porcobrar' : c.items.some(i => i.estado === 'enviado') ? 'enviada' : 'ocupada')
+
+// Mesa dividida (2a/2b): «por cobrar» solo si TODAS las subcuentas lo están; si no, manda enviada/ocupada.
+const estadoVarias = cs => {
+  if (!cs.length) return 'libre'
+  const e = cs.map(c => estadoMesa(c))
+  return e.every(x => x === 'porcobrar') ? 'porcobrar' : e.includes('enviada') ? 'enviada' : 'ocupada'
+}
 
 // ── lógica pura del salón (exportada para poder probarla sin navegador) ──
 
@@ -385,13 +392,14 @@ export default function SalonPage({ rol, sesion }) {
           <div className="mesas-lista">
             {mesasZona.length === 0 && <p className="lienzo-vacio" style={{ position: 'static' }}>{t('salon.sinMesasZona')}</p>}
             {mesasZona.map(m => {
-              const c = cuentaActiva(s, m.id), est = estadoMesa(c)
+              const cs = cuentasDeMesa(s, m.id), c = cs[0], est = estadoVarias(cs), total = cs.reduce((a, x) => a + totalFinal(x), 0)
               const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
               return (
                 <button type="button" key={m.id} className={`mesa-item ${est}`} onClick={() => setSel(m.id)}>
-                  <b className="nombre">{m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : ''}</b>
+                  <b className="nombre">{m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : cs.length > 1 ? ` ✂×${cs.length}` : ''}</b>
                   <span className="mi-est">{t('salon.' + est)}</span>
-                  {c && <small className="importe">{money(totalFinal(c))}</small>}
+                  {c && <small className="importe">{money(total)}</small>}
+                  {c && <small className="mi-quien">👥 {comDe(c)}/{capacidadCuenta(c, s.mesas) || m.cap || 0}{c.abiertaPor ? ` · 👤 ${c.abiertaPor}` : ''}</small>}
                   {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
                 </button>
               )
@@ -406,7 +414,7 @@ export default function SalonPage({ rol, sesion }) {
             <p className="lienzo-vacio">{edit && admin ? t('salon.sinMesas') : t('salon.sinMesasZona')}</p>
           )}
           {mesasZona.map(m => {
-            const c = cuentaActiva(s, m.id), est = estadoMesa(c)
+            const cs = cuentasDeMesa(s, m.id), c = cs[0], est = estadoVarias(cs), total = cs.reduce((a, x) => a + totalFinal(x), 0)
             const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
             // Capacidad de la cuenta: suma de las mesas unidas (los comensales se comparan
             // contra esa suma, no contra la mesa suelta).
@@ -421,9 +429,11 @@ export default function SalonPage({ rol, sesion }) {
                   title={c ? (com > capT ? t('salon.comensalesDeMas', { comensales: com, cap: capT }) : t('salon.comensalesTitle', { comensales: com, cap: capT })) : t('salon.capacidadTitle', { cap: m.cap })}>
                   👥 {c ? `${com}/${capT}` : m.cap}
                 </span>
-                {c && <small className="importe">{money(totalFinal(c))}</small>}
+                {c && <small className="importe">{money(total)}</small>}
+                {c && c.abiertaPor && <small className="abrio" title={t('pedido.abrio', { usuario: c.abiertaPor })}>👤 {c.abiertaPor}</small>}
                 {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
                 {c && heredadas.includes(c.id) && <span className="badge-heredada" title={t('salon.heredadaTitle')}>↩</span>}
+                {!unida && cs.length > 1 && <span className="badge-unida" title={t('pedido.menuDividir')}>✂ ×{cs.length}</span>}
                 {unida && (
                   <span className="badge-unida" title={t('salon.unidaTitle', { n: c.mesaIds.length, total: money(totalCuenta(c)) })}>
                     🔗 ×{c.mesaIds.length}
