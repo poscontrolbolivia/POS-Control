@@ -133,3 +133,51 @@ html .topbar-salir:hover:not(:disabled),html .topbar-menu:hover:not(:disabled){f
 
 .pref-fila{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
 .pref-fila .lg-tema{display:flex;align-items:center;gap:8px}
+
+/* ============================================================================================
+   BOTONES CON LOS COLORES DEL LOGO · sólidos (sin fondos translúcidos) y NO dependen del tema.
+   Paleta sacada del logo: azul, verde, naranja, celeste y amarillo. Cambiar aquí = cambia todo.
+   ============================================================================================ */
+:root{
+  --logo-navy:#0f4c91;--logo-blue:#1f6fd0;--logo-teal:#1686ba;--logo-green:#238f41;--logo-orange:#f16f1b;--logo-yellow:#fbb633;
+  --btn-blue:var(--logo-blue);--btn-green:var(--logo-green);--btn-orange:var(--logo-orange);--btn-yellow:var(--logo-yellow);--btn-teal:var(--logo-teal);
+}
+button.primary,button.info{--pc:var(--logo-blue)}
+button:not(.primary):not(.info):not(.success):not(.warning):not(.orange):not(.violet):not(.teal):not(.pink):not(.slate):not(.rojo):not(.danger):not(.ghost){
+  background:var(--logo-navy);border-color:var(--logo-navy);color:#fff}
+button:not(.primary):not(.info):not(.success):not(.warning):not(.orange):not(.violet):not(.teal):not(.pink):not(.slate):not(.rojo):not(.danger):not(.ghost):hover:not(:disabled){
+  background:var(--logo-navy);filter:brightness(1.15)}
+button.ghost{background:var(--logo-teal);border-color:var(--logo-teal);color:#fff}
+button.ghost:hover:not(:disabled){background:var(--logo-teal);filter:brightness(1.1)}
+html[data-theme] button.danger{background:var(--btn-red);border-color:var(--btn-red);color:#fff}
+html[data-theme] button.danger:hover:not(:disabled){background:var(--btn-red);filter:brightness(1.1)}
+.tab.on,.ck-tab.on,.ck-sacadas.on,.topbar-tab.on,.vd-tab.on,.vd-metodo.on,.me-opc.on,.pm-opcion.on,.eq-area-chip.on,html .tab.on,html .topbar-tab.on,html .vd-tab.on,html .vd-metodo.on,html .me-opc.on,html .pm-opcion.on{
+  background:var(--logo-orange);border-color:var(--logo-orange);color:#fff}
+.tab.on:hover:not(:disabled),.me-opc.on:hover:not(:disabled){background:var(--logo-orange);color:#fff}
+
+
+/* ============================================================================================
+   v0.22.1 · RED DE SEGURIDAD
+   1) Zoom involuntario: un campo con letra < 16px hace zoom al tocarlo (iPhone). Varias reglas de
+      componentes (`font: inherit` dentro de etiquetas pequeñas) la bajaban; !important la fija.
+   2) Casillas que se salen del margen: cualquier campo/etiqueta puede encogerse (min-width:0) y
+      nunca pasa del ancho de su caja. Los mínimos de cada pantalla se acotan con min(…, 100%).
+   ============================================================================================ */
+input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:max(16px,1em)!important}
+input,select,textarea{max-width:100%}
+label,fieldset,.adm-campo,.super-campo,.campo,.me-campo{min-width:0}
+select{text-overflow:ellipsis}
+body{overflow-x:clip}
+.caja-form input{min-width:min(160px,100%)}
+.campo input,.campo select{min-width:min(8rem,100%)}
+.adm-fila input{min-width:min(140px,100%)}
+.imp-seccion select{min-width:min(110px,100%)}
+.imp-url input{min-width:min(240px,100%)}
+.eq-clave-fila input{min-width:min(150px,100%)}
+
+/* Botones que seguían con el color del tema o sin relleno → colores del logo, sólidos */
+html .ztab.on .tab{background:var(--logo-orange);color:#fff}
+button.ico{background:var(--logo-navy);border:0;color:#fff}
+button.ico:hover:not(:disabled){background:var(--logo-navy);filter:brightness(1.15)}
+button.ico.ok{background:var(--logo-green);color:#fff}
+button.ico.danger{background:var(--btn-red);color:#fff}

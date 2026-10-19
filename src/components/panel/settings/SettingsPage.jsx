@@ -19,6 +19,7 @@ export default function SettingsPage({ rol, sesion }) {
     ivaPct: String(s.config?.ivaPct ?? 0),
     propinaPct: String(s.config?.propinaPct ?? 10),
     propinaIncluida: Boolean(s.config?.propinaIncluida),
+    cajaModo: s.config?.cajaModo === 'por_cajero' ? 'por_cajero' : 'compartida',
   })
   const [msg, setMsg] = useState('')
   const [verImpresoras, setVerImpresoras] = useState(false)
@@ -61,7 +62,7 @@ export default function SettingsPage({ rol, sesion }) {
       setMsg(t('config.rangoPct'))
       return
     }
-    d({ t: 'cfg~', cambios: { nombre: form.nombre.trim(), moneda: limpiarMoneda(form.moneda), ivaPct, propinaPct, propinaIncluida: form.propinaIncluida } })
+    d({ t: 'cfg~', cambios: { nombre: form.nombre.trim(), moneda: limpiarMoneda(form.moneda), ivaPct, propinaPct, propinaIncluida: form.propinaIncluida, cajaModo: form.cajaModo } })
     setMsg(t('config.guardado'))
     setTimeout(() => setMsg(''), 2500)
   }
@@ -97,6 +98,17 @@ export default function SettingsPage({ rol, sesion }) {
             <span><b>{t('config.propinaIncluir')}</b><small>{t('config.propinaIncluirAyuda')}</small></span>
           </label>
         </div>
+        <fieldset className="adm-caja-modo" disabled={Boolean(s.caja?.turno) || (s.caja?.otros || []).length > 0}>
+          <legend>{t('config.cajaModo')}</legend>
+          {['compartida', 'por_cajero'].map(m => (
+            <label key={m} className={'adm-check' + (form.cajaModo === m ? ' on' : '')}>
+              <input type="radio" name="cajaModo" value={m} checked={form.cajaModo === m} onChange={() => setForm(f => ({ ...f, cajaModo: m }))} />
+              <span><b>{t(m === 'compartida' ? 'config.cajaCompartida' : 'config.cajaPorCajero')}</b>
+                <small>{t(m === 'compartida' ? 'config.cajaCompartidaAyuda' : 'config.cajaPorCajeroAyuda')}</small></span>
+            </label>
+          ))}
+          {(s.caja?.turno || (s.caja?.otros || []).length > 0) && <small className="adm-msg warn">{t('config.cajaModoBloqueado')}</small>}
+        </fieldset>
         <div className="adm-fila">
           <button type="submit" className="primary big">{t('config.guardarCambios')}</button>
           {msg && <span className={'adm-msg' + (msg.startsWith('✅') ? ' ok' : ' warn')}>{msg}</span>}

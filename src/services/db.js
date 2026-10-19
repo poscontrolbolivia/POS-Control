@@ -35,6 +35,8 @@ const mapTurno = (t, nombres) => ({
   id: t.id,
   abiertoEn: ts(t.abierto_en),
   abiertoPor: nombres[t.abierto_por] || t.abierto_por,
+  abiertoPorId: t.abierto_por,
+  modo: t.modo || 'compartida',
   fondo: N(t.fondo),
   movimientos: ((t.movimientos && t.movimientos.movimientos) || []).map(mapMov),
   ...(t.cerrado_en ? {
@@ -69,11 +71,15 @@ async function fetchCuentas(empresaId, caja) {
 }
 
 async function fetchCaja(empresaId) {
-  const [abierto, historial] = await Promise.all([
-    selectAll(sb.from('turnos_caja').select('*').eq('empresa_id', empresaId).is('cerrado_en', null).order('abierto_en', { ascending: false }).limit(1)),
+  const { data: ses } = await sb.auth.getSession()
+  const uid = ses?.session?.user?.id
+  const [abiertos, historial] = await Promise.all([
+    selectAll(sb.from('turnos_caja').select('*').eq('empresa_id', empresaId).is('cerrado_en', null).order('abierto_en', { ascending: false }).limit(50)),
     selectAll(sb.from('turnos_caja').select('*').eq('empresa_id', empresaId).not('cerrado_en', 'is', null).order('abierto_en', { ascending: false }).limit(15)),
   ])
-  return { abierto: abierto[0] || null, historial }
+  // Caja compartida: el único turno abierto del local. Un turno por cajero: EL MÍO (los de los demás van aparte).
+  const mio = abiertos.find(x => x.modo === 'por_cajero' && x.abierto_por === uid) || abiertos.find(x => x.modo !== 'por_cajero') || null
+  return { abierto: mio, otros: abiertos.filter(x => x !== mio), historial }
 }
 
 async function fetchDevoluciones(empresaId, cajaT, nombres) {
@@ -129,8 +135,9 @@ function armarCuentas(cuentas, items, pagos, cms, nombres) {
   }))
 }
 
-const armarCaja = (abierto, historial, nombres, siguienteTurno, cajaPrev) => ({
+const armarCaja = (abierto, historial, nombres, siguienteTurno, cajaPrev, otros = []) => ({
   turno: abierto ? mapTurno(abierto, nombres) : null,
+  otros: otros.map(x => mapTurno(x, nombres)),
   historial: historial.map(t => mapTurno(t, nombres)),
 
   siguienteTurno: siguienteTurno ?? cajaPrev?.siguienteTurno ?? 1,
@@ -167,7 +174,7 @@ export async function cargarEstadoInicial(empresaId) {
     productos: productos.map(mapProducto),
     cuentas,
     devoluciones,
-    caja: armarCaja(cajaT.abierto, cajaT.historial, nombres, N(numeradas[0]?.numero || 0) + 1),
+    caja: armarCaja(cajaT.abierto, cajaT.historial, nombres, N(numeradas[0]?.numero || 0) + 1, undefined, cajaT.otros),
     usuariosDemo: [],
     _sup: true,
   }
@@ -184,7 +191,7 @@ async function refrescarNegocio(estado) {
     ...estado,
     cuentas: armarCuentas(data.cuentas, data.items, data.pagos, data.cms, nombres),
     devoluciones: await fetchDevoluciones(empresaId, cajaT, nombres),
-    caja: armarCaja(cajaT.abierto, cajaT.historial, nombres, undefined, estado.caja),
+    caja: armarCaja(cajaT.abierto, cajaT.historial, nombres, undefined, estado.caja, cajaT.otros),
   }
 }
 

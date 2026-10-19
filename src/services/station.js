@@ -2,7 +2,7 @@ import { sb, obtenerEmpresaActiva } from './supabaseClient.js'
 import { gruposDe } from './printing.js'
 import { estadoImpresora, imprimirSilencioso, generarBytes, generarTexto, reutilizarImpresoras, suscribirImpresora } from './printer.js'
 import { imprimirEnWindows } from './printWindows.js'
-import { imprimirPorAgente } from './printAgent.js'
+import { imprimirPorAgente, listarImpresorasAgente } from './printAgent.js'
 import { reclamarImpresion, finalizarImpresion, listarImpresion } from './printQueue.js'
 
 const LLAVE = 'pos-estacion'
@@ -39,6 +39,28 @@ export function fijarImpresora(grupoId, nombre) {
   if (nombre) impresoras[grupoId] = nombre; else delete impresoras[grupoId]
   pref = { ...pref, impresoras }
   guardarPref(pref); notificar()
+}
+
+/**
+ * «Entrar a la app y que ya funcionen las impresoras»: si esta PC tiene el agente instalado
+ * (instalar-agente.bat, arranca solo con Windows) y un grupo (Cocina, Barra, Caja) nunca se configuró
+ * AQUÍ, se le asigna la impresora predeterminada de Windows. Solo en PC (no en teléfonos) y solo para
+ * grupos sin elección previa: lo que ya elegiste no se toca. Devuelve true si cambió algo.
+ */
+export async function autoConfigurarAgente(grupos = []) {
+  const escritorio = typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+  const nuevos = grupos.filter(g => !pref.salidas?.[g.id])
+  if (!escritorio || !nuevos.length) return false
+  try {
+    const { predeterminada } = await listarImpresorasAgente()
+    if (!predeterminada) return false
+    const salidas = { ...pref.salidas }
+    const impresoras = { ...pref.impresoras }
+    nuevos.forEach(g => { salidas[g.id] = 'agente'; impresoras[g.id] = predeterminada })
+    pref = { ...pref, salidas, impresoras }
+    guardarPref(pref); notificar()
+    return true
+  } catch { return false } // sin agente: nada que hacer (el selector manual sigue disponible)
 }
 
 export const modoAgenteDe = grupoId => (pref.modos?.[grupoId] === 'texto' ? 'texto' : 'raw')

@@ -61,3 +61,31 @@
 
 .super-cuota-caja{border:1px dashed #8a6d1a;border-radius:14px;padding:14px;background:var(--libre)}
 .super-cuota-caja .super-titulo-bloque{margin-bottom:2px}
+
+/* Plan / Premium del super */
+.super-chip.plan-premium{background:var(--logo-green);color:#fff}
+.super-chip.plan-basico{background:var(--libre);color:var(--mut)}
+.super-plan-caja{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1.5px solid var(--line-fuerte);border-radius:14px;background:var(--card)}
+.super-plan-estado{font-size:1rem}
+.super-plan-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.super-plan-custom{display:inline-flex;gap:6px;align-items:center;max-width:100%}
+.super-plan-custom input{width:96px;min-width:0;min-height:40px}
+
+/* Que NADA se salga del ancho en el móvil */
+.super-envoltura,.super-bloque,.panel.super-bloque,.super-campo{min-width:0;max-width:100%}
+.super-bloque input,.super-bloque select,.super-bloque textarea{max-width:100%;min-width:0}
+@media (max-width:700px){
+  .super-envoltura{padding:10px}
+  .super-tabla-envoltura{border:0;background:transparent;overflow:visible}
+  .super-tabla,.super-tabla tbody,.super-tabla tr,.super-tabla td{display:block;width:100%;min-width:0}
+  .super-tabla thead{display:none}
+  .super-tabla tr{border:1px solid var(--line);border-radius:14px;background:var(--card);padding:8px 12px;margin-bottom:10px}
+  .super-tabla td{display:flex;justify-content:space-between;align-items:center;gap:12px;border:0;padding:5px 0;white-space:normal;text-align:right}
+  .super-tabla td::before{content:attr(data-label);color:var(--mut);font-size:.74rem;text-transform:uppercase;font-weight:700;text-align:left}
+  .super-tabla td.super-nombre{display:block;text-align:left;font-size:1.05rem;min-width:0}
+  .super-tabla td.super-nombre::before,.super-tabla td:last-child::before{content:none}
+  .super-tabla td:last-child{display:block;padding-top:8px}
+  .super-tabla .super-acciones{flex-wrap:wrap}
+  .super-tabla .super-acciones button{flex:1 1 auto}
+  .super-titulo-bloque .sp{display:none}
+}

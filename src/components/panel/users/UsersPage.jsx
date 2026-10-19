@@ -49,11 +49,9 @@ function fecha(iso, idiom) {
 function EquipoFilaColapsada({ n, error, onToggle, tOr }) {
   return (
     <div className="adm-fila">
-      <b>👥 {tOr('equipo.titulo', 'Equipo')}</b>
+      <button type="button" className="ghost eq-toggle" onClick={onToggle}>👥 {tOr('equipo.mostrar', 'Mostrar equipo')}</button>
       <span className="adm-chip">{n} {n === 1 ? tOr('equipo.una', 'persona') : tOr('equipo.varias', 'personas')}</span>
       {error && <span className="adm-chip" title={error}>⚠️ {tOr('equipo.error', 'Error al cargar el equipo')}</span>}
-      <span className="sp" />
-      <button type="button" className="ghost" onClick={onToggle}>{tOr('equipo.mostrar', 'Mostrar equipo')}</button>
     </div>
   )
 }
@@ -205,6 +203,7 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
   return (
     <section className="adm-card adm-equipo eq-bloque">
       <div className="adm-card-cab">
+        <button type="button" className="ghost eq-toggle" onClick={onToggleAbierto}>👥 {tOr('equipo.ocultar', 'Ocultar equipo')}</button>
         <h3>{tOr('equipo.titulo', 'Equipo')}</h3>
         <span className="adm-chip">{miembros.length} {miembros.length === 1 ? tOr('equipo.una', 'persona') : tOr('equipo.varias', 'personas')}</span>
         <span className="sp" />
@@ -212,7 +211,6 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
           <button type="button" className="ghost" disabled={cargando || ocupado} onClick={() => cargar()}>
             {cargando ? tOr('equipo.cargando', 'Cargando…') : tOr('equipo.actualizar', 'Actualizar')}
           </button>
-          <button type="button" className="ghost" onClick={onToggleAbierto}>{tOr('equipo.ocultar', 'Ocultar equipo')}</button>
         </span>
       </div>
       <p className="adm-sub eq-nota">
@@ -397,10 +395,9 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
   return (
     <section className="adm-card adm-equipo eq-bloque">
       <div className="adm-card-cab">
+        <button type="button" className="ghost eq-toggle" onClick={onToggleAbierto}>👥 {tOr('equipo.ocultar', 'Ocultar equipo')}</button>
         <h3>{tOr('equipo.titulo', 'Equipo')}</h3>
         <span className="adm-chip">{usuarios.length}</span>
-        <span className="sp" />
-        <button type="button" className="ghost" onClick={onToggleAbierto}>{tOr('equipo.ocultar', 'Ocultar equipo')}</button>
       </div>
       <p className="adm-sub eq-nota">{t('equipo.demoNota')}</p>
       {error && <div className="eq-error" role="alert">⚠️ {error}</div>}

@@ -4,13 +4,14 @@ import { puede } from '../../../services/permissions'
 import { MONEDA } from '../../../services/config'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { imprimirCuenta } from '../../printing/Ticket.jsx'
+import ClosingsHistory from './ClosingsHistory.jsx'
 import './CashPage.css'
 
 const round2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100
 
 function calcularResumen(turno, cuentas) {
   const fin = turno.cerradoEn ?? Date.now()
-  const tickets = cuentas.filter(c => c.estado === 'cerrada' && (c.pagos || []).length > 0 && (c.cerradaEn || 0) >= turno.abiertoEn && (c.cerradaEn || 0) <= fin)
+  const tickets = cuentas.filter(c => c.estado === 'cerrada' && (c.pagos || []).length > 0 && (turno.modo !== 'por_cajero' || c.cerradaPor === turno.abiertoPor) && (c.cerradaEn || 0) >= turno.abiertoEn && (c.cerradaEn || 0) <= fin)
   const ventas = { efectivo: 0, qr: 0, tarjeta: 0, otros: 0 }
   tickets.forEach(c => (c.pagos || []).forEach(p => {
     const k = ['efectivo', 'qr', 'tarjeta'].includes(p.metodo) ? p.metodo : 'otros'
@@ -153,7 +154,7 @@ export default function CashPage({ rol, sesion }) {
         </section>
 
         {s.caja.historial.map(h => <SeccionDev key={'dev' + h.id} filas={devDe(h)} />)}
-        {s.caja.historial.length > 0 && (
+        {sesion?.supabase ? <ClosingsHistory moneda={moneda} /> : s.caja.historial.length > 0 && (
           <section className="caja-card">
             <div className="caja-head"><h2>{t('caja.historial')}</h2></div>
             <ul className="caja-lista">
@@ -184,6 +185,9 @@ export default function CashPage({ rol, sesion }) {
   return (
     <div className="caja">
       {aviso && <div className="caja-aviso" role="status">{aviso}<button type="button" className="caja-aviso-x" onClick={() => setAviso('')} aria-label={t('comun.cancelar')}>✕</button></div>}
+      {s.caja.otros?.length > 0 && (
+        <p className="caja-nota">{t('caja.otrosTurnos', { lista: s.caja.otros.map(x => `${x.abiertoPor} (${new Date(x.abiertoEn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`).join(', ') })}</p>
+      )}
       <section className="caja-card caja-turno">
         <div className="caja-head">
           <h2>{t('caja.turnoNumero', { n: numeroActual })}</h2>
@@ -316,6 +320,7 @@ export default function CashPage({ rol, sesion }) {
               </form>
             )}
       </section>
+      {sesion?.supabase && <ClosingsHistory moneda={moneda} />}
     </div>
   )
 }

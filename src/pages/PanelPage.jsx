@@ -10,7 +10,8 @@ import QuickSalePage from '../components/panel/quicksale/QuickSalePage.jsx'
 import KitchenPage from '../components/panel/kitchen/KitchenPage.jsx'
 import MenuPage from '../components/panel/menu/MenuPage.jsx'
 import SettingsPage from '../components/panel/settings/SettingsPage.jsx'
-import { iniciarEstacion, detenerEstacion, estacionRecordada, actualizarConfig } from '../services/station.js'
+import { iniciarEstacion, detenerEstacion, estacionRecordada, actualizarConfig, autoConfigurarAgente } from '../services/station.js'
+import { gruposDe } from '../services/printing.js'
 
 const AuditPage = lazy(() => import('../components/panel/audit/AuditPage.jsx'))
 const InventoryPage = lazy(() => import('../components/panel/inventory/InventoryPage.jsx'))
@@ -52,6 +53,10 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
     if (!puedeEstacion) return undefined
     if (estacionRecordada()) iniciarEstacion(() => configRef.current || {})
     return () => detenerEstacion({ recordar: true })
+  }, [puedeEstacion, sesion.empresaId])
+
+  useEffect(() => {
+    if (puedeEstacion) autoConfigurarAgente(gruposDe(configRef.current || {}))
   }, [puedeEstacion, sesion.empresaId])
 
   const permitidos = modulos.map(m => m.id).join(',')

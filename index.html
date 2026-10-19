@@ -1,6 +1,15 @@
 <!doctype html>
 <html lang="es"><head><meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<script>
+/* iPhone/iPad: Safari hace zoom solo al tocar un campo. maximum-scale=1 lo evita; el zoom con los
+   dedos (voluntario) sigue disponible. En Android/PC el viewport queda igual. */
+(function () {
+  var ua = navigator.userAgent || '';
+  var ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios) document.querySelector('meta[name=viewport]').setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover');
+})();
+</script>
 <meta name="description" content="POS Control: punto de venta para restaurantes — salón, comandas a cocina, caja y venta directa."/>
 <meta name="theme-color" content="#2f7d5b"/>
 <meta name="color-scheme" content="light dark"/>

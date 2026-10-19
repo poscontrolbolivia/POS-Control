@@ -46,16 +46,20 @@ export async function verCuota(id) {
   return {
     max_productos: d.max_productos === undefined ? null : d.max_productos,
     plan: String(d.plan || 'gratis'),
+    premium_hasta: d.premium_hasta || null,
     max_miembros: d.max_miembros === undefined ? null : d.max_miembros,
     productos_actuales: Number(d.productos_actuales || 0),
     miembros_actuales: Number(d.miembros_actuales || 0),
   }
 }
 
-export async function cambiarPlan(id, plan) {
+// plan 'pago' + dias → Premium por esa cantidad de días (se SUMAN a lo vigente); sin dias → indefinido.
+export async function cambiarPlan(id, plan, dias = null) {
   if (!esUuid(id)) throw new Error('El identificador de la empresa no es válido.')
   if (plan !== 'gratis' && plan !== 'pago') throw new Error('El plan debe ser «gratis» (Básico) o «pago» (Premium).')
-  await rpcSuper('super_cambiar_plan', { p_empresa: id, p_plan: plan })
+  const n = dias === null || dias === undefined || dias === '' ? null : Number(dias)
+  if (n !== null && (!Number.isInteger(n) || n < 1 || n > 3650)) throw new Error('Los días deben ser un número entero entre 1 y 3650.')
+  await rpcSuper('super_cambiar_plan', n === null || plan !== 'pago' ? { p_empresa: id, p_plan: plan } : { p_empresa: id, p_plan: plan, p_dias: n })
   return true
 }
 

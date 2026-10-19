@@ -16,6 +16,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
   const [cuotaGuardando, setCuotaGuardando] = useState(false)
   const [cuotaError, setCuotaError] = useState('')
   const [cuotaOk, setCuotaOk] = useState('')
+  const [diasCustom, setDiasCustom] = useState('')
 
   const abrirCuota = async e => {
     if (cuotaEmpresa?.id === e.id) { cerrarCuota(); return }
@@ -50,11 +51,12 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
     } catch (err) { setCuotaError(mensajeError(err)) } finally { setCuotaGuardando(false) }
   }
 
-  const alternarPlan = async () => {
+  // Premium por N días (se suman a los vigentes), indefinido (dias = null) o vuelta a Básico.
+  const aplicarPlan = async (plan, dias = null) => {
     if (!cuotaEmpresa || !cuota) return
     setCuotaError(''); setCuotaOk(''); setCuotaGuardando(true)
     try {
-      await cambiarPlan(cuotaEmpresa.id, cuota.plan === 'pago' ? 'gratis' : 'pago')
+      await cambiarPlan(cuotaEmpresa.id, plan, dias)
       const datos = await verCuota(cuotaEmpresa.id)
       setCuota(datos)
       setForm(f => ({
@@ -63,7 +65,9 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
         maxM: datos.max_miembros == null ? '' : String(datos.max_miembros),
         plan: datos.plan === 'pago' ? 'pago' : 'gratis',
       }))
+      setDiasCustom('')
       setCuotaOk(tOr('super.cuota.planCambiado', 'Plan cambiado.'))
+      onRefrescar?.()
     } catch (err) { setCuotaError(mensajeError(err)) } finally { setCuotaGuardando(false) }
   }
 
@@ -96,6 +100,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
                   <tr>
                     <th>{tOr('super.tabla.colEmpresa', 'Empresa')}</th>
                     <th>{tOr('super.tabla.colCodigo', 'Código')}</th>
+                    <th>{tOr('super.tabla.colPlan', 'Plan')}</th>
                     <th>{tOr('super.tabla.colMoneda', 'Moneda')}</th>
                     <th className="super-num">{tOr('super.tabla.colUsuarios', 'Usuarios')}</th>
                     <th className="super-num">{tOr('super.tabla.colMesas', 'Mesas')}</th>
@@ -109,20 +114,27 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
                   {empresas.map(e => (
                     <tr key={e.id}>
                       <td className="super-nombre">{e.nombre}</td>
-                      <td>{e.codigo || <span className="super-chip">{tOr('super.tabla.sinCodigo', 'sin código')}</span>}</td>
-                      <td>{e.moneda || MONEDA}</td>
-                      <td className="super-num">{Number(e.usuarios || 0)}</td>
-                      <td className="super-num">{Number(e.mesas || 0)}</td>
-                      <td className="super-num">{Number(e.productos || 0)}</td>
-                      <td className="super-num">{Number(e.cuentas || 0)}</td>
-                      <td>{fecha(e.creada_en)}</td>
+                      <td data-label={tOr('super.tabla.colCodigo', 'Código')}>{e.codigo || <span className="super-chip">{tOr('super.tabla.sinCodigo', 'sin código')}</span>}</td>
+                      <td data-label={tOr('super.tabla.colPlan', 'Plan')}>
+                        <span className={'super-chip ' + (e.plan === 'pago' ? 'plan-premium' : 'plan-basico')}>
+                          {e.plan === 'pago'
+                            ? (e.premium_hasta ? `Premium · ${tOr('super.plan.hasta', 'hasta')} ${fecha(e.premium_hasta)}` : `Premium · ${tOr('super.plan.indefinido', 'indefinido')}`)
+                            : tOr('super.plan.basico', 'Básico')}
+                        </span>
+                      </td>
+                      <td data-label={tOr('super.tabla.colMoneda', 'Moneda')}>{e.moneda || MONEDA}</td>
+                      <td className="super-num" data-label={tOr('super.tabla.colUsuarios', 'Usuarios')}>{Number(e.usuarios || 0)}</td>
+                      <td className="super-num" data-label={tOr('super.tabla.colMesas', 'Mesas')}>{Number(e.mesas || 0)}</td>
+                      <td className="super-num" data-label={tOr('super.tabla.colProductos', 'Productos')}>{Number(e.productos || 0)}</td>
+                      <td className="super-num" data-label={tOr('super.tabla.colCuentas', 'Cuentas')}>{Number(e.cuentas || 0)}</td>
+                      <td data-label={tOr('super.tabla.colCreada', 'Creada')}>{fecha(e.creada_en)}</td>
                       <td>
                         <div className="super-acciones">
                           <button type="button" disabled={ocupado} onClick={() => onExportar?.(e)}>{tOr('super.tabla.exportar', 'Exportar')}</button>
                           <button type="button" className="primary" disabled={ocupado} onClick={() => setConfirmando(e)}>{tOr('super.tabla.entrar', 'Entrar')}</button>
                           <button type="button" className="super-ghost" disabled={ocupadoCuota && cuotaEmpresa?.id !== e.id}
                             onClick={() => abrirCuota(e)}>
-                            {cuotaEmpresa?.id === e.id ? tOr('super.tabla.cuotaCerrar', 'Cuota ✕') : tOr('super.tabla.cuota', 'Cuota')}
+                            {cuotaEmpresa?.id === e.id ? tOr('super.tabla.cuotaCerrar', 'Plan ✕') : tOr('super.tabla.planCuota', 'Plan / Premium')}
                           </button>
                         </div>
                       </td>
@@ -141,14 +153,35 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
             {cuota && <span className="super-chip">{tOr('super.cuota.plan', 'plan')}: {cuota.plan}</span>}
             {cuota && <span className="super-chip">{cuota.productos_actuales} / {limiteVisto} {tOr('super.cuota.uso', 'artículos en venta')}</span>}
             {cuota && <span className="super-chip">{cuota.miembros_actuales} / {limiteEquipo} {tOr('super.cuota.usoEquipo', 'personas en el equipo')}</span>}
-            {cuota && (
-              <button type="button" className="primary" disabled={ocupadoCuota} onClick={alternarPlan}>
-                {cuota.plan === 'pago' ? tOr('super.cuota.aBasico', 'Volver a Básico') : tOr('super.cuota.aPremium', 'Pasar a Premium')}
-              </button>
-            )}
           </div>
 
           {cuotaCargando && <div className="super-cargando" role="status">{tOr('super.cuota.cargando', 'Consultando la cuota…')}</div>}
+
+          {!cuotaCargando && cuota && (
+            <div className="super-plan-caja">
+              <div className="super-plan-estado">
+                <b>{tOr('super.plan.actual', 'Plan actual')}:</b>{' '}
+                {cuota.plan === 'pago'
+                  ? (cuota.premium_hasta
+                    ? `Premium · ${tOr('super.plan.vence', 'vence el')} ${fecha(cuota.premium_hasta)} (${diasRestantes(cuota.premium_hasta)} ${tOr('super.plan.diasRestan', 'días restantes')})`
+                    : `Premium · ${tOr('super.plan.indefinido', 'indefinido')}`)
+                  : tOr('super.plan.basico', 'Básico')}
+              </div>
+              <span className="super-ayuda">{tOr('super.plan.ayuda', 'Los días se SUMAN a los que ya tenga vigentes. Al vencer, la empresa vuelve sola a Básico.')}</span>
+              <div className="super-plan-btns">
+                {[30, 90, 365].map(n => (
+                  <button key={n} type="button" className="success" disabled={ocupadoCuota} onClick={() => aplicarPlan('pago', n)}>+{n} {tOr('super.plan.dias', 'días')}</button>
+                ))}
+                <span className="super-plan-custom">
+                  <input type="number" min="1" max="3650" step="1" inputMode="numeric" value={diasCustom} disabled={ocupadoCuota}
+                    placeholder={tOr('super.plan.diasPlaceholder', 'N días')} onChange={ev => setDiasCustom(ev.target.value)} />
+                  <button type="button" className="info" disabled={ocupadoCuota || !diasCustom} onClick={() => aplicarPlan('pago', diasCustom)}>{tOr('super.plan.sumar', 'Sumar días')}</button>
+                </span>
+                <button type="button" className="primary" disabled={ocupadoCuota} onClick={() => aplicarPlan('pago', null)}>{tOr('super.plan.premiumIndef', 'Premium indefinido')}</button>
+                <button type="button" className="orange" disabled={ocupadoCuota || cuota.plan !== 'pago'} onClick={() => aplicarPlan('gratis', null)}>{tOr('super.cuota.aBasico', 'Volver a Básico')}</button>
+              </div>
+            </div>
+          )}
 
           {!cuotaCargando && (
             <>
@@ -234,4 +267,9 @@ function fecha(iso) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function diasRestantes(iso) {
+  const ms = new Date(iso).getTime() - Date.now()
+  return Number.isNaN(ms) ? 0 : Math.max(0, Math.ceil(ms / 86400000))
 }

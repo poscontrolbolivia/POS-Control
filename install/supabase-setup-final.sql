@@ -1193,11 +1193,7 @@ begin
 
   delete from public.cuenta_mesas where cuenta_id = v_cuenta.id;
 
-  select id into v_turno
-    from public.turnos_caja
-   where empresa_id = v_emp and cerrado_en is null
-   order by abierto_en desc
-   limit 1;
+  v_turno := (private.turno_actual(v_emp)).id;
   if v_turno is not null then
     update public.turnos_caja t
        set movimientos = t.movimientos
@@ -1270,21 +1266,32 @@ security definer
 set search_path = ''
 as $fn$
 declare
-  v_emp uuid;
-  v_id  uuid;
+  v_emp  uuid;
+  v_id   uuid;
+  v_modo text;
 begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero']::text[]);
+  v_modo := private.caja_modo(v_emp);
 
   perform pg_advisory_xact_lock(hashtextextended('turno:' || v_emp::text, 0));
 
-  if exists (select 1 from public.turnos_caja
-             where empresa_id = v_emp and cerrado_en is null) then
+  if v_modo = 'por_cajero' then
+    if exists (select 1 from public.turnos_caja
+               where empresa_id = v_emp and cerrado_en is null and modo = 'compartida') then
+      raise exception 'hay un turno compartido abierto: ciérralo antes de trabajar con un turno por cajero';
+    end if;
+    if exists (select 1 from public.turnos_caja
+               where empresa_id = v_emp and cerrado_en is null and abierto_por = auth.uid()) then
+      raise exception 'ya tienes un turno de caja abierto';
+    end if;
+  elsif exists (select 1 from public.turnos_caja
+                where empresa_id = v_emp and cerrado_en is null) then
     raise exception 'ya existe un turno de caja abierto para esta empresa';
   end if;
 
-  insert into public.turnos_caja (empresa_id, abierto_por, fondo)
-  values (v_emp, auth.uid(), greatest(coalesce(p_fondo, 0), 0))
+  insert into public.turnos_caja (empresa_id, abierto_por, fondo, modo)
+  values (v_emp, auth.uid(), greatest(coalesce(p_fondo, 0), 0), v_modo)
   returning id into v_id;
   return v_id;
 end $fn$;
@@ -1317,14 +1324,8 @@ begin
     raise exception 'el monto del movimiento debe ser > 0';
   end if;
 
-  select * into v_turno
-    from public.turnos_caja t
-   where t.empresa_id = v_emp
-     and t.cerrado_en is null
-     and (p_turno_id is null or t.id = p_turno_id)
-   order by t.abierto_en desc
-   limit 1;
-  if not found then
+  v_turno := private.turno_actual(v_emp, p_turno_id);   -- compartida: el del local · por_cajero: el MÍO
+  if v_turno.id is null then
     raise exception 'no hay turno de caja abierto para registrar movimientos';
   end if;
 
@@ -1371,15 +1372,12 @@ begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero']::text[]);
 
-  select * into v_turno
-    from public.turnos_caja t
-   where t.empresa_id = v_emp
-     and t.cerrado_en is null
-     and (p_turno_id is null or t.id = p_turno_id)
-   order by t.abierto_en desc
-   limit 1;
-  if not found then
+  v_turno := private.turno_actual(v_emp, p_turno_id);   -- compartida: el del local · por_cajero: el MÍO
+  if v_turno.id is null then
     raise exception 'no hay turno abierto que cerrar';
+  end if;
+  if v_turno.modo = 'por_cajero' and v_turno.abierto_por is distinct from auth.uid() then
+    perform private.exigir_rol(array['admin']::text[]);   -- solo el admin cierra el turno de otra persona
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended('turno:' || v_turno.id::text, 0));
@@ -1391,7 +1389,8 @@ begin
      and p.metodo = 'efectivo'
      and c.cerrada_en is not null
      and c.cerrada_en >= v_turno.abierto_en
-     and c.cerrada_en <= now();
+     and c.cerrada_en <= now()
+     and (v_turno.modo <> 'por_cajero' or p.creada_por = v_turno.abierto_por);
 
   select coalesce(sum((m->>'monto')::numeric), 0) into v_ingresos
     from jsonb_array_elements(v_turno.movimientos->'movimientos') m
@@ -1847,6 +1846,7 @@ declare
   v_max integer;
   v_hay integer;
 begin
+  perform private.vencer_planes(new.empresa_id); -- Premium por días: si ya venció, vuelve a Básico
   if public.es_super() then return new; end if;
 
   select l.max_productos into v_max from public.limites l where l.empresa_id = new.empresa_id;
@@ -1885,6 +1885,7 @@ declare
   v_max integer;
   v_hay integer;
 begin
+  perform private.vencer_planes(new.empresa_id); -- Premium por días: si ya venció, vuelve a Básico
   if public.es_super() then return new; end if;
 
   select l.max_miembros into v_max from public.limites l where l.empresa_id = new.empresa_id;
@@ -1956,6 +1957,7 @@ begin
         max_productos  = excluded.max_productos,
         max_miembros   = excluded.max_miembros,
         notas          = coalesce(excluded.notas, limites.notas),
+        premium_hasta  = case when excluded.plan = 'pago' then limites.premium_hasta else null end,
         actualizado_en = now(),
         actualizado_por = excluded.actualizado_por;
   perform private.auditar(p_empresa, 'super_ajustar_cuota',
@@ -3811,8 +3813,7 @@ declare
   v_a     text;
   v_i     integer := 0;
 begin
-  select t.id into v_turno from public.turnos_caja t
-   where t.empresa_id = p_emp and t.cerrado_en is null order by t.abierto_en desc limit 1;
+  v_turno := (private.turno_actual(p_emp)).id;
   select coalesce(string_agg(m.nombre, ', ' order by m.nombre), 'Mostrador') into v_mesa
     from public.cuenta_mesas cm join public.mesas m on m.id = cm.mesa_id
    where cm.cuenta_id = p_it.cuenta_id;
@@ -4526,5 +4527,312 @@ begin
 end $fn$;
 revoke all on function public.dividir_cuenta(uuid, uuid) from public, anon;
 grant execute on function public.dividir_cuenta(uuid, uuid) to authenticated;
+
+
+-- ############################################################################
+-- ## v0.21 · PREMIUM POR DÍAS O INDEFINIDO + HISTORIAL DE CIERRES POR TURNO/DÍA
+-- ############################################################################
+-- Premium: limites.premium_hasta (null con plan 'pago' = indefinido). Al vencer, la empresa vuelve
+-- sola a Básico (cron cada hora + comprobación al pedir mi_plan y al aplicar cuotas).
+alter table public.limites add column if not exists premium_hasta timestamptz;
+
+create or replace function private.vencer_planes(p_empresa uuid default null)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare r record; n integer := 0;
+begin
+  for r in
+    with u as (
+      update public.limites l
+         set plan = 'gratis', max_productos = d.max_productos, max_miembros = d.max_miembros,
+             premium_hasta = null, actualizado_en = now()
+        from private.plan_defaults('gratis') d
+       where l.plan = 'pago' and l.premium_hasta is not null and l.premium_hasta <= now()
+         and (p_empresa is null or l.empresa_id = p_empresa)
+      returning l.empresa_id)
+    select u.empresa_id from u
+  loop
+    n := n + 1;
+    perform private.auditar(r.empresa_id, 'plan_vencido', '{}'::jsonb);
+  end loop;
+  return n;
+end $fn$;
+revoke all on function private.vencer_planes(uuid) from public, anon, authenticated;
+
+drop function if exists public.super_cambiar_plan(uuid, text);
+create or replace function public.super_cambiar_plan(p_empresa uuid, p_plan text, p_dias integer default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_prod  integer;
+  v_miem  integer;
+  v_hasta timestamptz;
+  v_base  timestamptz;
+  v_plan_actual text;
+  v_hasta_actual timestamptz;
+begin
+  if not public.es_super() then raise exception 'requiere super'; end if;
+  if p_plan not in ('gratis', 'pago') then raise exception 'plan inválido (gratis | pago)'; end if;
+  if p_empresa is null or not exists (select 1 from public.empresas e where e.id = p_empresa) then
+    raise exception 'empresa inexistente';
+  end if;
+  if p_dias is not null and (p_dias < 1 or p_dias > 3650) then
+    raise exception 'los días deben estar entre 1 y 3650 (vacío = indefinido)';
+  end if;
+
+  select l.plan, l.premium_hasta into v_plan_actual, v_hasta_actual from public.limites l where l.empresa_id = p_empresa;
+
+  if p_plan = 'pago' and p_dias is not null then
+    -- suma días a lo que ya tenga vigente; si no tiene Premium vigente, cuenta desde hoy
+    v_base  := case when v_plan_actual = 'pago' and v_hasta_actual is not null and v_hasta_actual > now()
+                    then v_hasta_actual else now() end;
+    v_hasta := v_base + make_interval(days => p_dias);
+  else
+    v_hasta := null;           -- Premium indefinido (o Básico: sin fecha)
+  end if;
+
+  select d.max_productos, d.max_miembros into v_prod, v_miem from private.plan_defaults(p_plan) d;
+
+  insert into public.limites (empresa_id, plan, max_productos, max_miembros, premium_hasta, actualizado_en, actualizado_por)
+  values (p_empresa, p_plan, v_prod, v_miem, v_hasta, now(), auth.uid())
+  on conflict (empresa_id) do update
+    set plan = excluded.plan,
+        max_productos = excluded.max_productos,
+        max_miembros  = excluded.max_miembros,
+        premium_hasta = excluded.premium_hasta,
+        actualizado_en = now(),
+        actualizado_por = excluded.actualizado_por;
+
+  perform private.auditar(p_empresa, 'super_cambio_plan',
+    jsonb_build_object('plan', p_plan, 'dias', p_dias, 'premium_hasta', v_hasta));
+  return jsonb_build_object('plan', p_plan, 'premium_hasta', v_hasta, 'max_productos', v_prod, 'max_miembros', v_miem);
+end $fn$;
+revoke all on function public.super_cambiar_plan(uuid, text, integer) from public, anon;
+grant execute on function public.super_cambiar_plan(uuid, text, integer) to authenticated;
+
+create or replace function public.super_ver_cuota(p_empresa uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+begin
+  if not public.es_super() then raise exception 'requiere super'; end if;
+  perform private.vencer_planes(p_empresa);
+  return jsonb_build_object(
+    'plan',               (select l.plan          from public.limites l where l.empresa_id = p_empresa),
+    'premium_hasta',      (select l.premium_hasta from public.limites l where l.empresa_id = p_empresa),
+    'max_productos',      (select l.max_productos from public.limites l where l.empresa_id = p_empresa),
+    'max_miembros',       (select l.max_miembros  from public.limites l where l.empresa_id = p_empresa),
+    'notas',              (select l.notas         from public.limites l where l.empresa_id = p_empresa),
+    'productos_actuales', (select count(*) from public.productos p where p.empresa_id = p_empresa and p.activo),
+    'miembros_actuales',  (select count(*) from public.membresias m where m.empresa_id = p_empresa)
+  );
+end $fn$;
+revoke all on function public.super_ver_cuota(uuid) from public, anon;
+grant execute on function public.super_ver_cuota(uuid) to authenticated;
+
+-- La tabla de empresas del super ahora trae el plan (para verlo sin abrir cada empresa).
+drop function if exists public.super_listar_empresas();
+create or replace function public.super_listar_empresas()
+returns table (id uuid, nombre text, codigo text, moneda text,
+               usuarios bigint, mesas bigint, productos bigint,
+               cuentas bigint, creada_en timestamptz,
+               plan text, premium_hasta timestamptz)
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not public.es_super() then raise exception 'requiere super'; end if;
+  return query
+    select e.id, e.nombre, e.codigo, e.moneda,
+      (select count(*) from public.membresias m where m.empresa_id = e.id),
+      (select count(*) from public.mesas x where x.empresa_id = e.id),
+      (select count(*) from public.productos p where p.empresa_id = e.id),
+      (select count(*) from public.cuentas c where c.empresa_id = e.id),
+      e.creada_en,
+      coalesce(l.plan, 'gratis'),
+      l.premium_hasta
+    from public.empresas e
+    left join public.limites l on l.empresa_id = e.id
+    order by e.creada_en;
+end $$;
+revoke all on function public.super_listar_empresas() from public, anon;
+grant execute on function public.super_listar_empresas() to authenticated;
+
+-- mi_plan: ahora también dice hasta cuándo es Premium (null = indefinido).
+create or replace function public.mi_plan(p_empresa_id uuid default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare v_emp uuid; v jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
+  perform private.vencer_planes(v_emp);
+  select jsonb_build_object(
+           'plan', l.plan,
+           'premium_hasta', l.premium_hasta,
+           'retencion_meses', case when l.plan = 'gratis' then l.retencion_meses end)
+    into v from public.limites l where l.empresa_id = v_emp;
+  return coalesce(v, jsonb_build_object('plan', 'gratis', 'retencion_meses', 6));
+end $fn$;
+revoke all on function public.mi_plan(uuid) from public, anon;
+grant execute on function public.mi_plan(uuid) to authenticated;
+
+do $do$
+begin
+  create extension if not exists pg_cron;
+  perform cron.schedule('pos-vencer-planes', '5 * * * *', 'select private.vencer_planes()');
+exception when others then
+  raise notice 'pg_cron no disponible (%): el Premium por días solo vence al abrir la app.', sqlerrm;
+end $do$;
+
+-- Historial de cierres: un turno de caja puede durar horas o días (negocios 24 h), por eso se
+-- lista POR TURNO con su rango de apertura/cierre; el cliente los agrupa por día.
+-- p_desde/p_hasta son instantes (el cliente manda los límites de día en su zona horaria).
+create or replace function public.cierres_listar(
+  p_desde      timestamptz,
+  p_hasta      timestamptz,
+  p_empresa_id uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare v_emp uuid; v jsonb; v_ve_todo boolean;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+  -- admin (o super sin membresía) ve todos los turnos; el cajero, en modo por_cajero, solo los suyos
+  v_ve_todo := coalesce((select m.rol = 'admin' from public.membresias m
+                          where m.user_id = auth.uid() and m.empresa_id = v_emp), true);
+  if p_desde is null or p_hasta is null or p_hasta < p_desde then raise exception 'Rango de fechas inválido'; end if;
+  if p_hasta - p_desde > interval '400 days' then raise exception 'Rango máximo: 400 días'; end if;
+
+  select coalesce(jsonb_agg(q.x order by q.ab desc), '[]'::jsonb) into v
+  from (
+    select t.abierto_en as ab,
+           jsonb_build_object(
+             'id', t.id,
+             'abierto_en', t.abierto_en,
+             'cerrado_en', t.cerrado_en,
+             'abierto_por', coalesce(nullif(pa.display_name, ''), ua.email::text, ''),
+             'cerrado_por', coalesce(nullif(pc.display_name, ''), uc.email::text, ''),
+             'fondo', t.fondo,
+             'esperado', t.esperado,
+             'contado', t.contado,
+             'diferencia', case when t.contado is not null and t.esperado is not null
+                                then round(t.contado - t.esperado, 2) end,
+             'cuentas', coalesce(s.cuentas, 0),
+             'cobrado', coalesce(s.total, 0),
+             'efectivo', coalesce(s.efectivo, 0),
+             'qr', coalesce(s.qr, 0),
+             'tarjeta', coalesce(s.tarjeta, 0),
+             'otros', coalesce(s.otros, 0),
+             'ingresos', coalesce(mv.ingresos, 0),
+             'egresos', coalesce(mv.egresos, 0),
+             'dev_n', coalesce(dv.n, 0),
+             'dev_monto', coalesce(dv.monto, 0),
+             'dev_sin_confirmar', coalesce(dv.sin, 0)
+           ) as x
+      from public.turnos_caja t
+      left join auth.users ua on ua.id = t.abierto_por
+      left join public.perfiles pa on pa.user_id = t.abierto_por
+      left join auth.users uc on uc.id = t.cerrado_por
+      left join public.perfiles pc on pc.user_id = t.cerrado_por
+      left join lateral (
+        select count(distinct c.id) as cuentas,
+               sum(p.monto) as total,
+               sum(p.monto) filter (where p.metodo = 'efectivo') as efectivo,
+               sum(p.monto) filter (where p.metodo = 'qr') as qr,
+               sum(p.monto) filter (where p.metodo = 'tarjeta') as tarjeta,
+               sum(p.monto) filter (where p.metodo not in ('efectivo','qr','tarjeta')) as otros
+          from public.cuentas c
+          join public.pagos p on p.cuenta_id = c.id
+         where c.empresa_id = v_emp and c.estado = 'cerrada'
+           and c.cerrada_en >= t.abierto_en and c.cerrada_en <= coalesce(t.cerrado_en, now())
+           and (t.modo <> 'por_cajero' or p.creada_por = t.abierto_por)
+      ) s on true
+      left join lateral (
+        select sum(coalesce(nullif(m->>'monto', '')::numeric, 0)) filter (where m->>'tipo' = 'ingreso') as ingresos,
+               sum(coalesce(nullif(m->>'monto', '')::numeric, 0)) filter (where m->>'tipo' = 'egreso') as egresos
+          from jsonb_array_elements(coalesce(t.movimientos->'movimientos', '[]'::jsonb)) m
+      ) mv on true
+      left join lateral (
+        select count(*) as n, sum(d.monto) as monto, count(*) filter (where d.confirmada_en is null) as sin
+          from public.devoluciones_item d
+         where d.empresa_id = v_emp and d.turno_id = t.id
+      ) dv on true
+     where t.empresa_id = v_emp
+       and t.abierto_en <= p_hasta
+       and coalesce(t.cerrado_en, now()) >= p_desde
+       and (v_ve_todo or t.modo <> 'por_cajero' or t.abierto_por = auth.uid())
+     order by t.abierto_en desc
+     limit 500
+  ) q;
+  return v;
+end $fn$;
+revoke all on function public.cierres_listar(timestamptz, timestamptz, uuid) from public, anon;
+grant execute on function public.cierres_listar(timestamptz, timestamptz, uuid) to authenticated;
+
+
+-- ############################################################################
+-- ## v0.22 · MODO DE CAJA POR EMPRESA (empresas.config.cajaModo)
+--   'compartida' (por defecto): UN turno para todo el local, un arqueo.
+--   'por_cajero': cada cajero abre, cuenta y cierra SU turno; su efectivo esperado sale solo de lo
+--   que él cobró (pagos.creada_por). Cada turno recuerda el modo con el que se abrió.
+-- ############################################################################
+alter table public.turnos_caja add column if not exists modo text not null default 'compartida';
+alter table public.turnos_caja drop constraint if exists turnos_modo_chk;
+alter table public.turnos_caja add constraint turnos_modo_chk check (modo in ('compartida','por_cajero'));
+
+create or replace function private.caja_modo(p_emp uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $f$
+  select case when e.config->>'cajaModo' = 'por_cajero' then 'por_cajero' else 'compartida' end
+    from public.empresas e where e.id = p_emp
+$f$;
+revoke all on function private.caja_modo(uuid) from public, anon, authenticated;
+
+-- El turno que corresponde a quien llama: el pedido por id, o (por_cajero) el MÍO, o el compartido.
+create or replace function private.turno_actual(p_emp uuid, p_turno_id uuid default null)
+returns public.turnos_caja
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare v public.turnos_caja;
+begin
+  if p_turno_id is not null then
+    select * into v from public.turnos_caja t
+     where t.empresa_id = p_emp and t.cerrado_en is null and t.id = p_turno_id;
+    return v;
+  end if;
+  if private.caja_modo(p_emp) = 'por_cajero' then
+    select * into v from public.turnos_caja t
+     where t.empresa_id = p_emp and t.cerrado_en is null and t.modo = 'por_cajero' and t.abierto_por = auth.uid()
+     order by t.abierto_en desc limit 1;
+    if v.id is not null then return v; end if;
+  end if;
+  select * into v from public.turnos_caja t
+   where t.empresa_id = p_emp and t.cerrado_en is null and t.modo = 'compartida'
+   order by t.abierto_en desc limit 1;
+  return v;
+end $fn$;
+revoke all on function private.turno_actual(uuid, uuid) from public, anon, authenticated;
 
 commit;
