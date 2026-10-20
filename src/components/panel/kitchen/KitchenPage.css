@@ -7,6 +7,7 @@
 .ck-sacadas { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
 .ck-sacadas em { font-style: normal; font-size: .75rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: var(--btn-green); color: var(--on-btn); }
 .ck-conexion { font-size: .9rem; }
+.ck-demo { display: inline-flex; align-items: center; min-height: 40px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .78rem; letter-spacing: .04em; background: var(--libre); color: var(--mut); border: 1px dashed color-mix(in srgb, var(--ac) 55%, var(--line)); }
 .ck-act { min-width: 40px; min-height: 40px; padding: 0 10px; border-radius: 999px; }
 .cocina-flecha { display: inline-block; font-size: 1.1rem; }
 .cocina-flecha.spin { animation: cocina-gira .8s linear infinite; }

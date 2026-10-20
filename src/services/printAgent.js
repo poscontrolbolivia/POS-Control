@@ -1,5 +1,5 @@
 const LLAVE_URL = 'pos-agente-url'
-export const URL_AGENTE_DEFECTO = 'http://127.0.0.1:9101'
+const URL_AGENTE_DEFECTO = 'http://127.0.0.1:9101'
 
 export const urlAgente = () => { try { return localStorage.getItem(LLAVE_URL) || URL_AGENTE_DEFECTO } catch { return URL_AGENTE_DEFECTO } }
 export const fijarUrlAgente = url => { try { localStorage.setItem(LLAVE_URL, String(url || '').trim().replace(/\/$/, '') || URL_AGENTE_DEFECTO) } catch {  } }
@@ -36,7 +36,7 @@ export async function imprimirPorAgente(nombre, bytes, modo = 'raw') {
 
 const ORIGEN_VALIDO = o => /^https?:\/\/[A-Za-z0-9.:_~+\-%@]{3,140}$/.test(String(o || '').replace(/\/+$/, ''))
 
-export async function textoInstalador() {
+async function textoInstalador() {
   const r = await fetch('/instalar-agente.bat', { cache: 'no-store' })
   if (!r.ok) throw new Error('El sitio no tiene instalar-agente.bat (falta public/instalar-agente.bat)')
   const txt = await r.text()

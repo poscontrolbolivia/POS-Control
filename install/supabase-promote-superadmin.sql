@@ -1,6 +1,3 @@
--- ## 1) Cambia el correo de abajo por el del administrador.
--- ## 2) Pégalo en Supabase → SQL Editor → Run.
-
 insert into public.supers (user_id)
 select id from auth.users where lower(email) = lower('admin@tucorreo.com')
 on conflict (user_id) do nothing;

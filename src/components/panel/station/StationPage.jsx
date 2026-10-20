@@ -12,8 +12,9 @@ import {
 } from '../../../services/station.js'
 import '../../../styles/admin.css'
 import './StationPage.css'
+import { hora as horaBase } from '../../../services/format.js'
 
-const hora = ts => { try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) } catch { return '' } }
+const hora = ts => horaBase(ts, { segundos: true })
 
 export default function StationPage({ rol, sesion }) {
   const { s, d } = useStore()

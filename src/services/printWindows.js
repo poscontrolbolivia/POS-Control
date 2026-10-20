@@ -2,7 +2,7 @@ import { lineaATexto } from './printer.js'
 
 const esc = x => String(x ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
-export function lineasAHtml(lineas = [], ancho = 32) {
+function lineasAHtml(lineas = [], ancho = 32) {
   const mm = ancho >= 42 ? 80 : 58
   const fuente = mm === 80 ? 10.4 : 11
   const filas = lineas.map(l => {

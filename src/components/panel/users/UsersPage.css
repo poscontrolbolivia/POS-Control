@@ -46,9 +46,10 @@
 
 .eq-acciones{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .eq-acciones button{min-height:40px;padding:7px 12px;font-size:.86rem}
-.eq-quitar{color:var(--danger);border-color:var(--line);background:var(--card)}
+.eq-quitar{color:var(--rojo-txt);border-color:var(--rojo-bd);background:var(--rojo-bg)}
+.eq-quitar:hover:not(:disabled){background:var(--rojo-hover);border-color:color-mix(in srgb,var(--rojo) 45%,var(--rojo-bd))}
 .eq-quitar.preguntando{
-  background:var(--danger);border-color:var(--danger);color:var(--on-btn);font-weight:700;
+  background:var(--rojo);border-color:var(--rojo);color:var(--rojo-on);font-weight:700;
   animation:eq-late .9s ease-in-out infinite;
 }
 @keyframes eq-late{50%{opacity:.72}}

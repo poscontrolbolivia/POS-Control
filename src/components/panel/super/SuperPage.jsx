@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { haySesion, mensajeError } from '../../../services/super/client.js'
 import {
-  descargarJson, empresaViendo, entrarEnEmpresa, esSuper, exportarEmpresa,
+  descargarBlob, descargarJson, empresaViendo, entrarEnEmpresa, esSuper, exportarEmpresa, exportarEmpresaZip,
   hayCliente, listarEmpresas, registrarExporte, salirDeEmpresa, sondearAcceso,
 } from '../../../services/super/superApi.js'
 import { useIdioma } from '../../../i18n/index.jsx'
@@ -54,6 +54,19 @@ export default function SuperPage({ sesion }) {
 
       try { await registrarExporte(e.id) } catch (aviso) { console.warn('super_registrar_exporte:', aviso?.message) }
     } catch (err) { setErrorLista(mensajeError(err)) } finally { setOp(null) }
+  }
+
+  const exportarZip = async e => {
+    setOp({ tipo: 'exportar', id: e.id })
+    setErrorLista(''); setAvisoAcceso('')
+    try {
+      const r = await exportarEmpresaZip(e.id, (hechas, total) => setAvisoAcceso(tOr('super.zip.progreso', `Bajando fotos… ${hechas}/${total}`, { hechas, total })))
+      descargarBlob(r.blob, e.codigo || e.nombre, 'zip')
+      try { await registrarExporte(e.id) } catch (aviso) { console.warn('super_registrar_exporte:', aviso?.message) }
+      setAvisoAcceso(r.fallidas.length
+        ? tOr('super.zip.conFallos', `Respaldo descargado, pero ${r.fallidas.length} de ${r.total} fotos no se pudieron bajar (el detalle está en LEEME.txt dentro del zip).`, { fallidas: r.fallidas.length, total: r.total })
+        : tOr('super.zip.ok', `Respaldo completo descargado (${r.total} fotos incluidas).`, { total: r.total }))
+    } catch (err) { setAvisoAcceso(''); setErrorLista(mensajeError(err)) } finally { setOp(null) }
   }
 
   const entrar = async e => {
@@ -140,6 +153,7 @@ export default function SuperPage({ sesion }) {
         error={errorLista}
         ocupado={Boolean(op)}
         onExportar={exportar}
+        onExportarZip={exportarZip}
         onEntrar={entrar}
         onRefrescar={refrescar}
       />

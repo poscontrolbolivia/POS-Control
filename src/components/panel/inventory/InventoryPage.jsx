@@ -3,12 +3,24 @@ import { useStore } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { useMoneda } from '../../../services/money.js'
 import { rpc, mensajeError } from '../../../services/supabaseClient.js'
+import { limpiarMonto, numMonto } from '../../../services/format.js'
 import './InventoryPage.css'
 
 const DIAS = [7, 30, 90]
 const LOCALE = { es: 'es', en: 'en-GB', pt: 'pt-BR' }
 
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+
+// En el schema (tabla insumos / insumos_movimientos / recetas) stock, stock_min y las cantidades
+// son numeric(12,3): admiten 3 decimales, NO son enteros. Por eso las cantidades usan un sanitizer
+// propio de 3 decimales; el costo (dinero, numeric(12,2)) reutiliza limpiarMonto (2 decimales).
+const limpiarCant = txt => {
+  const s = String(txt ?? '').replace(/[^0-9.,]/g, '').replace(',', '.')
+  const m = s.match(/^\d*\.?\d{0,3}/)
+  return m ? m[0] : ''
+}
+const normalizarCant = v => { const n = Number(v); return v !== '' && Number.isFinite(n) ? String(n) : '' }
+const normalizarCosto = v => (v !== '' ? numMonto(v).toFixed(2) : '')
 
 const CADUCA_PREGUNTA = 4000
 const CADUCA_AVISO = 5000
@@ -181,9 +193,9 @@ export default function InventoryPage({ rol }) {
           ...(form.id ? { id: form.id } : {}),
           nombre: form.nombre.trim(),
           unidad: form.unidad.trim(),
-          stock: num(form.stock),
-          stock_min: num(form.stock_min),
-          costo: num(form.costo),
+          stock: numMonto(form.stock),
+          stock_min: numMonto(form.stock_min),
+          costo: numMonto(form.costo),
           activo: Boolean(form.activo),
         },
       })
@@ -229,7 +241,7 @@ export default function InventoryPage({ rol }) {
     e.preventDefault()
     if (!mov || ocupado) return
     const i = insumoPorId.get(mov.insumoId)
-    const cantidad = Number(mov.cantidad)
+    const cantidad = numMonto(mov.cantidad)
     if (!(cantidad > 0)) { setMovErr(tOr('inventario.cantidadInvalida', 'La cantidad debe ser un número mayor que 0.')); return }
     setMovErr(''); setError(''); setMovEnVio(true)
     try {
@@ -263,12 +275,12 @@ export default function InventoryPage({ rol }) {
     if (!productoSel || ocupado) return
     const limpias = lineas.filter(l => String(l.insumo_id).trim() !== '' || num(l.cantidad) > 0)
     if (limpias.some(l => !l.insumo_id)) { setRecErr(tOr('inventario.recFaltaInsumo', 'Elige un insumo en todas las líneas.')); return }
-    if (limpias.some(l => !(Number(l.cantidad) > 0))) { setRecErr(tOr('inventario.recFaltaCantidad', 'Cada línea necesita una cantidad mayor que 0.')); return }
+    if (limpias.some(l => !(numMonto(l.cantidad) > 0))) { setRecErr(tOr('inventario.recFaltaCantidad', 'Cada línea necesita una cantidad mayor que 0.')); return }
     setRecErr(''); setError(''); setGuardandoRec(true)
     try {
       await rpc('receta_reemplazar', {
         p_producto_id: productoSel.id,
-        p_lineas: limpias.map(l => ({ insumo_id: l.insumo_id, cantidad: Number(l.cantidad) })),
+        p_lineas: limpias.map(l => ({ insumo_id: l.insumo_id, cantidad: numMonto(l.cantidad) })),
       })
       avisar(tOr('inventario.recetaOk', 'Receta guardada: ya se descuenta al cobrar.'))
       await cargar(true)
@@ -342,15 +354,24 @@ export default function InventoryPage({ rol }) {
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.stock', 'Stock')}</span>
-          <input type="number" min="0" step="any" inputMode="decimal" value={form.stock} onChange={setCampo('stock')} placeholder="0" />
+          <input type="text" inputMode="decimal" autoComplete="off" value={form.stock}
+            onChange={e => { setForm(f => ({ ...f, stock: limpiarCant(e.target.value) })); setFormErr('') }}
+            onBlur={() => setForm(f => ({ ...f, stock: normalizarCant(f.stock) }))}
+            onFocus={e => e.target.select()} placeholder="0" />
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.minimo', 'Mínimo')}</span>
-          <input type="number" min="0" step="any" inputMode="decimal" value={form.stock_min} onChange={setCampo('stock_min')} placeholder="0" />
+          <input type="text" inputMode="decimal" autoComplete="off" value={form.stock_min}
+            onChange={e => { setForm(f => ({ ...f, stock_min: limpiarCant(e.target.value) })); setFormErr('') }}
+            onBlur={() => setForm(f => ({ ...f, stock_min: normalizarCant(f.stock_min) }))}
+            onFocus={e => e.target.select()} placeholder="0" />
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.costo', 'Costo')} ({MONEDA})</span>
-          <input type="number" min="0" step="any" inputMode="decimal" value={form.costo} onChange={setCampo('costo')} placeholder="0" />
+          <input type="text" inputMode="decimal" autoComplete="off" value={form.costo}
+            onChange={e => { setForm(f => ({ ...f, costo: limpiarMonto(e.target.value) })); setFormErr('') }}
+            onBlur={() => setForm(f => ({ ...f, costo: normalizarCosto(f.costo) }))}
+            onFocus={e => e.target.select()} placeholder="0" />
         </label>
         <label className="inv-check">
           <input type="checkbox" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
@@ -459,9 +480,10 @@ export default function InventoryPage({ rol }) {
                             <div className="inv-mov-campos">
                               <label className="adm-campo">
                                 <span>{tOr('inventario.cantidad', 'Cantidad')} ({i.unidad})</span>
-                                <input autoFocus type="number" min="0" step="any" inputMode="decimal" value={mov.cantidad}
-                                  onChange={e => { setMov(m => ({ ...m, cantidad: e.target.value })); setMovErr('') }}
-                                  placeholder="0" />
+                                <input autoFocus type="text" inputMode="decimal" autoComplete="off" value={mov.cantidad}
+                                  onChange={e => { setMov(m => ({ ...m, cantidad: limpiarCant(e.target.value) })); setMovErr('') }}
+                                  onBlur={() => setMov(m => (m ? { ...m, cantidad: normalizarCant(m.cantidad) } : m))}
+                                  onFocus={e => e.target.select()} placeholder="0" />
                               </label>
                               <label className="adm-campo inv-mov-nota">
                                 <span>{tOr('inventario.nota', 'Nota')}</span>
@@ -537,14 +559,16 @@ export default function InventoryPage({ rol }) {
                                   <option key={i.id} value={i.id}>{i.nombre} ({i.unidad}) · {tOr('inventario.disponibles', 'disponibles')}: {fmt(i.stock)}</option>
                                 ))}
                               </select>
-                              <input className="inv-cant" type="number" min="0" step="any" inputMode="decimal" value={l.cantidad}
-                                onChange={e => cambiarLinea(ix, 'cantidad', e.target.value)}
+                              <input className="inv-cant" type="text" inputMode="decimal" autoComplete="off" value={l.cantidad}
+                                onChange={e => cambiarLinea(ix, 'cantidad', limpiarCant(e.target.value))}
+                                onBlur={() => cambiarLinea(ix, 'cantidad', normalizarCant(l.cantidad))}
+                                onFocus={e => e.target.select()}
                                 placeholder={tOr('inventario.pistaCantidad', 'cantidad por preparación')} />
                               <button type="button" className="danger" disabled={guardandoRec} onClick={() => quitarLinea(ix)}>✕</button>
                             </div>
                           ))}
                           <div className="adm-fila">
-                            <button type="button" className="ghost" disabled={guardandoRec || !insumos.length} onClick={anadirLinea}>
+                            <button type="button" className="success" disabled={guardandoRec || !insumos.length} onClick={anadirLinea}>
                               ＋ {tOr('inventario.anadirLinea', 'Añadir línea')}
                             </button>
                             {!insumos.length && <span className="adm-msg warn">{tOr('inventario.primeroInsumos', 'Primero crea insumos en la pestaña Insumos.')}</span>}

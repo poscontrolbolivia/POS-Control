@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { rpc, mensajeError } from '../../../services/supabaseClient.js'
 import { useIdioma } from '../../../i18n/index.jsx'
+import { round2 as r2 } from '../../../services/format.js'
+import { formatearMonto } from '../../../services/money.js'
 
-// Historial de cierres de caja, POR TURNO y agrupado POR DÍA. Sirve igual para negocios que cierran
-// cada día que para los de 24 h (un turno puede cruzar la medianoche: se muestra con fecha y hora).
-// Datos: RPC cierres_listar(p_desde, p_hasta) → un objeto por turno con cobrado por método, ingresos,
-// egresos, esperado/contado/diferencia y devoluciones. El rango se manda en instantes de ESTE equipo.
-const r2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100
 const pad = n => String(n).padStart(2, '0')
 const aFecha = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const hoy = () => aFecha(new Date())
@@ -20,7 +17,7 @@ export default function ClosingsHistory({ moneda = 'Bs' }) {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [abiertos, setAbiertos] = useState({})
-  const m = n => `${moneda} ${r2(n).toFixed(2)}`
+  const m = n => formatearMonto(n, moneda)
   const fh = iso => new Date(iso).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
   const buscar = useCallback(async (d = desde, h = hasta) => {
@@ -33,11 +30,10 @@ export default function ClosingsHistory({ moneda = 'Bs' }) {
     } catch (e) { setError(mensajeError(e)) } finally { setCargando(false) }
   }, [desde, hasta])
 
-  useEffect(() => { buscar() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { buscar() }, [])
 
   const rapido = (d, h) => { setDesde(d); setHasta(h); buscar(d, h) }
 
-  // Agrupa por día de CIERRE (o de apertura si sigue abierto), del más reciente al más antiguo.
   const dias = useMemo(() => {
     const mapa = new Map()
     ;(turnos || []).forEach(x => {

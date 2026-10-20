@@ -1,19 +1,9 @@
-import { tGlobal, idiomaActivo } from '../i18n/index.jsx'
-
+import { idiomaActivo } from '../i18n/index.jsx'
 const SW_URL = '/sw.js'
 const CLAVE_NEGADO = 'pos-notif-no-molestar'
 const CLAVE_PIDIO = 'pos-notif-pidio'
 
 const ICONO = '/icons/icon-192.png'
-
-export const TEXTO_PERMISO =
-  'POS Control quiere enviarte avisos del sistema en español: ' +
-  '«Nuevos platos enviados a cocina» para la tablet de cocina y ' +
-  '«Mesa por cobrar» cuando una cuenta pasa a pre-cuenta. ' +
-  'Así no necesitas mantener la app abierta. Puedes cambiarlo cuando quieras en ' +
-  'Ajustes del navegador › Permisos › Notificaciones.'
-
-export const textoPermiso = () => tGlobal('pwa.permisoTexto')
 
 let registration = null
 let initPromise = null
@@ -24,7 +14,7 @@ const notificacionesSoportadas = () => typeof window !== 'undefined' && 'Notific
 const leerClave = (k) => { try { return sessionStorage.getItem(k) } catch { return null } }
 const escribirClave = (k, v) => { try { sessionStorage.setItem(k, v) } catch {  } }
 
-export function estadoPermiso() {
+function estadoPermiso() {
   return notificacionesSoportadas() ? Notification.permission : 'unsupported'
 }
 
@@ -53,7 +43,7 @@ export function suscribirVista(cb) {
   return () => oyentesVista.delete(cb)
 }
 
-export async function pedirPermiso() {
+async function pedirPermiso() {
   if (!notificacionesSoportadas()) return 'unsupported'
   if (Notification.permission !== 'default') return Notification.permission
   if (leerClave(CLAVE_NEGADO) === '1') return Notification.permission
@@ -151,27 +141,4 @@ export async function cancelarNotificacion(tag) {
     }
   } catch {  }
   return false
-}
-
-export function notificarPorSW(titulo, cuerpo, url = '/', opciones = {}) {
-  if (!registration || !registration.active) return false
-  registration.active.postMessage({
-    type: 'pos:notificar',
-    titulo, cuerpo, url,
-    tag: opciones.tag, fijar: opciones.fijar, icono: opciones.icono, vibrar: opciones.vibrar,
-  })
-  return true
-}
-
-export async function suscribirPush(clavePublicaVapid) {
-  if (!registration || !clavePublicaVapid || !('PushManager' in window)) return null
-  try {
-    return await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: clavePublicaVapid,
-    })
-  } catch (err) {
-    console.warn('[POS] Suscripción de push no disponible:', err && err.message)
-    return null
-  }
 }

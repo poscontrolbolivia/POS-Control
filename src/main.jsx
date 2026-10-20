@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client'
-import './styles/base.css' // PRIMERO: así los CSS de cada pantalla (importados después) ganan sin !important
+import './styles/base.css'
 import { StoreProvider } from './context/StoreContext.jsx'
 import { IdiomaProvider } from './i18n/index.jsx'
 import App from './App.jsx'

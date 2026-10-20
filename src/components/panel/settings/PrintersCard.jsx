@@ -82,7 +82,7 @@ export default function PrintersCard({ rol, sesion }) {
         <form className="adm-fila adm-nuevo" onSubmit={e => { e.preventDefault(); crearGrupo() }}>
           <input autoFocus value={nuevo} maxLength={40} placeholder={t('impresoras.nombreGrupoPlace')} onChange={e => setNuevo(e.target.value)} />
           <button type="submit" className="success" disabled={!nuevo.trim()}>{t('comun.guardar')}</button>
-          <button type="button" className="ghost" onClick={() => setNuevo(null)}>{t('comun.cancelar')}</button>
+          <button type="button" className="danger" onClick={() => setNuevo(null)}>{t('comun.cancelar')}</button>
         </form>
       )}
 
@@ -134,7 +134,7 @@ export default function PrintersCard({ rol, sesion }) {
                   <>
                     <span className="imp-dato">{t('impresoras.confirmarEliminar')}</span>
                     <button type="button" className="danger solid" onClick={() => borrarGrupo(g)}>{t('comun.confirmar')}</button>
-                    <button type="button" className="ghost" onClick={() => setConf(null)}>{t('comun.cancelar')}</button>
+                    <button type="button" className="danger" onClick={() => setConf(null)}>{t('comun.cancelar')}</button>
                   </>
                 ) : (
                   <button type="button" className="danger" disabled={(!g.tickets && nComanda <= 1) || g.tickets}

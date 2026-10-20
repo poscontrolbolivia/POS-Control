@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 const KEY = 'pos-ui-theme-v1'
-export const TEMAS = ['light', 'night', 'forest']
+const TEMAS = ['light', 'night', 'forest']
 
 export function leerTema() {
   try { const v = localStorage.getItem(KEY); return TEMAS.includes(v) ? v : 'light' } catch { return 'light' }
@@ -13,7 +13,7 @@ export function aplicarTema(t) {
   const meta = document.querySelector('meta[name="theme-color"]')
   if (meta) meta.setAttribute('content', { light: '#3867f4', night: '#121824', forest: '#1f7a4d' }[t])
 }
-export function guardarTema(t) {
+function guardarTema(t) {
   try { localStorage.setItem(KEY, t) } catch {  }
   aplicarTema(t)
   window.dispatchEvent(new Event('pos-tema'))

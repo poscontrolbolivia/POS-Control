@@ -10,9 +10,12 @@ const PC437 = {
   '¿': 0xa8, '®': 0xa9, '¬': 0xaa, '½': 0xab, '¼': 0xac, '¡': 0xad, '«': 0xae, '»': 0xaf,
   '─': 0xc0, '│': 0xb3, '┌': 0xda, '┐': 0xbf, '└': 0xc0, '┘': 0xd9, '█': 0xdb, '▄': 0xdd,
   '▀': 0xdc, '▓': 0xdb, '▒': 0xb1, '░': 0xb0, '•': 0xf5, '€': 0xd5,
+  // El ticket los usa: el punto medio separa teléfono y NIT en el encabezado, y la raya larga
+  // marca los ítems anulados. Sin mapa saldrían como «?».
+  '·': 0xf7, '—': 0x2d, '–': 0x2d,
 }
 
-export const GRUPO_DEFECTO = 'general'
+const GRUPO_DEFECTO = 'general'
 const LLAVE_MAPA = 'pos-impresoras-puertos'
 
 const grupos = new Map()
@@ -103,14 +106,6 @@ export async function reutilizarImpresoras(lista = [{ id: GRUPO_DEFECTO }]) {
     if (alguno) notificar()
     return alguno
   } catch { return false }
-}
-
-export async function desconectarImpresora(grupo = GRUPO_DEFECTO) {
-  const g = grupoDe(grupo)
-  g.puerto = null
-  g.error = ''
-  const m = leerMapa(); delete m[grupo || GRUPO_DEFECTO]; guardarMapa(m)
-  notificar()
 }
 
 export const fijarBaud = (grupo, baud) => { grupoDe(grupo).baud = Number(baud) || 9600 }

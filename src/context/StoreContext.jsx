@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useReducer, useRef, 
 import { USAR_SUPABASE } from '../services/config.js'
 import { fijarEmpresa } from '../services/supabaseClient.js'
 import { cargarEstadoInicial, despacharSupabase } from '../services/db.js'
+import { round2 } from '../services/format.js'
+import { repartirPorGrupo } from '../services/printing.js'
 const uid = () => crypto.randomUUID()
 const KEY = 'pos-control-demo-v2'
 const KEY_SESION = 'pos-sesion'
@@ -44,15 +46,104 @@ const inicial = {
 }
 
 const migrar = e => {
-  if (!e || typeof e !== 'object') return inicial
+  if (!e || typeof e !== 'object') return sembrar(inicial)
   const config = { ...inicial.config, ...(e.config || {}) }
   if (!Array.isArray(config.gruposImpresion) || !config.gruposImpresion.length) config.gruposImpresion = GRUPOS_DEMO
   if (!config.impresoraPorSeccion) config.impresoraPorSeccion = inicial.config.impresoraPorSeccion
-  return { ...e, config }
+  return sembrar({ ...e, config })
 }
 
-const nuevaCuenta = (a) => ({ id: uid(), tipo: 'mesa', canal: 'mesa', estado: 'abierta', items: [], pagos: [], propina: 0, descuento: 0, comensales: 1, abiertaEn: Date.now(), ...a })
+const nuevaCuenta = (a) => ({ id: uid(), tipo: 'mesa', canal: 'mesa', estado: 'abierta', items: [], pagos: [], propina: 0, descuento: 0, detalle: '', comensales: 1, abiertaEn: Date.now(), ...a })
+
+// En demo el negocio arranca vacío y las pantallas de cocina/barra quedarían sin nada que mostrar,
+// así que se siembra una vez por navegador: mesas abiertas con comandas ya enviadas.
+function sembrar(s) {
+  if (s._cocinaSembrada || (s.cuentas || []).some(c => c.estado !== 'cerrada')) return { ...s, _cocinaSembrada: true }
+  const en = Date.now()
+  const min = n => en - n * 60000
+  const it = (nombre, qty, estado, enviadoEn, areas, extra) => {
+    const prod = (s.productos || []).find(x => x.nombre === nombre)
+    return prod ? { id: uid(), productoId: prod.id, nombre: prod.nombre, precio: prod.precio, qty, estado, nota: '', areas, enviadoEn, ...extra } : null
+  }
+  const devuelto = it('Sopa del día', 1, 'anulado', min(14), ['cocina'], { motivo: 'No salió' })
+  const cuentas = [
+    nuevaCuenta({ mesaIds: ['m1'], comensales: 4, abiertaPor: 'mesero', abiertaEn: min(22), items: [
+      it('Milanesa', 1, 'enviado', min(11), ['cocina'], { nota: 'sin picante' }),
+      it('Pique macho', 2, 'enviado', min(11), ['cocina']),
+      it('Sopa del día', 1, 'listo', min(6), ['cocina'], { areasListas: ['cocina'], areasEn: { cocina: min(6) }, listoEn: min(6) }),
+      it('Api con pastel', 1, 'enviado', min(3), ['cocina', 'barra'], { areasListas: ['cocina'], areasEn: { cocina: min(3) } }),
+      it('Café', 2, 'anulacion', min(4), ['cocina'], { motivo: 'Cambio del cliente', anulacionEstadoPrevio: 'enviado', anulacionPedidaEn: min(1), anulacionPor: 'mesero' }),
+      it('Cerveza', 2, 'enviado', min(6), ['barra']),
+      it('Jugo de naranja', 1, 'pendiente'),
+    ].filter(Boolean) }),
+    nuevaCuenta({ mesaIds: ['m2'], comensales: 2, abiertaPor: 'mesero', abiertaEn: min(16), items: [
+      devuelto,
+      it('Milanesa', 1, 'enviado', min(2), ['cocina']),
+      it('Refresco', 1, 'enviado', min(2), ['barra']),
+    ].filter(Boolean) }),
+  ]
+  const devoluciones = devuelto ? [{
+    id: uid(), cuentaId: cuentas[1].id, itemId: devuelto.id, area: 'cocina', nombre: devuelto.nombre, qty: devuelto.qty,
+    monto: round2(devuelto.precio * devuelto.qty), mesa: nombreDeCuenta(s, cuentas[1]), motivo: 'No salió', turnoId: null,
+    pedidaPor: 'mesero', pedidaEn: min(12), confirmadaPor: '', confirmadaEn: null, nota: '',
+  }] : []
+  return { ...s, _cocinaSembrada: true, cuentas: [...(s.cuentas || []), ...cuentas], devoluciones: [...(s.devoluciones || []), ...devoluciones] }
+}
+
+// Cada pago entra con su marca de tiempo: un abono entra en el turno en que se cobró,
+// aunque la cuenta se cierre en un turno después.
+const conFecha = (pagos, concepto, usuario) => (pagos || []).map(p => ({ ...p, id: p.id || uid(), ...(concepto ? { concepto } : {}), ...(usuario ? { por: usuario } : {}), en: Date.now() }))
 const itemsVivos = c => c.items.filter(i => i.estado !== 'anulado')
+
+// Las áreas de un ítem se resuelven igual que al imprimir la comanda, así la pantalla muestra
+// exactamente lo que salió impreso.
+const areasPorItem = (items, productos, config) => {
+  const mapa = {}
+  repartirPorGrupo(items, productos, config).forEach(({ grupo, items: delGrupo }) => delGrupo.forEach(i => { mapa[i.id] = [...(mapa[i.id] || []), grupo.id] }))
+  return mapa
+}
+const areasDel = (i, s) => (Array.isArray(i.areas) && i.areas.length ? i.areas : areasPorItem([i], s.productos, s.config)[i.id] || [])
+const nombreDeCuenta = (s, c) => (c.mesaIds || []).map(id => (s.mesas || []).find(m => m.id === id)?.nombre).filter(Boolean).join(', ')
+
+// El monto se reparte entre las áreas que sirvieron el plato; el residuo va a la primera.
+function devolucionesDeItem(s, c, i, motivo, usuario) {
+  const areas = i.estado === 'listo' ? areasDel(i, s) : (i.areasListas || [])
+  if (!areas.length) return []
+  const total = round2(i.precio * i.qty)
+  const parte = round2(total / areas.length)
+  const en = Date.now()
+  return areas.map((area, n) => ({
+    id: uid(), cuentaId: c.id, itemId: i.id, area, nombre: i.nombre, qty: i.qty,
+    monto: n === 0 ? round2(total - parte * (areas.length - 1)) : parte,
+    mesa: nombreDeCuenta(s, c), motivo: motivo || 'sin motivo', turnoId: s.caja?.turno?.id || null,
+    pedidaPor: usuario || '', pedidaEn: en, confirmadaPor: '', confirmadaEn: null, nota: '',
+  }))
+}
+
+const cocinaSalida = (i, a, s) => {
+  if (i.id !== a.itemId || i.estado !== 'enviado') return i
+  const areas = areasDel(i, s)
+  const areasListas = [...new Set([...(i.areasListas || []), a.area])]
+  const en = Date.now()
+  const completo = !areas.length || areas.every(x => areasListas.includes(x))
+  return { ...i, areas, areasListas, areasEn: { ...(i.areasEn || {}), [a.area]: en }, ...(completo ? { estado: 'listo', listoEn: en } : {}) }
+}
+
+const cocinaDeshacer = (i, a) => {
+  if (i.id !== a.itemId || (i.estado !== 'enviado' && i.estado !== 'listo')) return i
+  const { [a.area]: _sale, ...areasEn } = i.areasEn || {}
+  return { ...i, areasListas: (i.areasListas || []).filter(x => x !== a.area), areasEn, ...(i.estado === 'listo' ? { estado: 'enviado', listoEn: null } : {}) }
+}
+
+const cocinaAnular = (i, a) => (i.id !== a.itemId || (i.estado !== 'enviado' && i.estado !== 'listo')) ? i
+  : { ...i, estado: 'anulacion', motivo: a.motivo, anulacionEstadoPrevio: i.estado, anulacionPedidaEn: Date.now(), anulacionPor: a.usuario || '' }
+
+const cocinaResolver = (i, a) => {
+  if (i.id !== a.itemId || i.estado !== 'anulacion') return i
+  if (a.aprobar) return { ...i, estado: 'anulado', motivo: i.motivo || a.motivo || 'sin motivo', anulacionResueltaEn: Date.now(), anulacionResueltaPor: a.usuario || '' }
+  const { anulacionEstadoPrevio: previo, motivo: _motivo, anulacionPedidaEn: _pedida, anulacionPor: _por, ...limpia } = i
+  return { ...limpia, estado: previo || 'enviado', motivo: '' }
+}
 
 function reducer(s, a) {
   const upd = (id, fn) => ({ ...s, cuentas: s.cuentas.map(c => (c.id === id ? fn(c) : c)) })
@@ -69,6 +160,13 @@ function reducer(s, a) {
     case 'abrir-directa': return { ...s, caja: { ...s.caja, siguienteTurno: s.caja.siguienteTurno + 1 },
       cuentas: [...s.cuentas, nuevaCuenta({ tipo: 'directa', canal: a.canal || 'mostrador', numero: s.caja.siguienteTurno, mesaIds: [], abiertaPor: a.usuario })] }
 
+    case 'abrir-llevar': {
+      const dia = x => new Date(x || 0).toDateString()
+      const n = s.cuentas.filter(c => c.canal === 'llevar' && dia(c.abiertaEn) === dia(Date.now())).reduce((m, c) => Math.max(m, c.numero || 0), 0) + 1
+      return { ...s, cuentas: [...s.cuentas, nuevaCuenta({ tipo: 'directa', canal: 'llevar', numero: n, mesaIds: [], clienteNombre: a.nombre, clienteTel: a.tel || '', abiertaPor: a.usuario })] }
+    }
+    case 'llevar~': return upd(a.cuentaId, c => ({ ...c, clienteNombre: a.nombre, clienteTel: a.tel || '' }))
+    case 'llevar-mesa': return upd(a.cuentaId, c => (c.canal !== 'llevar' ? c : { ...c, tipo: 'mesa', canal: 'mesa', numero: undefined, mesaIds: [a.mesaId], comensales: a.comensales || c.comensales || 1 }))
     case 'unir': {
       const absorb = s.cuentas.filter(c => c.estado !== 'cerrada' && c.id !== a.cuentaId && c.mesaIds.some(m => a.mesaIds.includes(m)))
       const absorbItems = absorb.flatMap(c => c.items)
@@ -86,9 +184,10 @@ function reducer(s, a) {
 
     case 'item+': return upd(a.cuentaId, c => {
       const nota = a.nota || ''
-      const ex = c.items.find(i => i.productoId === a.p.id && i.estado === 'pendiente' && (i.nota || '') === nota)
+      const precio = a.p.precio + (Number(a.extra) || 0)
+      const ex = c.items.find(i => i.productoId === a.p.id && i.estado === 'pendiente' && (i.nota || '') === nota && i.precio === precio)
       if (ex) return { ...c, items: c.items.map(i => (i === ex ? { ...i, qty: i.qty + 1 } : i)) }
-      return { ...c, items: [...c.items, { id: uid(), productoId: a.p.id, nombre: a.p.nombre, precio: a.p.precio, qty: 1, estado: 'pendiente', nota }] }
+      return { ...c, items: [...c.items, { id: uid(), productoId: a.p.id, nombre: a.p.nombre, precio, qty: 1, estado: 'pendiente', nota }] }
     })
     case 'dividir': {
       const c = s.cuentas.find(x => x.id === a.cuentaId)
@@ -101,14 +200,39 @@ function reducer(s, a) {
         .concat([nuevaCuenta({ tipo: 'mesa', mesaIds: [...c.mesaIds], etiqueta: sig, abiertaPor: a.usuario })]) }
     }
     case 'qty': return upd(a.cuentaId, c => ({ ...c, items: c.items.flatMap(i => (i.id !== a.itemId ? [i] : i.qty + a.d <= 0 ? [] : [{ ...i, qty: i.qty + a.d }])) }))
+    case 'detalle': return upd(a.cuentaId, c => ({ ...c, detalle: a.detalle || '' }))
     case 'nota': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.id === a.itemId ? { ...i, nota: a.nota } : i)) }))
-    case 'anular': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.id === a.itemId ? { ...i, estado: 'anulado', motivo: a.motivo } : i)) }))
-    case 'enviar': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.estado === 'pendiente' ? { ...i, estado: 'enviado', enviadoEn: Date.now() } : i)) }))
+    // Un plato que ya salió del área deja devolución, igual que hace el servidor al anularlo.
+    case 'anular': {
+      const previo = s.cuentas.find(c => c.id === a.cuentaId)?.items.find(i => i.id === a.itemId)
+      if (previo && (previo.estado === 'listo' || (previo.areasListas || []).length)) return reducer(s, { ...a, t: 'devolver' })
+      return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.id === a.itemId ? { ...i, estado: 'anulado', motivo: a.motivo } : i)) }))
+    }
+    // Una sola marca de tiempo por envío: la cocina agrupa la comanda por ese momento.
+    case 'enviar': return upd(a.cuentaId, c => {
+      const pend = c.items.filter(i => i.estado === 'pendiente')
+      const areas = areasPorItem(pend, s.productos, s.config)
+      const en = Date.now()
+      return { ...c, items: c.items.map(i => (i.estado === 'pendiente' ? { ...i, estado: 'enviado', enviadoEn: en, areas: areas[i.id] || [] } : i)) }
+    })
+    case 'cocina-salida': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => cocinaSalida(i, a, s)) }))
+    case 'cocina-deshacer': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => cocinaDeshacer(i, a)) }))
+    case 'cocina-anular': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => cocinaAnular(i, a)) }))
+    case 'cocina-resolver': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => cocinaResolver(i, a)) }))
+    case 'devolver': {
+      const c = s.cuentas.find(x => x.id === a.cuentaId)
+      const i = c?.items.find(x => x.id === a.itemId)
+      if (!i) return s
+      return { ...upd(a.cuentaId, x => ({ ...x, items: x.items.map(y => (y.id === a.itemId ? { ...y, estado: 'anulado', motivo: a.motivo || 'sin motivo' } : y)) })),
+        devoluciones: [...(s.devoluciones || []), ...devolucionesDeItem(s, c, i, a.motivo, a.usuario)] }
+    }
+    case 'devolver~': return { ...s, devoluciones: (s.devoluciones || []).map(x => (x.id === a.id && !x.confirmadaEn ? { ...x, confirmadaEn: Date.now(), confirmadaPor: a.usuario || '', nota: a.nota || '' } : x)) }
     case 'precuenta': return upd(a.cuentaId, c => ({ ...c, estado: 'precuenta' }))
     case 'reabrir': return upd(a.cuentaId, c => ({ ...c, estado: 'abierta' }))
     case 'extras': return upd(a.cuentaId, c => ({ ...c, propina: a.propina ?? c.propina, descuento: a.descuento ?? c.descuento }))
     case 'comensales~': return upd(a.cuentaId, c => ({ ...c, comensales: a.comensales }))
-    case 'cobrar': return upd(a.cuentaId, c => ({ ...c, estado: 'cerrada', pagos: a.pagos, propina: a.propina ?? c.propina, descuento: a.descuento ?? c.descuento, cerradaPor: a.usuario, cerradaEn: Date.now() }))
+    case 'cobrar': return upd(a.cuentaId, c => ({ ...c, estado: 'cerrada', pagos: [...(c.pagos || []), ...conFecha(a.pagos, a.concepto, a.usuario)], propina: a.propina ?? c.propina, descuento: a.descuento ?? c.descuento, cerradaPor: a.usuario, cerradaEn: Date.now() }))
+    case 'abonar': return upd(a.cuentaId, c => ({ ...c, pagos: [...(c.pagos || []), ...conFecha(a.pagos, a.concepto, a.usuario)] }))
 
     case 'mover': {
       const origen = s.cuentas.find(c => c.id === a.cuentaId)
@@ -160,7 +284,11 @@ function reducer(s, a) {
     case 'seccion+': return { ...s, secciones: [...s.secciones, { id: uid(), orden: s.secciones.length + 1, ...a.seccion }] }
     case 'seccion~': return { ...s, secciones: s.secciones.map(x => (x.id === a.id ? { ...x, ...a.cambios } : x)) }
     case 'seccion-': return { ...s, secciones: s.secciones.filter(x => x.id !== a.id), productos: s.productos.filter(p => p.seccionId !== a.id) }
-    case 'producto+': return { ...s, productos: [...s.productos, { id: uid(), activo: true, ...a.producto }] }
+    case 'producto+': {
+      // Nº de ítem consecutivo por negocio, que NO se reutiliza aunque se borre un producto (en demo: contador aparte).
+      const n = Math.max(s.contadorProductos || 0, s.productos.length, ...s.productos.map(p => p.numero || 0)) + 1
+      return { ...s, contadorProductos: n, productos: [...s.productos, { id: uid(), activo: true, numero: n, ...a.producto }] }
+    }
     case 'area-': return { ...s, productos: s.productos.map(p => {
       const rest = (p.areas || []).filter(x => x !== a.id)
       return (p.areas || []).includes(a.id) ? { ...p, areas: rest.length ? rest : [a.reemplazo || 'cocina'] } : p
@@ -284,6 +412,15 @@ export const cuentasDeMesa = (s, mesaId) => s.cuentas
   .filter(c => c.mesaIds.includes(mesaId) && c.estado !== 'cerrada')
   .sort((x, y) => (x.etiqueta || '').localeCompare(y.etiqueta || ''))
 export const cuentaActiva = (s, mesaId) => cuentasDeMesa(s, mesaId)[0]
-export const totalCuenta = c => (c ? itemsVivos(c).reduce((t, i) => t + i.precio * i.qty, 0) : 0)
-export const totalFinal = c => (c ? Math.max(0, totalCuenta(c) - (c.descuento || 0)) + (c.propina || 0) : 0)
-export const pagadoCuenta = c => (c?.pagos || []).reduce((t, p) => t + p.monto, 0)
+export const totalCuenta = c => (c ? round2(itemsVivos(c).reduce((t, i) => t + i.precio * i.qty, 0)) : 0)
+export const totalFinal = c => (c ? round2(Math.max(0, totalCuenta(c) - (c.descuento || 0)) + (c.propina || 0)) : 0)
+export const pagadoCuenta = c => round2((c?.pagos || []).reduce((t, p) => t + (Number(p.monto) || 0), 0))
+export const saldoCuenta = c => round2(Math.max(0, totalFinal(c) - pagadoCuenta(c)))
+
+// «Orden» del ticket: el lugar que ocupa esta cuenta entre las abiertas el mismo día.
+// Se saca del momento de apertura, así coincide con el orden en que entraron.
+export const ordenDelDia = (cuentas, cuenta) => {
+  const dia = ts => { const d = new Date(ts || 0); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` }
+  const delDia = (cuentas || []).filter(x => dia(x.abiertaEn) === dia(cuenta?.abiertaEn)).sort((a, b) => (a.abiertaEn || 0) - (b.abiertaEn || 0))
+  return delDia.findIndex(x => x.id === cuenta?.id) + 1
+}

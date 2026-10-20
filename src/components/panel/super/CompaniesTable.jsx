@@ -5,7 +5,7 @@ import { mensajeError } from '../../../services/super/client.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import './SuperPage.css'
 
-export default function CompaniesTable({ empresas = [], cargando = false, error = '', ocupado = false, onExportar, onEntrar, onRefrescar }) {
+export default function CompaniesTable({ empresas = [], cargando = false, error = '', ocupado = false, onExportar, onExportarZip, onEntrar, onRefrescar }) {
   const { tOr } = useIdioma()
   const [confirmando, setConfirmando] = useState(null)
 
@@ -51,7 +51,6 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
     } catch (err) { setCuotaError(mensajeError(err)) } finally { setCuotaGuardando(false) }
   }
 
-  // Premium por N días (se suman a los vigentes), indefinido (dias = null) o vuelta a Básico.
   const aplicarPlan = async (plan, dias = null) => {
     if (!cuotaEmpresa || !cuota) return
     setCuotaError(''); setCuotaOk(''); setCuotaGuardando(true)
@@ -131,6 +130,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
                       <td>
                         <div className="super-acciones">
                           <button type="button" disabled={ocupado} onClick={() => onExportar?.(e)}>{tOr('super.tabla.exportar', 'Exportar')}</button>
+                          <button type="button" disabled={ocupado} title={tOr('super.tabla.exportarZipTitulo', 'Descarga todo: datos, inventario, devoluciones y las fotos reales')} onClick={() => onExportarZip?.(e)}>{tOr('super.tabla.exportarZip', 'Completo (.zip)')}</button>
                           <button type="button" className="primary" disabled={ocupado} onClick={() => setConfirmando(e)}>{tOr('super.tabla.entrar', 'Entrar')}</button>
                           <button type="button" className="super-ghost" disabled={ocupadoCuota && cuotaEmpresa?.id !== e.id}
                             onClick={() => abrirCuota(e)}>

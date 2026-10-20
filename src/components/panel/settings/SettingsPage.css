@@ -1,0 +1,5 @@
+.adm-config{display:flex;flex-direction:column;gap:14px}
+.cfg-collapsed{gap:8px}
+.cfg-collapsed .eq-toggle{margin-right:0}
+.cfg-bloque > .adm-config{width:100%}
+.cfg-bloque .adm-card-cab .eq-toggle{flex:0 0 auto}

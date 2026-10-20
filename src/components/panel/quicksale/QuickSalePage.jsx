@@ -6,11 +6,13 @@ import { LADO_VISUAL_PX, urlImagenProducto } from '../../../services/imageUpload
 import { useIdioma } from '../../../i18n/index.jsx'
 import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
 import { imprimirCuenta, precalcularCambio } from '../../printing/Ticket.jsx'
+import ComprobanteQr from '../pago/ComprobanteQr.jsx'
+import '../pago/ComprobanteQr.css'
 import './QuickSalePage.css'
+import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
+import { formatearMonto } from '../../../services/money.js'
 
-const round2 = n => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100
-
-export function MiniaturaProducto({ producto }) {
+function MiniaturaProducto({ producto }) {
   const url = urlImagenProducto(producto)
   const ini = ((producto.nombre || '').trim().charAt(0) || '?').toUpperCase()
   return (
@@ -31,11 +33,11 @@ function imputarPagos(lineas, total) {
   const pagos = []
   let cambio = 0
   ;(lineas || []).forEach(l => {
-    const n = round2(Number(l.monto) || 0)
+    const n = round2(numMonto(l.monto))
     if (n <= 0) return
     const aplica = round2(Math.min(n, saldo))
     const devuelto = l.metodo === 'efectivo' ? round2(n - aplica) : 0
-    if (aplica > 0) pagos.push({ metodo: l.metodo, monto: aplica, recibido: n, cambio: devuelto })
+    if (aplica > 0) pagos.push({ metodo: l.metodo, monto: aplica, recibido: n, cambio: devuelto, ...(l.metodo === 'qr' && l.comprobante ? { comprobante: l.comprobante } : {}) })
     cambio = round2(cambio + devuelto)
     saldo = round2(saldo - aplica)
   })
@@ -49,7 +51,7 @@ export default function QuickSalePage({ rol, sesion }) {
   const { t } = useIdioma()
   const usuario = sesion?.usuario || sesion?.nombre || rol || '—'
   const moneda = s.config?.moneda || MONEDA
-  const m = n => `${moneda} ${round2(n).toFixed(2)}`
+  const m = n => formatearMonto(n, moneda)
 
   const secciones = useMemo(() => [...(s.secciones || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0)), [s.secciones])
   const [sec, setSec] = useState(secciones[0]?.id)
@@ -94,6 +96,7 @@ export default function QuickSalePage({ rol, sesion }) {
   })
 
   const confirmarCobro = () => {
+    if (cobro.lineas.some(l => l.subiendo)) return setAviso(t('comp.subiendo'))
     const { pagos, saldo } = imputarPagos(cobro.lineas, total)
     if (saldo > 0.009) return setAviso(t('venta.faltaTotal', { faltan: m(saldo) }))
     if (!pagos.length) return setAviso(t('venta.sinPago'))
@@ -104,7 +107,7 @@ export default function QuickSalePage({ rol, sesion }) {
 
   useEffect(() => {
     if (!pendiente) return
-    const c = s.cuentas.find(x => x.tipo === 'directa' && x.numero === pendiente.numero)
+    const c = s.cuentas.find(x => x.tipo === 'directa' && x.canal !== 'llevar' && x.numero === pendiente.numero)
     if (!c || c.estado === 'cerrada') { if (c) setPendiente(null); return }
 
     const idx = Math.floor(pendiente.fase)
@@ -132,7 +135,7 @@ export default function QuickSalePage({ rol, sesion }) {
     const base = t('venta.cobrada', { n: c.numero }) + (cambio > 0 ? t('venta.cambioSuffix', { monto: m(cambio) }) : '')
     setAviso(base)
     if (imprimir) {
-      imprimirCuenta({ cuenta: { ...c, estado: 'cerrada', pagos, cerradaEn: Date.now() }, config: s.config })
+      imprimirCuenta({ cuenta: { ...c, estado: 'cerrada', pagos, cerradaEn: Date.now() }, config: s.config, datos: { salon: t('venta.mostrador') } })
         .then(r => { if (r === 'sin-impresora') setAviso(base + t('venta.sinImpresoraDialogo'))
           else if (r === 'error') setAviso(base + t('venta.sinImpresoraBoton')) })
     }
@@ -219,12 +222,13 @@ export default function QuickSalePage({ rol, sesion }) {
                   ))}
                 </div>
                 <label className="vd-monto">{t('venta.recibido')}
-                  <input type="number" min="0" step="0.01" inputMode="decimal" autoFocus={i === 0}
-                    value={l.monto} onChange={e => setLinea(i, { monto: e.target.value })} placeholder={m(total)} />
+                  <input type="text" inputMode="decimal" autoComplete="off" autoFocus={i === 0}
+                    value={l.monto} onChange={e => setLinea(i, { monto: limpiarMonto(e.target.value) })} onFocus={e => e.target.select()} placeholder={m(total)} />
                 </label>
+                {l.metodo === 'qr' && <ComprobanteQr valor={l.comprobante} onCambio={v => setLinea(i, v)} />}
               </div>
             ))}
-            {cobro.lineas.length < 2 && <button className="ghost" type="button" onClick={agregarLinea}>{t('venta.segundoPago')}</button>}
+            {cobro.lineas.length < 2 && <button className="success" type="button" onClick={agregarLinea}>{t('venta.segundoPago')}</button>}
             {cobro.lineas.length >= 2 && <small className="vd-nota-ayuda">{t('venta.maxDosLineas')}</small>}
             <div className="vd-resumen-pago">
               <span>{t('venta.pagadoLabel')} <b>{m(pagadoPreview)}</b></span>
@@ -243,7 +247,7 @@ export default function QuickSalePage({ rol, sesion }) {
             ? <button className="primary big" disabled={!carrito.length} onClick={abrirCobro}>{t('venta.cobrar')}</button>
             : <>
               <button className="primary big" onClick={confirmarCobro}>{t('venta.confirmarPago')}</button>
-              <button className="ghost" onClick={() => setCobro(null)}>{t('venta.volver')}</button>
+              <button className="danger" onClick={() => setCobro(null)}>{t('venta.volver')}</button>
             </>}
         </div>
       </aside>

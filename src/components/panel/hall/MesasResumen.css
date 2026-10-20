@@ -1,0 +1,39 @@
+.mr-bloque{gap:10px}
+.mr-cab{flex-wrap:wrap}
+.mr-cab .vista-sel{display:inline-flex;gap:6px;flex:0 0 auto}
+.mr-cab .txt{font-weight:600}
+.mr-bloque .tab{min-height:36px;padding:5px 12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:.85rem;white-space:nowrap}
+.mr-zonas{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.mr-vacio{margin:0}
+
+/* Listado compacto de mesas (solo lectura) */
+.mr-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.mr-item{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;padding:10px 16px;border-radius:999px;border:2px solid var(--line-fuerte);text-align:left;background:var(--card);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer}
+.mr-item .mr-nombre{font-size:1.02rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.mr-item .mr-est{font-size:.8rem;font-weight:600;opacity:.85}
+.mr-item .mr-importe{font-weight:700}
+.mr-item .mr-quien{font-size:.78rem;font-weight:600;opacity:.9;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mr-item .mr-quien.alerta{color:var(--danger);font-weight:700}
+.mr-item .mr-zona{font-size:.72rem;opacity:.75}
+.mr-item.libre{background:var(--libre-bg);border-color:var(--libre-bd);color:var(--libre-ink)}
+.mr-item.ocupada{background:var(--ocupada-bg);border-color:var(--ocupada-bd);color:var(--ocupada-ink)}
+.mr-item.enviada{background:var(--enviada-bg);border-color:var(--enviada-bd);color:var(--enviada-ink)}
+.mr-item.porcobrar{background:var(--porcobrar-bg);border-color:var(--porcobrar-bd);color:var(--porcobrar-ink)}
+.mr-item:hover:not(:disabled){filter:brightness(.97);transform:translateY(-1px)}
+
+/* Mapa de solo lectura */
+.mr-lienzo{touch-action:pan-y;max-height:min(52vh,420px);width:100%;margin:0 auto}
+.mr-mesa{padding:2px 4px;gap:1px;cursor:pointer;font:inherit}
+.mr-mesa .nombre{font-weight:700;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.mr-mesa .pax{font-size:.85em;line-height:1.15;color:var(--mut);white-space:nowrap}
+.mr-mesa .pax.alerta{color:var(--danger);font-weight:700}
+.mr-mesa .importe{font-size:.85em;line-height:1.15}
+.mr-mesa .abonado,.mr-item .abonado{display:inline-block;margin-left:5px;font-style:normal;font-weight:750;font-size:.85em;color:var(--ok)}
+.mr-mesa .etiqueta-zona{font-size:.7em;line-height:1.1;color:var(--mut);background:rgba(255,255,255,.55);border-radius:999px;padding:0 6px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+[data-theme="night"] .mr-mesa .etiqueta-zona{background:rgba(0,0,0,.28)}
+.mr-leyenda{gap:8px 14px;font-size:.8rem}
+
+@media(max-width:768px){
+  .mr-cab .txt{display:none}
+  .mr-lienzo .pax{display:none}
+}

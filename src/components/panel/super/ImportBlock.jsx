@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { importarEmpresa, leerTextoArchivo, validarSnapshot } from '../../../services/super/superApi.js'
+import { importarEmpresa, leerArchivoRespaldo, validarSnapshot } from '../../../services/super/superApi.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import './SuperPage.css'
 
@@ -13,6 +13,8 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
   const [creando, setCreando] = useState(false)
   const [creada, setCreada] = useState(null)
   const [error, setError] = useState('')
+  const [progreso, setProgreso] = useState('')
+  const zipRef = useRef(null)
   const entrada = useRef(null)
 
   const datos = useMemo(() => {
@@ -28,7 +30,8 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
   const cargarArchivo = async f => {
     setErrorArchivo(''); setError('')
     try {
-      const leido = await leerTextoArchivo(f)
+      const { datos: leido, zip } = await leerArchivoRespaldo(f)
+      zipRef.current = zip
       setCrudo(JSON.stringify(leido, null, 2))
       setArchivo(f.name)
       setCreada(null)
@@ -45,11 +48,14 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
     if (!datos.ok) return
     setError(''); setCreando(true)
     try {
-      const id = await importarEmpresa(JSON.parse(crudo), codigo, clave)
-      setCreada({ id, nombre: datos.resumen.nombre, codigo: codigo.trim().toLowerCase() })
+      const { id, fotos } = await importarEmpresa(JSON.parse(crudo), codigo, clave, {
+        zip: zipRef.current,
+        onProgreso: (h, t) => setProgreso(tOr('super.importar.subiendoFotos', `Subiendo fotos… ${h}/${t}`, { hechas: h, total: t })),
+      })
+      setCreada({ id, nombre: datos.resumen.nombre, codigo: codigo.trim().toLowerCase(), fotos })
     } catch (e) {
       setError(e?.message || tOr('super.importar.errorImport', 'No se pudo importar la empresa.'))
-    } finally { setCreando(false) }
+    } finally { setCreando(false); setProgreso('') }
   }
 
   const r = datos.resumen
@@ -68,12 +74,12 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
       <div className="super-campo">
         <span>{tOr('super.importar.archivo', 'Archivo exportado')}</span>
         <div className="barra">
-          <input ref={entrada} type="file" accept="application/json,.json" style={{ flex: 1, minWidth: 220 }}
+          <input ref={entrada} type="file" accept="application/json,.json,application/zip,.zip" style={{ flex: 1, minWidth: 220 }}
             disabled={ocupadisimo} onChange={e => cargarArchivo(e.target.files?.[0])} />
           {archivo && <span className="super-chip">{archivo}</span>}
           {crudo && (
             <button type="button" className="super-ghost" disabled={ocupadisimo}
-              onClick={() => { setCrudo(''); setArchivo(''); setCreada(null); setError(''); setErrorArchivo('') }}>
+              onClick={() => { zipRef.current = null; setCrudo(''); setArchivo(''); setCreada(null); setError(''); setErrorArchivo('') }}>
               {tOr('super.importar.limpiar', 'Limpiar')}
             </button>
           )}
@@ -85,7 +91,7 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
         <span>{tOr('super.importar.pegar', '…o pega el JSON aquí')}</span>
         <textarea value={crudo} disabled={ocupadisimo} spellCheck={false}
           placeholder='{ "empresa": { "nombre": "…" }, "zonas": [], "mesas": [], "productos": [] }'
-          onChange={e => { setCrudo(e.target.value); setCreada(null); setError('') }} />
+          onChange={e => { zipRef.current = null; setCrudo(e.target.value); setCreada(null); setError('') }} />
       </label>
 
       {!datos.ok
@@ -108,9 +114,15 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
               <span className="super-chip">{r.pagos} {tOr('super.importar.pagos', 'pagos')}</span>
               <span className="super-chip">{r.turnos} {tOr('super.importar.turnos', 'turnos')}</span>
               <span className="super-chip">{r.equipo} {tOr('super.importar.equipo', 'personas del equipo')}</span>
+              <span className="super-chip">{r.insumos} {tOr('super.importar.insumos', 'insumos')}</span>
+              <span className="super-chip">{r.recetas} {tOr('super.importar.recetas', 'recetas')}</span>
+              <span className="super-chip">{r.devoluciones} {tOr('super.importar.devoluciones', 'devoluciones')}</span>
+              <span className="super-chip">{zipRef.current ? r.fotos : 0} {tOr('super.importar.fotos', 'fotos')}</span>
             </div>
             <p className="super-ayuda">
-              {tOr('super.importar.notaHistorico', 'Las cuentas, ítems, pagos y turnos del respaldo quedan en el historial de la empresa original pero no se duplican al importar: se recrean maestro, catálogo y equipo.')}
+              {zipRef.current
+                ? tOr('super.importar.notaZip', 'Respaldo completo (.zip): se recrea todo, con las fotos de productos y los comprobantes QR.')
+                : tOr('super.importar.notaJson', 'Con un .json se recrea todo menos las fotos (productos y comprobantes quedan sin imagen). Para llevarte las fotos, exporta «Completo (.zip)».')}
             </p>
           </div>
         )}
@@ -131,7 +143,7 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
 
       <div className="barra">
         <button type="button" className="primary" disabled={!datos.ok || !codigo.trim() || ocupadisimo} onClick={ejecutar}>
-          {creando ? tOr('super.importar.importando', 'Importando…') : tOr('super.importar.boton', 'Importar empresa')}
+          {creando ? (progreso || tOr('super.importar.importando', 'Importando…')) : tOr('super.importar.boton', 'Importar empresa')}
         </button>
         <span className="sp" />
         <span className="super-ayuda">{tOr('super.importar.codigosRepetidos', 'La base rechaza códigos repetidos.')}</span>
@@ -144,6 +156,9 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
             onClick={() => onEntrar?.({ id: creada.id, nombre: creada.nombre, mesas: 0, productos: 0, cuentas: 0 })}>
             {tOr('super.importar.entrarAhora', 'Entrar ahora')}
           </button>
+          {creada.fotos?.fallidas?.length > 0 && (
+            <div className="super-error" role="alert" style={{ marginTop: 6 }}>⚠️ {tOr('super.importar.fotosFallidas', `No se pudieron subir ${creada.fotos.fallidas.length} foto(s).`, { n: creada.fotos.fallidas.length })} {creada.fotos.fallidas.slice(0, 3).join(' · ')}</div>
+          )}
           <div className="super-ayuda" style={{ marginTop: 6 }}>{tOr('super.importar.idNuevo', 'Identificador nuevo')}: <code>{creada.id}</code></div>
         </div>
       )}

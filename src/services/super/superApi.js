@@ -1,6 +1,7 @@
 import { sb, rpcSuper, esUuid, mensajeError, CONFIG_FALTA, SIN_SESION } from './client.js'
 import { MONEDA } from '../config.js'
 import { sb as sbSesion, fijarEmpresaSesion } from '../supabaseClient.js'
+import { crearZipRespaldo, subirFotosImportadas, leerArchivoRespaldo, fotosDe } from './respaldoZip.js'
 
 const KEY_SESION = 'pos-sesion'
 const KEY_ANTERIOR = 'pos-super-sesion-anterior'
@@ -26,18 +27,34 @@ export async function exportarEmpresa(id) {
   return datos
 }
 
-export async function importarEmpresa(datos, codigo, clave) {
+// `zip` (opcional): el .zip leído con leerArchivoRespaldo; con él se restauran también las fotos.
+export async function importarEmpresa(datos, codigo, clave, { zip = null, onProgreso } = {}) {
   const revision = validarSnapshot(datos)
   if (!revision.ok) throw new Error(revision.problemas.join(' '))
   const cod = String(codigo || '').trim().toLowerCase()
   if (!cod) throw new Error('Escribe el código nuevo de la empresa (el que el cliente tecleará al entrar).')
-  const params = { p_datos: datos, p_codigo: cod }
+  const params = { p_datos: datos, p_codigo: cod, p_con_fotos: Boolean(zip) }
   const k = String(clave || '').trim()
   if (k) params.p_clave_inicial = k
-  const nuevoId = await rpcSuper('super_importar_empresa', params)
+  const resp = await rpcSuper('super_importar_empresa', params)
+  const nuevoId = typeof resp === 'string' ? resp : resp?.empresa_id
   if (!esUuid(nuevoId)) throw new Error('La base no devolvió el identificador de la empresa creada.')
-  return nuevoId
+  let fotos = { subidas: 0, fallidas: [] }
+  if (zip && Array.isArray(resp?.fotos) && resp.fotos.length) {
+    try { fotos = await subirFotosImportadas(zip, resp.fotos, onProgreso) }
+    catch (e) { fotos = { subidas: 0, fallidas: [mensajeError(e)] } }
+  }
+  return { id: nuevoId, fotos }
 }
+
+// Exportación completa: datos.json + las fotos reales en un .zip.
+export async function exportarEmpresaZip(id, onProgreso) {
+  const datos = await exportarEmpresa(id)
+  const { blob, total, fallidas } = await crearZipRespaldo(datos, onProgreso)
+  return { datos, blob, total, fallidas }
+}
+
+export { leerArchivoRespaldo }
 
 export async function verCuota(id) {
   if (!esUuid(id)) throw new Error('El identificador de la empresa no es válido.')
@@ -53,7 +70,6 @@ export async function verCuota(id) {
   }
 }
 
-// plan 'pago' + dias → Premium por esa cantidad de días (se SUMAN a lo vigente); sin dias → indefinido.
 export async function cambiarPlan(id, plan, dias = null) {
   if (!esUuid(id)) throw new Error('El identificador de la empresa no es válido.')
   if (plan !== 'gratis' && plan !== 'pago') throw new Error('El plan debe ser «gratis» (Básico) o «pago» (Premium).')
@@ -171,16 +187,21 @@ function resumir(datos) {
     pagos: n('pagos'),
     turnos: n('turnos'),
     equipo: n('equipo'),
+    insumos: n('insumos'),
+    recetas: n('recetas'),
+    devoluciones: n('devoluciones'),
+    fotos: fotosDe(datos).length,
+    version: Number(datos.version || 1),
   }
 }
 
-export function nombreArchivo(codigo) {
+function nombreArchivo(codigo, ext = 'json') {
   const limpio = String(codigo || 'sin-codigo').trim().toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'sin-codigo'
   const d = new Date()
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
-  return `pos-control-${limpio}-${d.getFullYear()}-${mm}-${dd}.json`
+  return `pos-control-${limpio}-${d.getFullYear()}-${mm}-${dd}.${ext}`
 }
 
 export function descargarJson(datos, codigo) {
@@ -194,6 +215,17 @@ export function descargarJson(datos, codigo) {
   a.remove()
 
   setTimeout(() => URL.revokeObjectURL(url), 5000)
+}
+
+export function descargarBlob(blob, codigo, ext = 'zip') {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nombreArchivo(codigo, ext)
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10000)
 }
 
 export async function leerTextoArchivo(file) {

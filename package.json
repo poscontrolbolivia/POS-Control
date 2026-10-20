@@ -1,7 +1,7 @@
 {
   "name": "pos-control",
   "private": true,
-  "version": "0.23.0",
+  "version": "0.30.0",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-agent.mjs",
@@ -12,13 +12,17 @@
     "agent": "node scripts/copy-agent.mjs",
     "icons": "node scripts/gen-icons.mjs",
     "i18n": "node scripts/check-i18n.mjs",
-    "test": "node scripts/check-i18n.mjs && node tests/soldOut.mjs",
+    "test": "node scripts/check-i18n.mjs && node tests/indicaciones.mjs && node tests/cierre.mjs && node tests/soldOut.mjs && node tests/montos.mjs && node tests/respaldoZip.mjs && node tests/ticket.mjs",
+    "test:ticket": "node tests/ticket.mjs",
     "test:soldout": "node tests/soldOut.mjs",
+    "test:montos": "node tests/montos.mjs",
     "test:isolation": "node tests/isolation.mjs",
     "test:quotas": "node tests/quotas.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
+    "jspdf": "^4.2.1",
+    "jszip": "^3.10.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.4"

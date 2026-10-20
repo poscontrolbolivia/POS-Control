@@ -9,7 +9,7 @@ const mapZona = z => ({ id: z.id, nombre: z.nombre })
 const mapMesa = m => ({ id: m.id, zona: m.zona_id, nombre: m.nombre, x: N(m.x), y: N(m.y), w: N(m.w), h: N(m.h), forma: m.forma, cap: N(m.capacidad) })
 const mapSeccion = s => ({ id: s.id, nombre: s.nombre, orden: N(s.orden) })
 const mapProducto = p => ({
-  id: p.id, nombre: p.nombre, seccionId: p.seccion_id, precio: N(p.precio), activo: p.activo, imagen_path: p.imagen_path ?? null,
+  id: p.id, numero: p.numero ?? null, nombre: p.nombre, seccionId: p.seccion_id, precio: N(p.precio), activo: p.activo, imagen_path: p.imagen_path ?? null,
 
   areas: Array.isArray(p.areas) && p.areas.length ? p.areas : ['cocina'],
   opciones: Array.isArray(p.opciones) ? p.opciones : [],
@@ -27,7 +27,7 @@ const mapItem = i => ({
   ...(i.anulacion_resuelta_en ? { anulacionResueltaEn: ts(i.anulacion_resuelta_en), anulacionResueltaPor: i.anulacion_resuelta_por } : {}),
 })
 
-const mapPago = p => ({ id: p.id, metodo: p.metodo, monto: N(p.monto), ...(p.detalle && typeof p.detalle === 'object' ? p.detalle : {}), creadaEn: ts(p.creada_en) })
+const mapPago = p => ({ id: p.id, metodo: p.metodo, monto: N(p.monto), ...(p.detalle && typeof p.detalle === 'object' ? p.detalle : {}), creadaEn: ts(p.creada_en), porId: p.creada_por || undefined })
 
 const mapMov = m => ({ id: m.id, t: m.tipo, monto: N(m.monto), motivo: m.motivo, creadaEn: ts(m.creada_en) })
 
@@ -77,7 +77,7 @@ async function fetchCaja(empresaId) {
     selectAll(sb.from('turnos_caja').select('*').eq('empresa_id', empresaId).is('cerrado_en', null).order('abierto_en', { ascending: false }).limit(50)),
     selectAll(sb.from('turnos_caja').select('*').eq('empresa_id', empresaId).not('cerrado_en', 'is', null).order('abierto_en', { ascending: false }).limit(15)),
   ])
-  // Caja compartida: el único turno abierto del local. Un turno por cajero: EL MÍO (los de los demás van aparte).
+
   const mio = abiertos.find(x => x.modo === 'por_cajero' && x.abierto_por === uid) || abiertos.find(x => x.modo !== 'por_cajero') || null
   return { abierto: mio, otros: abiertos.filter(x => x !== mio), historial }
 }
@@ -117,7 +117,9 @@ function armarCuentas(cuentas, items, pagos, cms, nombres) {
   return cuentas.map(c => ({
     id: c.id,
     tipo: c.tipo,
-    canal: c.tipo === 'directa' ? 'mostrador' : 'mesa',
+    canal: c.tipo === 'directa' ? (c.canal === 'llevar' ? 'llevar' : 'mostrador') : 'mesa',
+    clienteNombre: c.cliente_nombre || '',
+    clienteTel: c.cliente_tel || '',
     numero: c.numero ?? undefined,
     mesaIds: (mesasBy[c.id] || []).map(cm => cm.mesa_id),
     estado: c.estado,
@@ -126,6 +128,7 @@ function armarCuentas(cuentas, items, pagos, cms, nombres) {
     propina: N(c.propina),
     descuento: N(c.descuento),
     nota: c.nota ?? undefined,
+    detalle: c.detalle || '',
     abiertaPor: nombres[c.abierta_por] || undefined,
     abiertaEn: ts(c.abierta_en),
     cerradaPor: c.cerrada_por ? (nombres[c.cerrada_por] || undefined) : undefined,
@@ -159,7 +162,7 @@ export async function cargarEstadoInicial(empresaId) {
     cajaP,
     cajaP.then(t => fetchCuentas(empresaId, { turno: t.abierto ? mapTurno(t.abierto, nombres) : null, historial: t.historial.map(x => mapTurno(x, nombres)) })),
 
-    selectAll(sb.from('cuentas').select('numero').eq('empresa_id', empresaId).eq('tipo', 'directa').gte('abierta_en', hoyISO()).order('numero', { ascending: false }).limit(1)),
+    selectAll(sb.from('cuentas').select('numero').eq('empresa_id', empresaId).eq('tipo', 'directa').is('canal', null).gte('abierta_en', hoyISO()).order('numero', { ascending: false }).limit(1)),
   ])
   const emp = empresas[0]
   if (!emp) throw new Error('No tienes acceso a esta empresa (o no existe)')
@@ -214,7 +217,7 @@ function cuentaRecien(cuentas, filtro) {
   return null
 }
 
-const DETALLE_KEYS = ['recibido', 'cambio', 'referencia', 'tarjeta', 'ultimos4']
+const DETALLE_KEYS = ['recibido', 'cambio', 'referencia', 'tarjeta', 'ultimos4', 'concepto', 'comprobante']
 const mapPagos = pagos => (pagos || []).map(p => {
   const detalle = {}
   for (const k of DETALLE_KEYS) if (p[k] !== undefined && p[k] !== null) detalle[k] = p[k]
@@ -241,9 +244,21 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       if (locId && locId !== dbId) mapa.set(locId, dbId)
       return refrescarNegocio(E)
     }
+    case 'abrir-llevar': {
+      const dbId = await rpc('abrir_para_llevar', { p_nombre: a.nombre, p_telefono: a.tel || null })
+      const locId = (a._nuevos?.cuentas || [])[0]
+      if (locId && locId !== dbId) mapa.set(locId, dbId)
+      return refrescarNegocio(E)
+    }
+    case 'llevar~':
+      await rpc('editar_cliente_llevar', { p_cuenta_id: rid(mapa, a.cuentaId), p_nombre: a.nombre, p_telefono: a.tel || null })
+      return refrescarNegocio(E)
+    case 'llevar-mesa':
+      await rpc('pasar_llevar_a_mesa', { p_cuenta_id: rid(mapa, a.cuentaId), p_mesa_id: a.mesaId, p_comensales: a.comensales || 1 })
+      return refrescarNegocio(E)
     case 'item+': {
 
-      const itemsDb = await rpc('agregar_items', { p_cuenta_id: rid(mapa, a.cuentaId), p_items: [{ producto_id: a.p.id, qty: 1, ...(a.nota ? { nota: a.nota } : {}) }] })
+      const itemsDb = await rpc('agregar_items', { p_cuenta_id: rid(mapa, a.cuentaId), p_items: [{ producto_id: a.p.id, qty: 1, ...(a.nota ? { nota: a.nota } : {}), ...(a.sel?.length ? { sel: a.sel } : {}) }] })
       const c = cuentaRecien(estado.cuentas, x => x.id === a.cuentaId || x.id === rid(mapa, a.cuentaId))
       if (c) remapItems(mapa, c.items, itemsDb)
       return refrescarNegocio(E)
@@ -253,6 +268,9 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       if (a.d < 0) { const real = mapa.get(a.itemId); if (real) mapa.delete(a.itemId) }
       return refrescarNegocio(E)
     }
+    case 'detalle':
+      await rpc('poner_detalle_cuenta', { p_cuenta_id: rid(mapa, a.cuentaId), p_detalle: a.detalle || '' })
+      return refrescarNegocio(E)
     case 'nota':
       await rpc('poner_nota', { p_item_id: rid(mapa, a.itemId), p_nota: a.nota || '' })
       return refrescarNegocio(E)
@@ -278,13 +296,19 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     case 'cobrar': {
       const ticket = await rpc('cobrar_cuenta', {
         p_cuenta_id: rid(mapa, a.cuentaId),
-        p_pagos: mapPagos(a.pagos),
+        p_pagos: mapPagos(a.pagos.map(p => ({ ...p, ...(a.concepto ? { concepto: a.concepto } : {}) }))),
         p_propina: a.propina ?? null,
         p_descuento: a.descuento ?? null,
       })
       ctx.onTicket?.(ticket)
       return refrescarNegocio(E)
     }
+    case 'abonar':
+      await rpc('abonar_cuenta', {
+        p_cuenta_id: rid(mapa, a.cuentaId),
+        p_pagos: mapPagos(a.pagos.map(p => ({ ...p, ...(a.concepto ? { concepto: a.concepto } : {}) }))),
+      })
+      return refrescarNegocio(E)
     case 'unir':
       await rpc('unir_mesas', { p_cuenta_id: rid(mapa, a.cuentaId), p_mesa_ids: a.mesaIds })
       return refrescarNegocio(E)

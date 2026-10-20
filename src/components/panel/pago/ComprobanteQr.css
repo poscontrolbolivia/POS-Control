@@ -1,0 +1,7 @@
+.cq{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 0 2px}
+.cq button{min-height:44px}
+.cq-mini{width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line-fuerte,#ccc)}
+.cq-ok{color:var(--ok-ink,#1d7a35);font-weight:600}
+.cq-omitir{opacity:.7}
+.cq-error{color:var(--danger-ink,#b42318);flex-basis:100%}
+.cq-ver{min-width:36px}

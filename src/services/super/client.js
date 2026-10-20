@@ -5,7 +5,7 @@ export const sb = USAR_SUPABASE ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) 
 
 export const CONFIG_FALTA = 'Falta la configuración de Supabase (SUPABASE_URL / SUPABASE_ANON_KEY en src/services/config.js). El panel de super necesita una base real.'
 export const SIN_SESION = 'No hay sesión iniciada. Entra en POS Control con el correo del super administrador y vuelve a intentarlo.'
-export const NO_SUPER = 'Este usuario no es super administrador: el panel solo está disponible para el dueño de la plataforma.'
+const NO_SUPER = 'Este usuario no es super administrador: el panel solo está disponible para el dueño de la plataforma.'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const esUuid = v => typeof v === 'string' && UUID_RE.test(v.trim())

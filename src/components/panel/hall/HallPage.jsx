@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStore, cuentaActiva, cuentasDeMesa, totalCuenta, totalFinal, nuevoId } from '../../../context/StoreContext.jsx'
+import { useStore, cuentaActiva, cuentasDeMesa, totalCuenta, totalFinal, pagadoCuenta, saldoCuenta, nuevoId } from '../../../context/StoreContext.jsx'
 import { puede } from '../../../services/permissions'
+import { round2 } from '../../../services/format.js'
 import { useMoneda } from '../../../services/money.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import OrderPanel from '../order/OrderPanel.jsx'
@@ -8,6 +9,7 @@ import './HallPage.css'
 
 const W = 1000, H = 600
 const TODAS = 'todas'
+const LLEVAR = 'llevar'
 
 const LARGO_ZONA = 80, LARGO_MESA = 60, CAP_MIN = 1, CAP_MAX = 50
 const COM_MIN = 1, COM_MAX = 99
@@ -22,13 +24,13 @@ const estadoVarias = cs => {
   return e.every(x => x === 'porcobrar') ? 'porcobrar' : e.includes('enviada') ? 'enviada' : 'ocupada'
 }
 
-export const ordenarZonas = zonas => zonas
+const ordenarZonas = zonas => zonas
   .map((z, i) => ({ ...z, _i: i }))
   .sort((a, b) => ((a.orden ?? a._i + 1) - (b.orden ?? b._i + 1)) || (a._i - b._i))
 
-export const ordenNuevaZona = zonas => zonas.reduce((max, z, i) => Math.max(max, z.orden ?? i + 1), 0) + 1
+const ordenNuevaZona = zonas => zonas.reduce((max, z, i) => Math.max(max, z.orden ?? i + 1), 0) + 1
 
-export const intercambioOrden = (zonas, i, dir) => {
+const intercambioOrden = (zonas, i, dir) => {
   const a = zonas[i], b = zonas[i + dir]
   if (!a || !b) return null
   const oa = a.orden ?? i + 1
@@ -37,23 +39,21 @@ export const intercambioOrden = (zonas, i, dir) => {
   return [{ id: a.id, orden: ob }, { id: b.id, orden: oa }]
 }
 
-export const dentroDelLienzo = (x, y, w, h) => ({
+const dentroDelLienzo = (x, y, w, h) => ({
   x: Math.max(0, Math.min(W - w, Math.round(x))),
   y: Math.max(0, Math.min(H - h, Math.round(y))),
 })
 
-export const limitarCapacidad = cap => Math.max(CAP_MIN, Math.min(CAP_MAX, cap))
+const limitarCapacidad = cap => Math.max(CAP_MIN, Math.min(CAP_MAX, cap))
 
-export const cascadar = (k, w = 110, h = 110) => dentroDelLienzo(30 + (k % 6) * 150, 30 + Math.floor(k / 6) * 130, w, h)
-
-export const proximaMesaNombre = mesas => {
+const proximaMesaNombre = mesas => {
   const nums = mesas.map(m => Number(String(m.nombre).match(/(\d+)\s*$/)?.[1] || 0))
   return 'Mesa ' + (Math.max(0, ...nums) + 1)
 }
 
-export const mesasPorZona = (mesas, id) => mesas.filter(m => m.zona === id).length
+const mesasPorZona = (mesas, id) => mesas.filter(m => m.zona === id).length
 
-export const capacidadCuenta = (c, mesas) => {
+const capacidadCuenta = (c, mesas) => {
   if (!c) return 0
   const ids = c.tipo === 'mesa' && c.mesaIds.length > 1 ? c.mesaIds : [c.mesaIds[0]]
   return ids.reduce((t, id) => t + (mesas.find(m => m.id === id)?.cap ?? 0), 0)
@@ -79,6 +79,10 @@ export default function HallPage({ rol, sesion }) {
   const [ren, setRen] = useState(null)
   const [conf, setConf] = useState(null)
 
+  const [cli, setCli] = useState(null)
+  const [aMesa, setAMesa] = useState(null)
+  const [llevarSelId, setLlevarSelId] = useState(null)
+
   const [aviso, setAviso] = useState('')
   const avisoTimer = useRef(null)
 
@@ -90,10 +94,19 @@ export default function HallPage({ rol, sesion }) {
 
   const zonas = useMemo(() => ordenarZonas(s.zonas), [s.zonas])
 
-  const activo = zona === TODAS || zonas.some(z => z.id === zona) ? zona : (zonas[0]?.id ?? TODAS)
+  const activo = zona === TODAS || zona === LLEVAR || zonas.some(z => z.id === zona) ? zona : (zonas[0]?.id ?? TODAS)
   const destinoAlta = activo === TODAS ? (zonas[0]?.id ?? null) : activo
   const mesasZona = s.mesas.filter(m => activo === TODAS || m.zona === activo)
   const mesaSel = s.mesas.find(m => m.id === sel)
+  const enLlevar = activo === LLEVAR
+  const llevarCuentas = s.cuentas.filter(c => c.canal === 'llevar' && c.estado !== 'cerrada').sort((a, b) => (a.numero || 0) - (b.numero || 0))
+  const llevarSel = llevarSelId ? llevarCuentas.find(c => c.id === llevarSelId) : null
+  const mesasLibres = s.mesas.filter(m => cuentasDeMesa(s, m.id).length === 0)
+  useEffect(() => {
+    if (!enLlevar || modo !== 'supabase') return undefined
+    const id = setInterval(() => { if (!document.hidden) window.dispatchEvent(new Event('pos-reanudar')) }, 20000)
+    return () => clearInterval(id)
+  }, [enLlevar, modo])
   const cuentaSel = sel ? cuentaActiva(s, sel) : null
   const comDe = c => (c ? c.comensales ?? 0 : 0)
   const heredadas = s.caja?.turno?.heredadas || []
@@ -101,6 +114,22 @@ export default function HallPage({ rol, sesion }) {
     setAviso(m)
     clearTimeout(avisoTimer.current)
     avisoTimer.current = setTimeout(() => setAviso(''), 4500)
+  }
+  const guardarCli = () => {
+    const nombre = (cli?.nombre || '').trim().slice(0, 80)
+    if (!nombre) return
+    const tel = (cli.tel || '').trim().slice(0, 40)
+    if (cli.id) d({ t: 'llevar~', cuentaId: cli.id, nombre, tel })
+    else d({ t: 'abrir-llevar', nombre, tel, usuario: sesion?.usuario || sesion?.nombre || rol })
+    setCli(null)
+  }
+  const pasarAMesa = () => {
+    const m = s.mesas.find(x => x.id === aMesa?.mesaId)
+    const c = llevarCuentas.find(x => x.id === aMesa?.cuentaId)
+    if (!m || !c) return
+    d({ t: 'llevar-mesa', cuentaId: c.id, mesaId: m.id, comensales: Math.max(1, Number(aMesa.com) || 1) })
+    avisar(t('salon.llevarMovida', { nombre: c.clienteNombre, mesa: m.nombre }))
+    setAMesa(null); setLlevarSelId(null); setZona(m.zona ?? TODAS); setSel(m.id)
   }
   const zonaNombre = id => zonas.find(z => z.id === id)?.nombre ?? t('salon.sinZona')
   const nMesasZona = id => mesasPorZona(s.mesas, id)
@@ -204,6 +233,9 @@ export default function HallPage({ rol, sesion }) {
               title={t('salon.todasTitle')} onClick={() => { setZona(TODAS); setSel(null) }}>
               <span aria-hidden="true">▦</span> {t('salon.todas')}
             </button>
+            <button className={enLlevar ? 'tab on' : 'tab'} aria-pressed={enLlevar} onClick={() => { setZona(LLEVAR); setSel(null); setEdit(false); setNueva(null); setRen(null); setConf(null) }}>
+              <span aria-hidden="true">🥡</span> {t('salon.llevar')}{llevarCuentas.length > 0 && <span className="llevar-n">{llevarCuentas.length}</span>}
+            </button>
             {zonas.map((z, i) => (ren && ren.id === z.id ? (
               <span className="zren" key={z.id}>
                 <input autoFocus className="zinput" value={ren.nombre} maxLength={LARGO_ZONA}
@@ -254,7 +286,7 @@ export default function HallPage({ rol, sesion }) {
             <button type="button" className={'tab' + (vista === 'lista' && !edit ? ' on' : '')} aria-pressed={vista === 'lista' && !edit} disabled={edit} onClick={() => cambiarVista('lista')}>☰ <span className="txt">{t('salon.vistaLista')}</span></button>
           </div>
           {admin && (
-            <button className={edit ? 'primary' : 'ghost'} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
+            <button className={edit ? 'primary' : 'ghost'} disabled={enLlevar} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
               title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { setEdit(!edit); setSel(null); setNueva(null); setRen(null); setConf(null) }}>
               <span aria-hidden="true">{edit ? '✓' : '✎'}</span><span className="txt">{edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}</span>
             </button>
@@ -275,13 +307,13 @@ export default function HallPage({ rol, sesion }) {
               onChange={e => setNueva(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') crearZona(); if (e.key === 'Escape') setNueva(null) }} />
             <button className="primary" onClick={crearZona} disabled={!nueva.trim()}>{t('comun.guardar')}</button>
-            <button className="ghost" onClick={() => setNueva(null)}>{t('comun.cancelar')}</button>
+            <button className="danger" onClick={() => setNueva(null)}>{t('comun.cancelar')}</button>
           </div>
         )}
 
         {edit && admin && (
           <div className="barra">
-            <button className="ghost" onClick={crear} disabled={!destinoAlta} aria-label={t('salon.masMesa')}
+            <button className="success" onClick={crear} disabled={!destinoAlta} aria-label={t('salon.masMesa')}
               title={destinoAlta ? t('salon.masMesa') : t('salon.sinZonas')}>
               <span aria-hidden="true">＋</span><span className="txt">{t('salon.masMesa')}</span>
             </button>
@@ -348,18 +380,20 @@ export default function HallPage({ rol, sesion }) {
           <div className="salon-aviso sin-turno" role="status">{t('salon.sinTurno')}</div>
         )}
 
-        {vista === 'lista' && !edit && (
+        {vista === 'lista' && !edit && !enLlevar && (
           <div className="mesas-lista">
             {mesasZona.length === 0 && <p className="lienzo-vacio" style={{ position: 'static' }}>{t('salon.sinMesasZona')}</p>}
             {mesasZona.map(m => {
               const cs = cuentasDeMesa(s, m.id), c = cs[0], est = estadoVarias(cs), total = cs.reduce((a, x) => a + totalFinal(x), 0)
+              const abono = round2(cs.reduce((a, x) => a + pagadoCuenta(x), 0))
+              const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
               const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
               return (
                 <button type="button" key={m.id} className={`mesa-item ${est}`} onClick={() => setSel(m.id)}>
                   <b className="nombre">{m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : cs.length > 1 ? ` ✂×${cs.length}` : ''}</b>
                   <span className="mi-est">{t('salon.' + est)}</span>
-                  {c && <small className="importe">{money(total)}</small>}
-                  {c && <small className="mi-quien">👥 {comDe(c)}/{capacidadCuenta(c, s.mesas) || m.cap || 0}{c.abiertaPor ? ` · 👤 ${c.abiertaPor}` : ''}</small>}
+                  {c && <small className="importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
+                  {c && <small className="mi-quien">👥 {comDe(c)}/{capacidadCuenta(c, s.mesas) || m.cap || 0}{c.abiertaPor ? ` · 👤 ${c.abiertaPor}` : ''}{c.detalle ? ' · 📝' : ''}</small>}
                   {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
                 </button>
               )
@@ -367,7 +401,7 @@ export default function HallPage({ rol, sesion }) {
           </div>
         )}
 
-        <div ref={lienzo} hidden={vista === 'lista' && !edit} className={'lienzo' + (edit ? ' edit' : '')} style={{ aspectRatio: `${W} / ${H}` }}
+        <div ref={lienzo} hidden={(vista === 'lista' && !edit) || enLlevar} className={'lienzo' + (edit ? ' edit' : '')} style={{ aspectRatio: `${W} / ${H}` }}
           onPointerDown={e => { if (e.target === e.currentTarget) setSel(null) }}
           onPointerMove={move} onPointerUp={up} onPointerCancel={suelta}>
           {mesasZona.length === 0 && (
@@ -375,6 +409,8 @@ export default function HallPage({ rol, sesion }) {
           )}
           {mesasZona.map(m => {
             const cs = cuentasDeMesa(s, m.id), c = cs[0], est = estadoVarias(cs), total = cs.reduce((a, x) => a + totalFinal(x), 0)
+            const abono = round2(cs.reduce((a, x) => a + pagadoCuenta(x), 0))
+            const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
             const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
 
             const capT = capacidadCuenta(c, s.mesas) || (m.cap || 0)
@@ -388,8 +424,9 @@ export default function HallPage({ rol, sesion }) {
                   title={c ? (com > capT ? t('salon.comensalesDeMas', { comensales: com, cap: capT }) : t('salon.comensalesTitle', { comensales: com, cap: capT })) : t('salon.capacidadTitle', { cap: m.cap })}>
                   👥 {c ? `${com}/${capT}` : m.cap}
                 </span>
-                {c && <small className="importe">{money(total)}</small>}
+                {c && <small className="importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
                 {c && c.abiertaPor && <small className="abrio" title={t('pedido.abrio', { usuario: c.abiertaPor })}>👤 {c.abiertaPor}</small>}
+                {c && c.detalle && <small className="abrio" title={c.detalle}>📝 {c.detalle}</small>}
                 {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
                 {c && heredadas.includes(c.id) && <span className="badge-heredada" title={t('salon.heredadaTitle')}>↩</span>}
                 {!unida && cs.length > 1 && <span className="badge-unida" title={t('pedido.menuDividir')}>✂ ×{cs.length}</span>}
@@ -403,15 +440,66 @@ export default function HallPage({ rol, sesion }) {
           })}
         </div>
 
-        <div className="leyenda">
+        {enLlevar && (
+          <div className="llevar">
+            {puede(rol, 'abrir_mesa') && !cli && (
+              <div className="barra"><button className="success" onClick={() => setCli({ id: null, nombre: '', tel: '' })}>＋ {t('salon.llevarNuevo')}</button></div>
+            )}
+            {cli && (
+              <div className="llevar-form">
+                <input autoFocus value={cli.nombre} maxLength={80} placeholder={t('salon.llevarNombre')} aria-label={t('salon.llevarNombre')}
+                  onChange={e => setCli({ ...cli, nombre: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') guardarCli(); if (e.key === 'Escape') setCli(null) }} />
+                <input value={cli.tel} maxLength={40} inputMode="tel" placeholder={t('salon.llevarTel')} aria-label={t('salon.llevarTel')}
+                  onChange={e => setCli({ ...cli, tel: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') guardarCli(); if (e.key === 'Escape') setCli(null) }} />
+                <button className="primary" disabled={!cli.nombre.trim()} onClick={guardarCli}>{cli.id ? t('comun.guardar') : t('salon.llevarCrear')}</button>
+                <button className="ghost" onClick={() => setCli(null)}>{t('comun.cancelar')}</button>
+              </div>
+            )}
+            {llevarCuentas.length === 0 && !cli && <p className="lienzo-vacio" style={{ position: 'static' }}>{t('salon.llevarVacio')}</p>}
+            <div className="llevar-lista">
+              {llevarCuentas.map(c => (
+                <div key={c.id} className={'llevar-card ' + estadoMesa(c)}>
+                  <button type="button" className="llevar-main" onClick={() => setLlevarSelId(c.id)}>
+                    <b>{t('salon.llevarCliente', { n: c.numero })}</b>
+                    <span className="llevar-nombre">{c.clienteNombre}</span>
+                    {c.clienteTel && <small>{c.clienteTel}</small>}
+                    <small className="importe">{money(saldoCuenta(c))} · {t('salon.' + estadoMesa(c))}</small>
+                  </button>
+                  {puede(rol, 'abrir_mesa') && (
+                    <div className="llevar-acc">
+                      <button type="button" className="ghost" onClick={() => setCli({ id: c.id, nombre: c.clienteNombre || '', tel: c.clienteTel || '' })}>✎ {t('salon.llevarEditar')}</button>
+                      <button type="button" className="ghost" onClick={() => setAMesa(aMesa?.cuentaId === c.id ? null : { cuentaId: c.id, mesaId: '', com: 1 })}>➜ {t('salon.llevarAMesa')}</button>
+                    </div>
+                  )}
+                  {aMesa?.cuentaId === c.id && (
+                    <div className="llevar-mesa">
+                      {mesasLibres.length === 0 ? <small>{t('salon.llevarSinMesas')}</small> : (
+                        <>
+                          <select value={aMesa.mesaId} aria-label={t('salon.llevarElegirMesa')} onChange={e => setAMesa({ ...aMesa, mesaId: e.target.value })}>
+                            <option value="">{t('salon.llevarElegirMesa')}</option>
+                            {mesasLibres.map(m => <option key={m.id} value={m.id}>{m.nombre} · {zonaNombre(m.zona)}</option>)}
+                          </select>
+                          <input type="number" min={COM_MIN} max={COM_MAX} value={aMesa.com} aria-label={t('pedido.comensales')} onChange={e => setAMesa({ ...aMesa, com: e.target.value })} />
+                          <button className="primary" disabled={!aMesa.mesaId} onClick={pasarAMesa}>{t('salon.llevarMover')}</button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!enLlevar && <div className="leyenda">
           {[['libre', t('salon.libre')], ['ocupada', t('salon.ocupada')], ['enviada', t('salon.enviada')], ['porcobrar', t('salon.porcobrar')]].map(([k, l]) => (
             <span key={k}><i className={'pt ' + k} />{l}</span>
           ))}
           <span><i className="pt pax" />{t('salon.leyendaPax')}</span>
           <span><i className="pt unida" />{t('salon.leyendaUnidas')}</span>
-        </div>
+        </div>}
       </section>
-      <OrderPanel rol={rol} sesion={sesion} mesa={mesaSel} onClose={() => setSel(null)} bloqueado={edit} />
+      <OrderPanel rol={rol} sesion={sesion} mesa={enLlevar ? undefined : mesaSel} cuenta={enLlevar ? llevarSel : undefined} onClose={() => { setSel(null); setLlevarSelId(null) }} bloqueado={edit} />
     </div>
   )
 }

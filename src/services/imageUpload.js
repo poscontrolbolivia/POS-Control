@@ -1,14 +1,14 @@
 import { SUPABASE_URL } from './config.js'
 
 export const LADO_VISUAL_PX = 45
-export const LADO_ALMACENADO_PX = LADO_VISUAL_PX * 2
-export const BUCKET = 'pos-imagenes'
+const LADO_ALMACENADO_PX = LADO_VISUAL_PX * 2
+const BUCKET = 'pos-imagenes'
 
 const MAX_BYTES_ENTRADA = 8 * 1024 * 1024
 const LIMITE_STORAGE_BYTES = 209715
 const CALIDAD_INICIAL = 0.85
 
-export function recubrirCuadrado(srcW, srcH, lado) {
+function recubrirCuadrado(srcW, srcH, lado) {
   const sSize = Math.min(srcW, srcH)
   return {
     sx: (srcW - sSize) / 2,
@@ -20,19 +20,19 @@ export function recubrirCuadrado(srcW, srcH, lado) {
   }
 }
 
-export const rutaImagenProducto = (empresaId, productoId, ext = 'webp') =>
+const rutaImagenProducto = (empresaId, productoId, ext = 'webp') =>
   `productos/${empresaId}/${productoId}.${ext}`
 
 const extParaMime = mime => (mime === 'image/jpeg' ? 'jpg' : mime === 'image/png' ? 'png' : 'webp')
 
-export function imagenPublica(path) {
+function imagenPublica(path) {
   if (!path) return null
   if (/^https?:\/\//i.test(path)) return path
   return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`
 }
 
 const cacheSesion = new Map()
-export function registrarCacheImagen(productoId, url) {
+function registrarCacheImagen(productoId, url) {
   if (!productoId) return
   if (url) cacheSesion.set(productoId, url)
   else cacheSesion.delete(productoId)
@@ -70,7 +70,7 @@ async function decodificar(file) {
 const blobDeCanvas = (canvas, mime, calidad) =>
   new Promise(resolve => canvas.toBlob(resolve, mime, calidad))
 
-export async function comprimirImagen(file, lado = LADO_ALMACENADO_PX) {
+async function comprimirImagen(file, lado = LADO_ALMACENADO_PX) {
   if (!file) throw new Error('Selecciona un archivo de imagen.')
   const tipo = (file.type || '').toLowerCase()
   if (!tipo.startsWith('image/')) throw new Error('Ese archivo no es una imagen.')
@@ -107,7 +107,7 @@ export async function comprimirImagen(file, lado = LADO_ALMACENADO_PX) {
   return { blob, mime: blob.type || mime }
 }
 
-export async function blobADataUrl(blob) {
+async function blobADataUrl(blob) {
   if (typeof FileReader === 'function') {
     return new Promise((resolve, reject) => {
       const fr = new FileReader()
@@ -124,7 +124,7 @@ export async function blobADataUrl(blob) {
   return `data:${blob.type};base64,${btoa(bin)}`
 }
 
-export async function subirImagen(sb, empresaId, productoId, blob, mime = 'image/webp') {
+async function subirImagen(sb, empresaId, productoId, blob, mime = 'image/webp') {
   if (!sb) throw new Error('Sin conexión con el servidor: no se pueden subir fotos en el modo demo.')
   if (!empresaId || !productoId) throw new Error('Falta identificar la empresa o el artículo.')
   const ext = extParaMime(mime)
@@ -141,7 +141,7 @@ export async function borrarImagen(sb, path) {
   if (error) throw new Error('No se pudo borrar la foto: ' + (error.message || String(error)))
 }
 
-export async function fijarImagenPath(sb, empresaId, productoId, path) {
+async function fijarImagenPath(sb, empresaId, productoId, path) {
   if (!sb) return
   const { error } = await sb.from('productos').update({ imagen_path: path }).eq('id', productoId).eq('empresa_id', empresaId)
   if (error) throw new Error('No se pudo guardar la foto del artículo: ' + (error.message || String(error)))

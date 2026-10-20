@@ -28,7 +28,7 @@ const azar = max => {
 const generarClave = () => {
   let clave = ''
   for (let i = 0; i < 3; i++) clave += CONSONANTES[azar(CONSONANTES.length)] + VOCALES[azar(VOCALES.length)]
-  return clave
+  return clave + String(azar(90) + 10)
 }
 
 const textoError = (err, tOr) => {
@@ -424,7 +424,7 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
                 </div>
                 <div className="adm-fila">
                   <button type="submit" className="success">{tOr('equipo.clave.guardar', 'Guardar la clave')}</button>
-                  <button type="button" className="ghost" onClick={() => setClaveFila(null)}>{tOr('equipo.cancelar', 'Cancelar')}</button>
+                  <button type="button" className="danger" onClick={() => setClaveFila(null)}>{tOr('equipo.cancelar', 'Cancelar')}</button>
                 </div>
               </form>
             )}

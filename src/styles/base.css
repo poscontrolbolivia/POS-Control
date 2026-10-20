@@ -1,61 +1,62 @@
-/* ============================================================================================
-   BASE · reinicio, botones, campos, mesas, ventana modal. Colores y medidas: SOLO tokens.css.
-   Orden del archivo: tipografía → botones → campos → maquetación → mesas → modal → red de seguridad.
-   ============================================================================================ */
 @import './tokens.css';
-*{box-sizing:border-box}:root{--font:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--font-display:Figtree,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}h1,h2,h3,button.primary,.cc-btn{font-family:var(--font-display)}
+*{box-sizing:border-box}
+:root{--font:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--font-display:Figtree,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
+h1, h2, h3, button.primary, .cc-btn{font-family:var(--font-display)}
 body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink)}
-button,select,input,textarea{font:inherit;color:inherit}
-
-button{border:1.5px solid var(--line-fuerte);background:var(--card);border-radius:999px;padding:8px 12px;cursor:pointer;min-height:40px;min-width:40px;color:var(--ink);transition:transform .12s ease,box-shadow .12s ease,filter .12s ease,background .12s ease}
-button:hover:not(:disabled){background:var(--card-2)}
-button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+button, select, input, textarea{font:inherit;color:inherit}
+button{border:1.5px solid var(--chip-bd);background:var(--chip-bg);border-radius:999px;padding:8px 12px;cursor:pointer;min-height:40px;min-width:40px;color:var(--chip-ink);transition:transform .12s ease,box-shadow .12s ease,filter .12s ease,background .12s ease}
+button:hover:not(:disabled){background:var(--chip-hover)}
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 button:disabled{opacity:.5;cursor:not-allowed}
-button.ghost{background:transparent;border-color:var(--line-fuerte)}
-button.ghost:hover:not(:disabled){background:var(--card-2)}
+button.ghost{background:transparent;border-color:var(--chip-bd);color:var(--chip-ink)}
+button.ghost:hover:not(:disabled){background:var(--chip-hover)}
 button.big{width:100%;padding:16px;font-size:1.1rem}
-
-button.primary,button.info,button.success,button.danger.solid,button.warning,button.orange,button.violet,button.teal,button.pink,button.slate,button.rojo{
-  --pc:var(--btn-blue);border:0;border-radius:999px;color:var(--on-btn);font-weight:650;
+button.primary, button.info, button.success, button.danger.solid, button.warning, button.orange, button.violet, button.teal, button.slate, button.rojo{
+  --pc:var(--btn-green);border:0;border-radius:999px;color:var(--on-btn);font-weight:650;
   background:var(--gloss),var(--pc);
   box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 38%,transparent);text-shadow:0 1px 1px rgba(0,0,0,.25)}
-button.primary,button.info{--pc:var(--ac)}
+/* El verde es la marca (el logo) y manda en el botón primario; el azul queda para información
+   y estado, que es lo que hace --ac en foco, chips y enlaces. */
+button.primary{--pc:var(--btn-green)}
+button.info{--pc:var(--ac)}
 button.success{--pc:var(--btn-green)}
-button.danger.solid,button.rojo{--pc:var(--btn-red)}
+button.danger.solid, button.rojo{--pc:var(--rojo)}
 button.warning{--pc:var(--btn-yellow);color:var(--on-warning);text-shadow:none}
 button.orange{--pc:var(--btn-orange)}
 button.violet{--pc:var(--btn-violet)}
 button.teal{--pc:var(--btn-teal)}
-button.pink{--pc:var(--btn-pink)}
 button.slate{--pc:var(--btn-slate)}
-button.primary:hover:not(:disabled),button.info:hover:not(:disabled),button.success:hover:not(:disabled),button.danger.solid:hover:not(:disabled),button.rojo:hover:not(:disabled),button.warning:hover:not(:disabled),button.orange:hover:not(:disabled),button.violet:hover:not(:disabled),button.teal:hover:not(:disabled),button.pink:hover:not(:disabled),button.slate:hover:not(:disabled){
+button.primary:hover:not(:disabled), button.info:hover:not(:disabled), button.success:hover:not(:disabled), button.danger.solid:hover:not(:disabled), button.rojo:hover:not(:disabled), button.warning:hover:not(:disabled), button.orange:hover:not(:disabled), button.violet:hover:not(:disabled), button.teal:hover:not(:disabled), button.slate:hover:not(:disabled){
   filter:brightness(.94);transform:translateY(-1px);background:var(--gloss),var(--pc)}
-button.primary:active:not(:disabled),button.success:active:not(:disabled),button.orange:active:not(:disabled){transform:translateY(0) scale(.98)}
-
-button.danger{color:var(--danger-deep);border-color:color-mix(in srgb,var(--danger) 70%,var(--line));font-weight:600}
-button.danger:hover:not(:disabled){background:color-mix(in srgb,var(--btn-red) 12%,var(--card))}
-button.danger.solid{color:var(--on-btn)}
-
-input,select,textarea{border:1.5px solid var(--line-fuerte);background:var(--card);border-radius:var(--r-sm);padding:8px;min-height:40px;color:var(--ink);transition:border-color .12s ease,box-shadow .12s ease}
-input:focus,select:focus,textarea:focus{border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 22%,transparent)}
+button.primary:active:not(:disabled), button.success:active:not(:disabled), button.orange:active:not(:disabled){transform:translateY(0) scale(.98)}
+button.danger{--pc:var(--rojo);color:var(--rojo-txt);border-color:var(--rojo-bd);background:var(--rojo-bg);font-weight:650}
+button.danger:hover:not(:disabled){background:var(--rojo-hover);border-color:color-mix(in srgb,var(--rojo) 45%,var(--rojo-bd))}
+button.danger.solid{color:var(--rojo-on)}
+button[aria-label="−"], button[aria-label="-"], button[aria-label="–"]{--pc:var(--rojo);border:0;color:var(--rojo-on);background:var(--gloss),var(--pc);box-shadow:var(--sh-btn) color-mix(in srgb,var(--pc) 38%,transparent);font-weight:700}
+button[aria-label="+"], button[aria-label="＋"]{--pc:var(--verde);border:0;color:var(--rojo-on);background:var(--gloss),var(--pc);box-shadow:var(--sh-btn) color-mix(in srgb,var(--pc) 38%,transparent);font-weight:700}
+button[aria-label="−"]:hover:not(:disabled), button[aria-label="+"]:hover:not(:disabled),
+button[aria-label="-"]:hover:not(:disabled), button[aria-label="–"]:hover:not(:disabled), button[aria-label="＋"]:hover:not(:disabled){filter:brightness(.94);transform:translateY(-1px);background:var(--gloss),var(--pc)}
+input, select, textarea{border:1.5px solid var(--line-fuerte);background:var(--card);border-radius:var(--r-sm);padding:8px;min-height:40px;color:var(--ink);transition:border-color .12s ease,box-shadow .12s ease}
+input:focus, select:focus, textarea:focus{border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 22%,transparent)}
 input::placeholder{color:var(--mut);opacity:.8}
-input[type=checkbox],input[type=radio]{min-height:0;accent-color:var(--ac)}
-
+input[type=checkbox], input[type=radio]{min-height:0;accent-color:var(--ac)}
 html{touch-action:manipulation}
-input,select,textarea{font-size:max(16px,1em)}
-
-.top{display:flex;gap:12px;align-items:center;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}.demo{color:var(--mut);font-size:.85rem;flex:1}
+input, select, textarea{font-size:max(16px,1em)}
+.top{display:flex;gap:12px;align-items:center;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.demo{color:var(--mut);font-size:.85rem;flex:1}
 .salon{display:block;padding:12px}
-.barra{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}.sp{flex:1}.fila{display:flex;align-items:center}
-
+.barra{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.sp{flex:1}
+.fila{display:flex;align-items:center}
 .sp+*{margin-left:auto}
 .tab{border-radius:var(--r-pill)}
-
 .lienzo{position:relative;width:100%;background-color:var(--lienzo);border:2px solid var(--line-fuerte);border-radius:14px;overflow:hidden;touch-action:none;
  background-image:radial-gradient(var(--lienzo-punto) 1.4px,transparent 1.4px);background-size:5% 8.33%}
 .lienzo.edit{outline:3px dashed var(--ac);outline-offset:2px}
 .mesa{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;border:3px solid var(--line-fuerte);cursor:pointer;user-select:none;text-align:center;font-size:clamp(.65rem,1.6vw,.95rem);box-shadow:0 3px 8px rgba(0,0,0,.22)}
-.mesa.cuadrada{border-radius:12px}.mesa.rect{border-radius:12px}.mesa.redonda{border-radius:50%}
+.mesa.cuadrada{border-radius:12px}
+.mesa.rect{border-radius:12px}
+.mesa.redonda{border-radius:50%}
 .mesa.libre{background:var(--libre-bg);border-color:var(--libre-bd);color:var(--libre-ink)}
 .mesa.ocupada{background:var(--ocupada-bg);border-color:var(--ocupada-bd);color:var(--ocupada-ink)}
 .mesa.enviada{background:var(--enviada-bg);border-color:var(--enviada-bd);color:var(--enviada-ink)}
@@ -63,73 +64,79 @@ input,select,textarea{font-size:max(16px,1em)}
 .mesa.sel{box-shadow:0 0 0 4px var(--card),0 0 0 8px var(--ac)}
 .leyenda{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;color:var(--ink);font-size:.85rem;font-weight:550}
 .pt{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:5px;vertical-align:middle;border:2px solid var(--line-fuerte)}
-.pt.libre{background:var(--libre-bg);border-color:var(--libre-bd)}.pt.ocupada{background:var(--ocupada-bg);border-color:var(--ocupada-bd)}
-.pt.enviada{background:var(--enviada-bg);border-color:var(--enviada-bd)}.pt.porcobrar{background:var(--porcobrar-bg);border-color:var(--porcobrar-bd)}
-.panel{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r-md);padding:14px;align-self:start;box-shadow:var(--sh-1)}.panel.vacio{color:var(--mut);text-align:center;padding:40px 14px}
+.pt.libre{background:var(--libre-bg);border-color:var(--libre-bd)}
+.pt.ocupada{background:var(--ocupada-bg);border-color:var(--ocupada-bd)}
+.pt.enviada{background:var(--enviada-bg);border-color:var(--enviada-bd)}
+.pt.porcobrar{background:var(--porcobrar-bg);border-color:var(--porcobrar-bd)}
+.panel{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r-md);padding:14px;align-self:start;box-shadow:var(--sh-1)}
+.panel.vacio{color:var(--mut);text-align:center;padding:40px 14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
-
 .prod{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 18px;text-align:center;background:var(--card-2);border-color:var(--line-fuerte);border-radius:999px}
 .prod:hover:not(:disabled){border-color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,var(--card))}
 .prod small{color:var(--mut)}
-.items{list-style:none;margin:12px 0;padding:0}.items li{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
-.items .n{flex:1}.items li.anulado{opacity:.5;text-decoration:line-through}.items li.enviado .n::before{content:'🔥 '}.items li.vacio{color:var(--mut);justify-content:center}
-
-.qty{display:flex;gap:6px;align-items:center}.qty button,.x{min-height:32px;min-width:32px;padding:2px 9px}.pr{min-width:78px;text-align:right}
+.items{list-style:none;margin:12px 0;padding:0}
+.items li{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.items .n{flex:1}
+.items li.anulado{opacity:.5;text-decoration:line-through}
+.items li.enviado .n::before{content:'🔥 '}
+.items li.vacio{color:var(--mut);justify-content:center}
+.qty{display:flex;gap:6px;align-items:center}
+.qty button, .x{min-height:32px;min-width:32px;padding:2px 9px}
+.pr{min-width:78px;text-align:right}
 .total{display:flex;justify-content:space-between;font-size:1.3rem;margin:10px 0}
 .tag{padding:2px 10px;border-radius:999px;background:var(--libre);font-size:.8rem;font-weight:650;border:1px solid var(--line)}
 .tag.abierta{background:var(--libre-bg);color:var(--libre-ink);border-color:var(--libre-bd)}
 .tag.precuenta{background:var(--porcobrar-bg);color:var(--porcobrar-ink);border-color:var(--porcobrar-bd)}
 .tag.cerrada{background:var(--card-2);color:var(--mut)}
-
 .modal-fondo{position:fixed;inset:0;z-index:200;background:rgba(8,14,28,.62);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px;animation:modal-in .14s ease-out}
 .modal-caja{width:100%;max-width:760px;max-height:calc(100vh - 32px);overflow-y:auto;background:var(--card);color:var(--ink);border:2px solid var(--line-fuerte);border-radius:18px;padding:18px;box-shadow:var(--sh-2)}
 @keyframes modal-in{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}}
-@media(max-width:640px){.modal-fondo{padding:0;align-items:flex-end}.modal-caja{max-width:none;max-height:94vh;border-radius:18px 18px 0 0;padding:14px}}
-@media(prefers-reduced-motion:reduce){.modal-fondo{animation:none}button{transition:none}}
+@media(max-width:640px){.modal-fondo{padding:0;align-items:flex-end}
+.modal-caja{max-width:none;max-height:94vh;border-radius:18px 18px 0 0;padding:14px}}
+@media(prefers-reduced-motion:reduce){.modal-fondo{animation:none}
+button{transition:none}}
 
-
-/* ── Seleccionado: UNA sola regla para todas las pantallas (pestañas, chips, opciones) ──────── */
-.tab.on,.topbar-tab.on,.ck-tab.on,.ck-sacadas.on,.vd-tab.on,.vd-metodo.on,.me-opc.on,.pm-opcion.on,.eq-area-chip.on,.sel-idioma-btn.on,.ztab.on .tab{
+.tab.on, .topbar-tab.on, .ck-tab.on, .ck-sacadas.on, .vd-tab.on, .vd-metodo.on, .me-opc.on, .pm-opcion.on, .ztab.on .tab{
   border-color:transparent;color:var(--on-btn);font-weight:650;text-shadow:0 1px 1px rgba(0,0,0,.25);
   background:var(--gloss),var(--sel);box-shadow:var(--sh-btn) color-mix(in srgb,var(--sel) 38%,transparent)}
-.tab.on:hover:not(:disabled),.topbar-tab.on:hover:not(:disabled),.ck-tab.on:hover:not(:disabled),.vd-tab.on:hover:not(:disabled),.vd-metodo.on:hover:not(:disabled),.me-opc.on:hover:not(:disabled),.pm-opcion.on:hover:not(:disabled){
+.tab.on:hover:not(:disabled), .topbar-tab.on:hover:not(:disabled), .ck-tab.on:hover:not(:disabled), .vd-tab.on:hover:not(:disabled), .vd-metodo.on:hover:not(:disabled), .me-opc.on:hover:not(:disabled), .pm-opcion.on:hover:not(:disabled){
   background:var(--gloss),var(--sel);filter:brightness(1.06)}
+.tab:not(.on), .topbar-tab:not(.on), .ck-tab:not(.on), .ck-sacadas:not(.on), .vd-tab:not(.on), .vd-metodo:not(.on),
+.me-opc:not(.on), .pm-opcion:not(.on), .ztab:not(.on) .tab, .salon .tab:not(.on){
+  background:var(--chip-bg);border-color:var(--chip-bd);color:var(--chip-ink);box-shadow:none;text-shadow:none;font-weight:600}
+.tab:not(.on):hover:not(:disabled), .topbar-tab:not(.on):hover:not(:disabled), .ck-tab:not(.on):hover:not(:disabled),
+.ck-sacadas:not(.on):hover:not(:disabled), .vd-tab:not(.on):hover:not(:disabled), .vd-metodo:not(.on):hover:not(:disabled),
+.me-opc:not(.on):hover:not(:disabled), .pm-opcion:not(.on):hover:not(:disabled), .ztab:not(.on) .tab:hover:not(:disabled){
+  background:var(--chip-hover);border-color:color-mix(in srgb,var(--ac) 62%,var(--line))}
+[class*="-aviso"] button.ico{background:var(--rojo-bg);border:1.5px solid var(--rojo-bd);color:var(--rojo-txt)}
+[class*="-aviso"] button.ico:hover:not(:disabled){background:var(--rojo-hover);border-color:color-mix(in srgb,var(--rojo) 45%,var(--rojo-bd));color:var(--rojo-txt)}
 
-/* ── Barra superior: menú ☰ y salir ───────────────────────────────────────────────────────── */
-.topbar-salir,.topbar-menu{
+.topbar-salir, .topbar-menu{
   display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:6px 14px;border:0;border-radius:var(--r-pill);color:var(--on-btn);font-weight:650;
   text-shadow:0 1px 1px rgba(0,0,0,.25);background:var(--gloss),var(--pc);box-shadow:var(--sh-btn) color-mix(in srgb,var(--pc) 38%,transparent)}
-.topbar-salir{--pc:var(--btn-red)}
+.topbar-salir{--pc:var(--rojo)}
 .topbar-menu{--pc:var(--btn-yellow);color:var(--on-warning);text-shadow:none;font-size:1.15rem;line-height:1;padding:6px 13px}
-.topbar-salir:hover:not(:disabled),.topbar-menu:hover:not(:disabled){filter:brightness(.95);transform:translateY(-1px);background:var(--gloss),var(--pc)}
+.topbar-salir:hover:not(:disabled), .topbar-menu:hover:not(:disabled){filter:brightness(.95);transform:translateY(-1px);background:var(--gloss),var(--pc)}
 .topbar-acc{display:flex;align-items:center;gap:8px;margin-left:auto}
 .topbar-mods.cerrado{display:none}
-@media(max-width:640px){.topbar-salir-txt{display:none}.topbar-salir{padding:6px 12px;min-width:38px}}
-
+@media(max-width:640px){.topbar-salir-txt{display:none}
+.topbar-salir{padding:6px 12px;min-width:38px}}
 .pref-fila{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
 .pref-fila .lg-tema{display:flex;align-items:center;gap:8px}
 
-/* ============================================================================================
-   v0.22.1 · RED DE SEGURIDAD
-   1) Zoom involuntario: un campo con letra < 16px hace zoom al tocarlo (iPhone). Varias reglas de
-      componentes (`font: inherit` dentro de etiquetas pequeñas) la bajaban; !important la fija.
-   2) Casillas que se salen del margen: cualquier campo/etiqueta puede encogerse (min-width:0) y
-      nunca pasa del ancho de su caja. Los mínimos de cada pantalla se acotan con min(…, 100%).
-   ============================================================================================ */
-input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:max(16px,1em)!important}
-input,select,textarea{max-width:100%}
-label,fieldset,.adm-campo,.super-campo,.campo,.me-campo{min-width:0}
+input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea{font-size:max(16px,1em)!important}
+input, select, textarea{max-width:100%}
+label, fieldset, .adm-campo, .super-campo, .campo, .me-campo{min-width:0}
 select{text-overflow:ellipsis}
 body{overflow-x:clip}
 .caja-form input{min-width:min(160px,100%)}
-.campo input,.campo select{min-width:min(8rem,100%)}
+.campo input, .campo select{min-width:min(8rem,100%)}
 .adm-fila input{min-width:min(140px,100%)}
 .imp-seccion select{min-width:min(110px,100%)}
 .imp-url input{min-width:min(240px,100%)}
 .eq-clave-fila input{min-width:min(150px,100%)}
 
-/* Botones que seguían con el color del tema o sin relleno → colores del logo, sólidos */
 button.ico{background:var(--logo-navy);border:0;color:var(--on-btn)}
 button.ico:hover:not(:disabled){background:var(--logo-navy);filter:brightness(1.15)}
 button.ico.ok{background:var(--logo-green)}
-button.ico.danger{background:var(--btn-red)}
+button.ico.danger{background:var(--rojo)}

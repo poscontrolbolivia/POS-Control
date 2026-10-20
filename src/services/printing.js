@@ -1,4 +1,4 @@
-export const GRUPOS_BASE = [
+const GRUPOS_BASE = [
   { id: 'cocina', nombre: 'Cocina', ancho: 32, baud: 9600 },
   { id: 'barra', nombre: 'Barra', ancho: 32, baud: 9600 },
   { id: 'caja', nombre: 'Caja (tickets)', ancho: 32, baud: 9600, tickets: true },
@@ -15,8 +15,6 @@ export function grupoDeSeccion(config, seccionId) {
   const id = config?.impresoraPorSeccion?.[seccionId]
   return lista.find(g => g.id === id) || lista[0] || null
 }
-
-export const areasDeComanda = config => gruposDeComanda(config).map(g => g.id)
 export const nombreDeArea = (config, id, respaldo) => gruposDeComanda(config).find(g => g.id === id)?.nombre || respaldo || id
 
 export const SIN_AREA = '_sin_area'
@@ -27,7 +25,7 @@ export function areasDelItem(item, productos = []) {
   return Array.isArray(prod?.areas) && prod.areas.length ? prod.areas : null
 }
 
-export function gruposDelItem(item, productos = [], config = {}) {
+function gruposDelItem(item, productos = [], config = {}) {
   const lista = gruposDeComanda(config)
   const validos = []
   const vistos = new Set()

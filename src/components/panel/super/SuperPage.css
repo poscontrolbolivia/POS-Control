@@ -62,7 +62,6 @@
 .super-cuota-caja{border:1px dashed var(--warn-line);border-radius:14px;padding:14px;background:var(--libre)}
 .super-cuota-caja .super-titulo-bloque{margin-bottom:2px}
 
-/* Plan / Premium del super */
 .super-chip.plan-premium{background:var(--logo-green);color:var(--on-btn)}
 .super-chip.plan-basico{background:var(--libre);color:var(--mut)}
 .super-plan-caja{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1.5px solid var(--line-fuerte);border-radius:14px;background:var(--card)}
@@ -71,7 +70,6 @@
 .super-plan-custom{display:inline-flex;gap:6px;align-items:center;max-width:100%}
 .super-plan-custom input{width:96px;min-width:0;min-height:40px}
 
-/* Que NADA se salga del ancho en el móvil */
 .super-envoltura,.super-bloque,.panel.super-bloque,.super-campo{min-width:0;max-width:100%}
 .super-bloque input,.super-bloque select,.super-bloque textarea{max-width:100%;min-width:0}
 @media (max-width:700px){

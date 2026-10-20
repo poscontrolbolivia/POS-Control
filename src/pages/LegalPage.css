@@ -2,20 +2,20 @@
 .legal-cab{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
 .legal-back{
   display:inline-flex;align-items:center;gap:8px;text-decoration:none;
-  background:var(--ac);color:var(--on-btn);border-radius:999px;padding:10px 16px;font-weight:650;font-size:.9rem;
+  background:var(--gloss),var(--rojo);color:var(--rojo-on);border-radius:999px;padding:10px 16px;font-weight:650;font-size:.9rem;
+  text-shadow:0 1px 1px rgba(0,0,0,.25);box-shadow:var(--sh-btn) color-mix(in srgb,var(--rojo) 38%,transparent);
 }
-.legal-back:hover{filter:brightness(1.06)}
+.legal-back:hover{background:var(--gloss),var(--rojo);filter:brightness(.94);transform:translateY(-1px)}
 .legal-marca{display:flex;align-items:center;gap:10px;margin-bottom:2px}
 .legal-wrap h1{font-size:1.55rem;margin:0;color:var(--ink)}
 .legal-updated{color:var(--mut);font-size:.85rem;margin:0 0 22px}
 .legal-wrap h2{font-size:1.12rem;margin:26px 0 8px;scroll-margin-top:16px;color:var(--ink)}
-.legal-wrap p,.legal-wrap li{font-size:.95rem}
+.legal-wrap p, .legal-wrap li{font-size:.95rem}
 .legal-wrap ul{padding-left:20px}
 .legal-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 28px}
 .legal-tabla{width:100%;min-width:460px;border-collapse:collapse;font-size:.88rem;margin:10px 0 6px}
-.legal-tabla th,.legal-tabla td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.legal-tabla th, .legal-tabla td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 .legal-tabla th{color:var(--mut);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.02em}
-.legal-tabla-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .legal-contact{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);font-size:.85rem;color:var(--mut)}
 .legal-crosslink{color:var(--ac);text-decoration:none}
 .legal-crosslink:hover{text-decoration:underline}
@@ -27,9 +27,7 @@
 .legal-toc a:hover{color:var(--ac)}
 .legal-summary{background:var(--libre);border-left:3px solid var(--ac);border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0 12px;font-size:.88rem}
 .legal-summary b{color:var(--ac)}
-.legal-back:focus-visible,.legal-toc a:focus-visible,.legal-crosslink:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-@media (max-width:600px){
-  .legal-wrap{padding-top:16px}
-  .legal-toc ol{columns:1}
-  .legal-card{padding:18px 16px}
-}
+.legal-back:focus-visible, .legal-toc a:focus-visible, .legal-crosslink:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+@media (max-width:600px){.legal-wrap{padding-top:16px}
+.legal-toc ol{columns:1}
+.legal-card{padding:18px 16px}}

@@ -3,11 +3,11 @@ import es from './locales/es.json'
 import en from './locales/en.json'
 import pt from './locales/pt.json'
 
-export const DICCIONARIOS = { es, en, pt }
-export const IDIOMAS = ['es', 'en', 'pt']
-export const IDIOMA_DEFECTO = 'es'
+const DICCIONARIOS = { es, en, pt }
+const IDIOMAS = ['es', 'en', 'pt']
+const IDIOMA_DEFECTO = 'es'
 
-export const CLAVE_STORAGE = 'pos-idioma-app'
+const CLAVE_STORAGE = 'pos-idioma-app'
 
 export const IDIOMAS_INFO = [
   { codigo: 'es', nombre: 'Español', corto: 'ES' },
@@ -17,11 +17,11 @@ export const IDIOMAS_INFO = [
 
 let idiomaActual = leerPreferencia()
 
-export function normalizarIdioma(v) {
+function normalizarIdioma(v) {
   return IDIOMAS.includes(v) ? v : IDIOMA_DEFECTO
 }
 
-export function leerPreferenciaCruda() {
+function leerPreferenciaCruda() {
   try {
     const v = localStorage.getItem(CLAVE_STORAGE)
     return v === null ? null : normalizarIdioma(v)
@@ -30,7 +30,7 @@ export function leerPreferenciaCruda() {
   }
 }
 
-export function leerPreferencia() {
+function leerPreferencia() {
   if (leerPreferenciaCruda() !== null) return leerPreferenciaCruda()
 
   const nav = (typeof navigator !== 'undefined' && navigator.language ? navigator.language : '').slice(0, 2).toLowerCase()
@@ -41,12 +41,12 @@ function escribirPreferencia(idioma) {
   try { localStorage.setItem(CLAVE_STORAGE, idioma) } catch {  }
 }
 
-export function interpolar(texto, params) {
+function interpolar(texto, params) {
   if (!params || typeof texto !== 'string') return texto
   return texto.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (m, k) => (params[k] === undefined || params[k] === null ? m : String(params[k])))
 }
 
-export function traducirEn(idioma, clave, params) {
+function traducirEn(idioma, clave, params) {
   const txt = DICCIONARIOS[idioma] && DICCIONARIOS[idioma][clave]
   if (typeof txt === 'string') return interpolar(txt, params)
   const enEs = es[clave]

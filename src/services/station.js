@@ -41,12 +41,6 @@ export function fijarImpresora(grupoId, nombre) {
   guardarPref(pref); notificar()
 }
 
-/**
- * «Entrar a la app y que ya funcionen las impresoras»: si esta PC tiene el agente instalado
- * (instalar-agente.bat, arranca solo con Windows) y un grupo (Cocina, Barra, Caja) nunca se configuró
- * AQUÍ, se le asigna la impresora predeterminada de Windows. Solo en PC (no en teléfonos) y solo para
- * grupos sin elección previa: lo que ya elegiste no se toca. Devuelve true si cambió algo.
- */
 export async function autoConfigurarAgente(grupos = []) {
   const escritorio = typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
   const nuevos = grupos.filter(g => !pref.salidas?.[g.id])
@@ -60,7 +54,7 @@ export async function autoConfigurarAgente(grupos = []) {
     pref = { ...pref, salidas, impresoras }
     guardarPref(pref); notificar()
     return true
-  } catch { return false } // sin agente: nada que hacer (el selector manual sigue disponible)
+  } catch { return false }
 }
 
 export const modoAgenteDe = grupoId => (pref.modos?.[grupoId] === 'texto' ? 'texto' : 'raw')

@@ -1,0 +1,57 @@
+/* Menú: grupos minimizados, lista compacta (Nº · nombre · precio · Editar) y ventanas en primer plano */
+.mn-acciones{gap:10px;flex-wrap:wrap}
+.mn-vacio{font-size:1.05rem;text-align:center;padding:28px 16px}
+.mn-barra{gap:10px;flex-wrap:wrap;align-items:center}
+.mn-buscar{flex:1 1 260px;min-width:0;max-width:100%;min-height:44px}
+.mn-grupo{padding:0;overflow:hidden}
+.mn-grupo-cab{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 8px}
+.mn-grupo-btn{flex:1 1 220px;min-width:0;display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;text-align:left;background:transparent !important;color:var(--ink) !important;border:0 !important;min-height:48px}
+.mn-grupo-btn h3{margin:0;font-size:1.1rem}
+.mn-lista{list-style:none;margin:0;padding:0 10px 10px}
+.mn-fila{display:grid;grid-template-columns:34px 64px minmax(0,1fr) 108px auto;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line)}
+.mn-fila:last-child{border-bottom:0}
+.mn-fila-cab{font-size:.78rem;color:var(--mut);text-transform:uppercase;font-weight:700;border-bottom:2px solid var(--line)}
+.mn-orden{background:transparent !important;border:0 !important;color:var(--mut) !important;text-align:left;min-height:36px;padding:2px 4px;text-transform:uppercase;font-size:.78rem;font-weight:700;cursor:pointer}
+.mn-orden:hover:not(:disabled){color:var(--ink) !important;filter:none !important}
+.mn-orden-precio{text-align:right}
+.mn-num{font-variant-numeric:tabular-nums;font-weight:700;color:var(--mut)}
+.mn-nombre{min-width:0;overflow-wrap:anywhere;font-weight:600}
+.mn-nombre small{color:var(--mut);font-weight:500}
+.mn-precio{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.mn-fila.inactivo .mn-nombre{color:var(--mut);text-decoration:line-through}
+.mn-fila.agotado .mn-nombre{color:var(--porcobrar-bd)}
+.mn-fila.sel{background:color-mix(in srgb,var(--ac) 9%,var(--card));border-radius:10px}
+.mn-fila button.info{min-height:40px;padding:6px 14px}
+@media (max-width:620px){
+  .mn-fila{grid-template-columns:30px 52px minmax(0,1fr) auto;row-gap:2px}
+  .mn-fila .mn-precio{grid-column:3;grid-row:2;text-align:left}
+  .mn-fila button.info{grid-column:4;grid-row:1 / span 2}
+  .mn-fila-cab .mn-orden-precio{display:none}
+}
+
+/* Ventana en primer plano */
+.mn-overlay{position:fixed;inset:0;z-index:1000;background:rgba(10,18,30,.62);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
+.mn-ventana{width:100%;max-width:560px;max-height:calc(100dvh - 32px);overflow-y:auto;background:var(--card);color:var(--ink);border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.45);border:1.5px solid var(--line-fuerte,var(--line))}
+.mn-ventana-tit{margin:0 0 12px;font-size:1.2rem}
+.mn-form{display:flex;flex-direction:column;gap:12px;min-width:0}
+.mn-form .adm-campo{min-width:0}
+.mn-form input:not([type=checkbox]):not([type=file]),.mn-form select{width:100%;max-width:100%;min-width:0;min-height:46px}
+.mn-dos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:520px){.mn-dos{grid-template-columns:1fr}}
+.mn-chips{display:flex;gap:8px;flex-wrap:wrap}
+.mn-chip{min-height:44px;padding:6px 16px;border-radius:999px;background:var(--card-2,var(--card)) !important;color:var(--ink) !important;border:1.5px solid var(--line-fuerte,var(--line)) !important}
+.mn-chip.on{background:var(--logo-orange,#f16f1b) !important;color:#fff !important;border-color:var(--logo-orange,#f16f1b) !important}
+.mn-pie{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:6px}
+.mn-itemnum{margin:0;color:var(--mut);font-weight:700}
+.mn-avanzado summary{cursor:pointer;color:var(--mut);font-weight:600;min-height:36px;display:flex;align-items:center}
+.mn-avanzado .menu-areas{display:flex;gap:12px;flex-wrap:wrap;padding:6px 0}
+.mn-extra{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px}
+.mn-estado{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.mn-estado .adm-motivo{flex:1 1 160px;min-width:0}
+
+.mn-fila-ind{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px}
+.mn-ind-grupo{margin-top:8px}
+.mn-indics .mn-nombre small{opacity:.75}
+
+.mn-det{align-items:center;margin-top:6px}
+.mn-det input,.mn-det select{min-height:40px}

@@ -24,7 +24,7 @@ function vencida() {
   alVencer?.()
 }
 
-export async function revisarSesion({ forzar = false } = {}) {
+async function revisarSesion({ forzar = false } = {}) {
   const guardada = leerSesionSup()
   if (!sb || !guardada?.supabase) return true
   if (enCurso) return true

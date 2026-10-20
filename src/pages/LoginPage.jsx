@@ -260,7 +260,7 @@ export default function LoginPage({ onEntrar }) {
                 ? <p className="lg-alerta lg-bloqueo" role="alert">{t('login.demasiadosIntentos', { segundos: restante })}</p>
                 : error && <p className="lg-alerta" role="alert">{error}</p>)}
               {demo && error && <p className="lg-alerta" role="alert">{error}</p>}
-              <button className="cc-btn cc-blue" type="submit" disabled={busy || (!demo && restante > 0)}>
+              <button className="cc-btn" type="submit" disabled={busy || (!demo && restante > 0)}>
                 {busy ? t('login.entrando') : demo ? t('login.entrarDemo') : t('login.entrar')}
               </button>
               {USAR_SUPABASE && <button className="cc-btn cc-yellow" type="button" onClick={irAlta}>{t('login.nuevoAqui')}</button>}
@@ -274,7 +274,7 @@ export default function LoginPage({ onEntrar }) {
               <h2>{t('login.titulo3')}</h2>
               <p className="auth-sub">{t('login.sub3')}</p>
               {empresasUsuario.map(emp => (
-                <button key={emp.id} type="button" className="cc-btn cc-blue" onClick={() => listo(emp, emp.rol, userRef)}>
+                <button key={emp.id} type="button" className="cc-btn" onClick={() => listo(emp, emp.rol, userRef)}>
                   {emp.nombre} <small>({tOr('rol.' + emp.rol, emp.rol)})</small>
                 </button>
               ))}
