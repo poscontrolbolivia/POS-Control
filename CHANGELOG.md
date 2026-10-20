@@ -1,3 +1,31 @@
+# v0.23.0 · sistema de diseño (tokens) y orden visual
+- **Causa raíz del «desastre»**: `base.css` se importaba DESPUÉS de toda la app, así que ganaba siempre a los CSS de cada pantalla. Por eso había `!important`, parches `html .x` y la mesa no abría a pantalla completa. Ahora se importa PRIMERO (`main.jsx`): cada pantalla puede sobrescribirlo sin trucos.
+- **Nuevo `src/styles/tokens.css`**: único lugar con colores, sombras y radios (3 temas: claro, nocturno, bosque). Cero colores hexadecimales fuera de ese archivo (los 217 pasaron a variables). Los colores de peligro/correcto/aviso, roles (admin, cajero, mesero, cocina, barra) y banners tienen ahora versión para cada tema: en nocturno ya no quedan textos rojo-oscuro sobre fondo oscuro.
+- **Seleccionado = `--sel`** (azul de marca con degradado y sombra, como Catering Control): UNA sola regla en `base.css` reemplaza las 5 copias (antes naranja liso con `!important`). Para volver al naranja basta `--sel: var(--btn-orange)` en `tokens.css`. En tema bosque usa el verde.
+- **Barra superior**: queda en UNA fila en móvil e indica el módulo actual cuando el menú ☰ está plegado; pestañas con hover; sombra suave.
+- **Mesa a pantalla completa** (corregido: antes salía como tarjeta flotante) y centrada en pantallas grandes.
+- **Venta directa**: las fichas de producto ya no cortan palabras («Sándwic-h»).
+- Tarjetas, campos y foco con la misma sombra/radio del sistema (`--sh-1`, `--r-md`…).
+- `!important` solo queda en la regla anti-zoom de iPhone y 3 ajustes locales. Sin hex en `.css`/`.jsx` (excepciones deliberadas: `theme.js` color de la barra del navegador y `printWindows.js` papel blanco/negro).
+- Verificado con capturas reales (Chromium) en móvil y escritorio, temas claro/nocturno/bosque; `npm test` y build verdes. NO probado con Supabase real.
+
+---
+
+# v0.22.3 · orden interno (sin cambios visibles a propósito)
+- `--btn-blue/green/orange/yellow/teal` estaban definidos DOS veces en `base.css`: una con un color fijo y otra, más abajo, apuntando al logo. La primera quedaba muerta (la tapaba la segunda) — quedó solo la del logo, en un único lugar.
+- «Pestaña/opción activa» (`.tab.on`, `.ck-tab.on`, `.vd-tab.on`, `.me-opc.on`…) tenía 5 reglas repartidas en 5 archivos de pantalla distintos, y no eran iguales: Cocina la pintaba azul con degradado; el resto, naranja liso. Ahora es una sola regla en `base.css`; todas quedan iguales (naranja del logo).
+- Sin esto no hay forma fácil de saber, a simple vista, cuál de las 5 copias es «la buena» al tocar el color más adelante.
+
+---
+
+# v0.22.2 · deshecho el barniz parejo de botones
+- La corrección de botones de la entrega anterior pintaba TODO botón sin clase de navy sólido y todo `.ghost` de celeste sólido, con una especificidad tan alta que tapaba el color propio de botones que ya lo tenían (ej. el de compartir del login, que ya era verde pero quedaba navy). Son ~90 botones los que usan `.ghost` (cancelar, cerrar, exportar, probar impresora…) y se pintaron todos igual sin que lo pidieras.
+- Revertido: `button` y `button.ghost` vuelven a su estilo neutro (transparente/tarjeta) de siempre. Los colores por función que SÍ quieres se mantienen por clase, no a lo bruto: `.primary`/`.info` azul, `.success` verde, `.danger.solid`/`.rojo` rojo (ya en degradado, sin tocar), pestañas activas naranja.
+- El botón de compartir del login vuelve a su verde de siempre (ya no lo tapaba el navy).
+- El de mostrar/ocultar contraseña, que no tenía clase y por eso se veía como un botón en blanco, ahora tiene su propio círculo celeste (`.lg-ojo`): es un simple interruptor, no crea ni guarda ni elimina nada.
+
+---
+
 # v0.22.1
 - **Zoom involuntario**: en iPhone/iPad el navegador hacía zoom al tocar un campo (por ejemplo Caja → + Ingreso). Se evita con `maximum-scale=1` solo en iOS (el zoom con los dedos sigue funcionando) y fijando los campos a 16 px mínimo con `!important`, porque varias reglas con `font: inherit` dentro de etiquetas pequeñas los bajaban a ~13 px. Android y PC no cambian.
 - **Casillas que se salían del margen**: red de seguridad global (`base.css`): campos y etiquetas pueden encogerse (`min-width:0`, `max-width:100%`), los mínimos de cada pantalla se acotan con `min(…, 100%)` (Caja, Salón, Impresoras, Equipo) y el `body` no se desplaza de lado.

@@ -251,7 +251,7 @@ export default function LoginPage({ onEntrar }) {
                     <span>{t('login.labelClave')}</span>
                     <div className="lg-clave">
                       <input type={verClave ? 'text' : 'password'} value={clave} onChange={e => setClave(e.target.value)} placeholder="••••" autoComplete="current-password" required />
-                      <button type="button" onClick={() => setVerClave(v => !v)} aria-label={verClave ? t('login.ocultarClave') : t('login.mostrarClave')}><Ojo off={verClave} /></button>
+                      <button type="button" className="lg-ojo" onClick={() => setVerClave(v => !v)} aria-label={verClave ? t('login.ocultarClave') : t('login.mostrarClave')}><Ojo off={verClave} /></button>
                     </div>
                   </label>
                 </>

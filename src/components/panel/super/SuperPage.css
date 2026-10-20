@@ -6,10 +6,10 @@
 
 .super-aviso{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  background:#3a2c07;color:#ffe9a8;border:1px solid #8a6d1a;
+  background:var(--warn-strong-bg);color:var(--warn-strong-ink);border:1px solid var(--warn-line);
   border-radius:14px;padding:10px 14px;font-weight:600;
 }
-.super-aviso b{color:#fff}
+.super-aviso b{color:var(--on-btn)}
 
 .super-bloque{display:flex;flex-direction:column;gap:10px}
 .super-titulo-bloque{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -44,26 +44,26 @@
 .super-ayuda{color:var(--mut);font-size:.82rem;line-height:1.45}
 
 .super-error{
-  background:#fde3e0;border:1px solid #f3b7b0;color:#c0392b;border-radius:12px;
+  background:var(--danger-bg);border:1px solid var(--danger-bd);color:var(--danger);border-radius:12px;
   padding:10px 12px;font-size:.88rem;font-weight:600;
 }
 .super-ok{
-  background:#e3f6e8;border:1px solid #a9dcb5;color:#1d7a35;border-radius:12px;
+  background:var(--ok-bg);border:1px solid var(--ok-bd);color:var(--ok);border-radius:12px;
   padding:10px 12px;font-size:.9rem;font-weight:600;
 }
 .super-aviso-acceso{
-  background:#fff6e0;border:1px solid #ecd9a0;color:#6b4e00;border-radius:12px;
+  background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-ink);border-radius:12px;
   padding:10px 12px;font-size:.86rem;line-height:1.45;
 }
 .super-cargando{color:var(--mut);font-size:.9rem;padding:18px;text-align:center}
 .super-vacio{color:var(--mut);text-align:center;padding:26px 14px}
 .super-centro{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
 
-.super-cuota-caja{border:1px dashed #8a6d1a;border-radius:14px;padding:14px;background:var(--libre)}
+.super-cuota-caja{border:1px dashed var(--warn-line);border-radius:14px;padding:14px;background:var(--libre)}
 .super-cuota-caja .super-titulo-bloque{margin-bottom:2px}
 
 /* Plan / Premium del super */
-.super-chip.plan-premium{background:var(--logo-green);color:#fff}
+.super-chip.plan-premium{background:var(--logo-green);color:var(--on-btn)}
 .super-chip.plan-basico{background:var(--libre);color:var(--mut)}
 .super-plan-caja{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1.5px solid var(--line-fuerte);border-radius:14px;background:var(--card)}
 .super-plan-estado{font-size:1rem}

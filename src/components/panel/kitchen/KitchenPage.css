@@ -4,13 +4,8 @@
 .ck-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ck-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .ck-tab { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; min-height: 40px; padding: 6px 14px; font-weight: 600; }
-.ck-tab.on, .ck-sacadas.on {
-  border-color: transparent; color: #fff; font-weight: 700; text-shadow: 0 1px 1px rgba(0,0,0,.25);
-  background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,0)), var(--btn-blue, var(--ac));
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--btn-blue, var(--ac)) 38%, transparent);
-}
 .ck-sacadas { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
-.ck-sacadas em { font-style: normal; font-size: .75rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: var(--btn-green); color: #fff; }
+.ck-sacadas em { font-style: normal; font-size: .75rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: var(--btn-green); color: var(--on-btn); }
 .ck-conexion { font-size: .9rem; }
 .ck-act { min-width: 40px; min-height: 40px; padding: 0 10px; border-radius: 999px; }
 .cocina-flecha { display: inline-block; font-size: 1.1rem; }
@@ -31,7 +26,7 @@
 .ck-fila.barra { border-color: color-mix(in srgb, var(--btn-blue, var(--ac)) 45%, var(--line)); }
 .ck-fila-cab { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
 .ck-fila-cab h3 { margin: 0; font-size: 1.05rem; }
-.ck-cuenta { min-width: 26px; height: 26px; padding: 0 8px; display: inline-grid; place-items: center; border-radius: 999px; font-weight: 800; font-size: .85rem; background: var(--ac); color: #fff; }
+.ck-cuenta { min-width: 26px; height: 26px; padding: 0 8px; display: inline-grid; place-items: center; border-radius: 999px; font-weight: 800; font-size: .85rem; background: var(--ac); color: var(--on-btn); }
 .ck-fila.cocina .ck-cuenta { background: var(--btn-orange); }
 .ck-fila.barra .ck-cuenta { background: var(--btn-blue, var(--ac)); }
 
@@ -53,13 +48,13 @@
 .ck-tag.pend { background: color-mix(in srgb, var(--btn-orange) 18%, var(--card)); color: var(--ink); border-color: color-mix(in srgb, var(--btn-orange) 55%, var(--line)); }
 .ck-timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1rem; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--btn-green) 16%, var(--card)); color: color-mix(in srgb, var(--btn-green) 70%, var(--ink)); white-space: nowrap; }
 .ck-timer.ambar { background: color-mix(in srgb, var(--btn-yellow) 30%, var(--card)); color: var(--ink); }
-.ck-timer.rojo { background: var(--btn-red); color: #fff; }
+.ck-timer.rojo { background: var(--btn-red); color: var(--on-btn); }
 .ck-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: .74rem; color: var(--mut); }
 
 .ck-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .ck-item { border: 1.5px solid var(--line); border-radius: 12px; background: var(--card-2, var(--card)); overflow: hidden; }
 .ck-item-fila { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 8px; min-height: 52px; }
-.ck-qty { flex: 0 0 auto; min-width: 32px; height: 32px; display: grid; place-items: center; border-radius: 999px; background: var(--ac); color: #fff; font-weight: 800; font-size: 1.05rem; }
+.ck-qty { flex: 0 0 auto; min-width: 32px; height: 32px; display: grid; place-items: center; border-radius: 999px; background: var(--ac); color: var(--on-btn); font-weight: 800; font-size: 1.05rem; }
 .ck-item.listo { opacity: .6; }
 .ck-item.listo .ck-qty { background: color-mix(in srgb, var(--btn-green) 85%, var(--card)); }
 .ck-item.listo .ck-nombre { text-decoration: line-through; }
@@ -71,7 +66,7 @@
 .ck-listo-hora { color: color-mix(in srgb, var(--btn-green) 65%, var(--ink)); font-weight: 700; font-size: .75rem; }
 .ck-item-acc { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
 
-.ck-check { min-width: 46px; min-height: 46px; width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 1.4rem; font-weight: 800; color: #fff; border: 0; text-shadow: 0 1px 1px rgba(0,0,0,.25);
+.ck-check { min-width: 46px; min-height: 46px; width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 1.4rem; font-weight: 800; color: var(--on-btn); border: 0; text-shadow: 0 1px 1px rgba(0,0,0,.25);
   background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,0)), var(--btn-green); box-shadow: 0 4px 12px color-mix(in srgb, var(--btn-green) 38%, transparent); }
 .ck-mini { min-width: 36px; min-height: 36px; width: 36px; height: 36px; padding: 0; border-radius: 50%; font-size: 1rem; }
 .cocina-btn { min-height: 44px; padding: 8px 16px; font-weight: 700; font-size: .95rem; border-radius: 999px; white-space: nowrap; }
@@ -83,7 +78,7 @@
 .ck-anul-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-top: 1.5px solid color-mix(in srgb, var(--btn-red) 35%, var(--line)); background: color-mix(in srgb, var(--btn-red) 6%, var(--card)); }
 .ck-motivos { display: flex; gap: 6px; flex-wrap: wrap; }
 .ck-motivo { min-height: 38px; padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: .85rem; }
-.ck-motivo.on { border-color: transparent; color: #fff; background: linear-gradient(135deg, rgba(255,255,255,.2), rgba(255,255,255,0)), var(--btn-red); }
+.ck-motivo.on { border-color: transparent; color: var(--on-btn); background: linear-gradient(135deg, rgba(255,255,255,.2), rgba(255,255,255,0)), var(--btn-red); }
 .ck-motivo-txt { min-height: 44px; font-size: 1rem; }
 
 .ck-panel-sacadas { background: var(--card); border: 1.5px solid var(--btn-green); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 42dvh; overflow-y: auto; }
@@ -104,7 +99,7 @@
 }
 
 .ck-devs{display:flex;flex-direction:column;gap:10px;margin:0 0 12px}
-.ck-dev{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:10px 14px;border:2px solid #d6851a;border-radius:18px;background:color-mix(in srgb,#f0a020 14%,var(--bg))}
+.ck-dev{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:10px 14px;border:2px solid var(--warn);border-radius:18px;background:color-mix(in srgb,var(--warn-solid) 14%,var(--bg))}
 .ck-dev b{flex:1 1 100%;font-size:1.05rem}
 .ck-dev-sub{flex:1 1 100%;color:var(--mut);font-size:.88rem}
 .ck-dev input{flex:1 1 200px;min-height:44px;border-radius:999px;padding:6px 16px}

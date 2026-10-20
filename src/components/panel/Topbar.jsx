@@ -12,20 +12,22 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
   const rol = (sesion?.rol || '').toLowerCase()
   const conectado = Boolean(sesion?.supabase)
 
+  const actual = items.find(m => m.id === modulo)?.nombre
   const rolVisto = rol ? tOr('rol.' + rol, rol) : t('topbar.invitado')
 
   return (
     <header className="topbar" style={{ position: 'relative' }}>
       <div className="topbar-izq">
         <span className="topbar-empresa"><BrandMark size={22} /> {sesion?.empresa || t('comun.miNegocio')}</span>
+        {!abierto && actual && <span className="topbar-actual" aria-live="polite">{actual}</span>}
         <span className={`topbar-rol topbar-rol-${rol}`}>{rolVisto}</span>
         <span className="topbar-user" title={sesion?.usuario}>{sesion?.nombre || sesion?.usuario}</span>
         {sesion?.es_super && (
-          <span className="topbar-rol" style={{ background: '#3b2f63', color: '#fff' }}
+          <span className="topbar-rol" style={{ background: 'var(--rol-super)', color: 'var(--on-btn)' }}
             title={tOr('super.topbar.chipTitle', 'Dueño de la plataforma')}>super</span>
         )}
         <span className="topbar-rol" title={conectado ? t('topbar.titleConectado') : t('topbar.titleDemo')}
-          style={{ background: conectado ? '#1b7a43' : '#7a5b1b', color: '#fff', borderRadius: 999, padding: '2px 8px', fontWeight: 600 }}>
+          style={{ background: conectado ? 'var(--rol-online)' : 'var(--rol-demo)', color: 'var(--on-btn)', borderRadius: 999, padding: '2px 8px', fontWeight: 600 }}>
           {conectado ? t('topbar.conectado') : t('topbar.demo')}
         </span>
       </div>

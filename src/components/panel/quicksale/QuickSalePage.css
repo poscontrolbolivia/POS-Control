@@ -8,11 +8,10 @@
 .vd-menu{display:flex;flex-direction:column;gap:8px;min-width:0}
 .vd-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 .vd-tab{white-space:nowrap;border-radius:999px}
-.vd-tab.on{background:var(--ac);color:#fff;border-color:var(--ac)}
-.vd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+.vd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(128px,45%),1fr));gap:8px}
 
-.vd-prod{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:76px;padding:12px 18px;text-align:center;font-weight:600;background:var(--card);border:1px solid var(--line);border-radius:999px}
-.vd-prod span{overflow-wrap:anywhere}
+.vd-prod{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:76px;padding:12px 10px;text-align:center;font-weight:600;background:var(--card);border:1px solid var(--line);border-radius:999px}
+.vd-prod span{overflow-wrap:break-word;hyphens:auto;line-height:1.15}
 .vd-prod small{color:var(--mut);font-weight:400}
 .vd-prod:active{border-color:var(--ac);background:var(--libre)}
 
@@ -38,12 +37,11 @@
 .vd-pago{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
 .vd-metodos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .vd-metodo{min-height:54px;font-size:1rem;font-weight:700}
-.vd-metodo.on{background:var(--ac);color:#fff;border-color:var(--ac)}
 .vd-monto{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:var(--mut)}
 .vd-monto input{width:100%}
 .vd-resumen-pago{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.92rem}
 .vd-cambio{font-weight:700;color:var(--ac)}
-.vd-falta{font-weight:700;color:#c0392b}
+.vd-falta{font-weight:700;color:var(--danger)}
 .vd-nota-ayuda{color:var(--mut)}
 .vd-check{display:flex;gap:8px;align-items:center;font-size:.9rem;color:var(--mut)}
 .vd-check input{width:auto;min-height:0}

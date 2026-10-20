@@ -10,7 +10,7 @@ const ROLES = ['admin', 'cajero', 'mesero', 'cocina', 'barra']
 
 const ROL_ETIQUETA = { admin: 'Administrador', cajero: 'Cajero', mesero: 'Mesero', cocina: 'Cocina', barra: 'Barra' }
 
-const ROL_INLINE = { cocina: { background: '#b02a2a', color: '#fff' }, barra: { background: '#0e92a3', color: '#fff' } }
+const ROL_INLINE = { cocina: { background: 'var(--rol-cocina)', color: 'var(--on-btn)' }, barra: { background: 'var(--rol-barra)', color: 'var(--on-btn)' } }
 const rolEtiqueta = (rol, tOr) => (rol ? tOr('rol.' + rol, ROL_ETIQUETA[rol] || rol) : '—')
 const MIN_CLAVE = 4
 const CORREO_OK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/

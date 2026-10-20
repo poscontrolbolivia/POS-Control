@@ -21,9 +21,8 @@
 }
 .ztab.on { border-color: var(--ac); }
 .ztab .tab { border: 0; border-radius: 999px; background: transparent; padding: 6px 12px; min-height: 34px; }
-.ztab.on .tab { background: var(--ac); color: #fff; }
 .ztab .n { font-style: normal; color: var(--mut); font-size: .75rem; margin-left: 5px; }
-.ztab.on .n { color: #eaf5ef; }
+.ztab.on .n { color: var(--on-btn); }
 .ztools { display: inline-flex; align-items: center; gap: 1px; padding: 0 4px 0 2px; border-left: 1px solid var(--line); }
 .salon .tab.mas { color: var(--ac); border-style: dashed; }
 
@@ -38,14 +37,14 @@ button.ico {
   font-size: .8rem;
 }
 button.ico:hover:not(:disabled) { background: var(--libre); border-color: var(--line); }
-button.ico.danger { color: #c0392b; }
+button.ico.danger { color: var(--danger); }
 button.ico.ok { color: var(--ac); }
 button.ico:disabled { opacity: .35; cursor: not-allowed; }
 
 .zren { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--ac); border-radius: 999px; background: var(--card); }
 .zinput { min-width: 9rem; padding: 4px 8px; min-height: 30px; border-radius: 8px; }
 .zconf { display: inline-flex; align-items: center; gap: 2px; padding-left: 4px; }
-.zconf-txt { font-size: .72rem; color: #c0392b; font-weight: 600; white-space: nowrap; }
+.zconf-txt { font-size: .72rem; color: var(--danger); font-weight: 600; white-space: nowrap; }
 .barra.zona-alta { align-items: flex-end; }
 .barra.zona-alta .zinput { min-width: 14rem; }
 
@@ -98,7 +97,7 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 .salon .mesa { overflow: hidden; padding: 2px 4px; gap: 1px; -webkit-user-select: none; user-select: none; }
 .salon .mesa .nombre { font-weight: 700; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .salon .mesa .pax { font-size: .9em; line-height: 1.15; color: var(--mut); white-space: nowrap; }
-.salon .mesa .pax.alerta { color: #b3402f; font-weight: 700; }
+.salon .mesa .pax.alerta { color: var(--danger); font-weight: 700; }
 .salon .mesa .importe { font-size: .9em; line-height: 1.15; }
 .salon .mesa .abrio { font-size: .75em; line-height: 1.1; color: var(--mut); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .salon .mesa .etiqueta-zona {
@@ -120,7 +119,7 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
   font-size: .65rem;
   font-weight: 700;
   background: var(--ac);
-  color: #fff;
+  color: var(--on-btn);
   border-radius: 999px;
   padding: 1px 7px;
   pointer-events: none;
@@ -239,15 +238,12 @@ button.ico:disabled { opacity: .35; cursor: not-allowed; }
 .me-campo input,.me-campo select,.me-campo>button{width:100%;min-height:44px}
 .me-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .me-opc{border:1.5px solid var(--line-fuerte);border-radius:999px;min-height:44px;min-width:44px;padding:4px 6px;background:var(--card);font-weight:600;font-size:.88rem}
-.me-opc.on{background:var(--ac);color:#fff}
 .me-step{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:6px}
 .me-step button{border-radius:50%;width:44px;min-height:44px;padding:0;font-size:1.2rem;background:var(--card-2)}
 .me-step b{text-align:center;color:var(--ink)}
-.badge-heredada{position:absolute;bottom:3px;left:5px;font-size:.7rem;font-weight:800;background:var(--btn-violet);color:#fff;border-radius:999px;padding:0 6px}
+.badge-heredada{position:absolute;bottom:3px;left:5px;font-size:.7rem;font-weight:800;background:var(--btn-violet);color:var(--on-btn);border-radius:999px;padding:0 6px}
 .salon .salon-aviso.sin-turno{background:color-mix(in srgb,var(--btn-yellow) 22%,var(--card));border-color:var(--btn-yellow);color:var(--ink)}
 @media(max-width:768px){.me-ancho2{grid-column:span 1}.me-grid{grid-template-columns:1fr 1fr}.me-seg{grid-column:1/-1}}
-.me-opc.on,.me-opc.on:hover:not(:disabled){background:var(--ac);color:#fff}
-
 .vista-sel{display:inline-flex;gap:6px;flex:0 0 auto}
 .mesas-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .mesa-item{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;padding:10px 22px;border-radius:999px;border:2px solid var(--line-fuerte);text-align:left;box-shadow:0 2px 8px rgba(0,0,0,.08)}

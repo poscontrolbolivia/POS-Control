@@ -127,7 +127,7 @@ export default function SuperPage({ sesion }) {
         <div className="super-aviso" role="status">
           <span>👁️ {tOr('super.entrar.viendo', 'Estás viendo la empresa')} <b>{viendo.nombre}</b>: {tOr('super.entrar.viendoDetalle', 'el salón, la caja y los tickets usan SUS datos.')}</span>
           <span className="sp" />
-          <button type="button" className="super-ghost" style={{ color: '#ffe9a8', borderColor: '#8a6d1a' }} disabled={Boolean(op)} onClick={salir}>
+          <button type="button" className="super-ghost" style={{ color: 'var(--warn-strong-ink)', borderColor: 'var(--warn-line)' }} disabled={Boolean(op)} onClick={salir}>
             {tOr('super.entrar.salir', 'Salir')}
           </button>
         </div>

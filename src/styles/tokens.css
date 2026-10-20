@@ -1,0 +1,86 @@
+/* ============================================================================================
+   TOKENS · el único lugar donde viven los colores, sombras y medidas de POS Control.
+   Ningún otro archivo escribe un color en hexadecimal: usa estas variables (var(--…)).
+   Los 3 temas (light · night · forest) solo redefinen variables; los componentes no se enteran.
+   Para cambiar el «azul de seleccionado» de toda la app basta tocar --sel.
+   ============================================================================================ */
+
+/* ── 1 · Marca (logo) y acciones ───────────────────────────────────────────── */
+:root{
+  --logo-navy:#0f4c91;--logo-blue:#1f6fd0;--logo-teal:#1686ba;
+  --logo-green:#238f41;--logo-orange:#f16f1b;--logo-yellow:#fbb633;
+
+  --btn-blue:var(--logo-blue);--btn-green:var(--logo-green);--btn-orange:var(--logo-orange);
+  --btn-yellow:var(--logo-yellow);--btn-teal:var(--logo-teal);
+  --btn-red:#e4002b;--btn-violet:#8a5cf6;--btn-pink:#d6338a;--btn-whatsapp:#25d366;--btn-slate:#64748b;
+
+  --sel:var(--btn-blue);              /* pestaña / opción / chip SELECCIONADO en toda la app */
+  --on-btn:#fff;                      /* texto sobre un botón de color */
+  --on-warning:#2d2000;               /* texto sobre el botón amarillo */
+  --gloss:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,0));
+}
+
+/* ── 2 · Superficies y texto (tema CLARO por defecto) ──────────────────────── */
+:root{
+  --bg:#e8edf5;--card:#ffffff;--card-2:#f1f4fa;--ink:#141c2e;--mut:#4f5c74;--ac:#3867f4;
+  --line:#b4bfd2;--line-fuerte:#7f8da6;--libre:#e3ebe6;
+  --lienzo:#cfd9e8;--lienzo-punto:#9aaac4;
+  --banner-bg:#1f2a3d;                /* franja de «instalar / actualizar» */
+
+  /* Estados de mesa */
+  --libre-bg:#c9f0d8;--libre-bd:#1b7a48;--libre-ink:#0b2a18;
+  --ocupada-bg:#ffd88a;--ocupada-bd:#a8690a;--ocupada-ink:#35230a;
+  --enviada-bg:#a6d6f7;--enviada-bd:#1a6aa3;--enviada-ink:#0a2740;
+  --porcobrar-bg:#ffb0b0;--porcobrar-bd:#b02a2a;--porcobrar-ink:#400d0d;
+  --ocupada:var(--ocupada-bg);--enviada:var(--enviada-bg);--porcobrar:var(--porcobrar-bg);
+
+  /* Mensajes: peligro · correcto · aviso (cada uno: tinta, fondo suave, borde, y color sólido) */
+  --danger:#c0392b;--danger-ink:#a61b1b;--danger-bg:#fde3e0;--danger-bd:#f3b7b0;--danger-deep:#b3001f;
+  --ok:#1d7a35;--ok-ink:#1d7a35;--ok-bg:#e3f6e8;--ok-bd:#a9dcb5;
+  --warn:#d6851a;--warn-ink:#6b4e00;--warn-bg:#fff6e0;--warn-bd:#ecd9a0;--warn-solid:#f0a020;--warn-line:#8a6d1a;
+  --warn-strong-bg:#3a2c07;--warn-strong-ink:#ffe9a8;
+
+  /* Etiquetas de rol */
+  --rol-admin:#2f7d5b;--rol-cajero:#6fb3e0;--rol-cajero-ink:#112233;--rol-mesero:#f4a259;--rol-mesero-ink:#3a2506;
+  --rol-cocina:#b02a2a;--rol-barra:#0e92a3;--rol-super:#3b2f63;--rol-demo:#7a5b1b;--rol-online:#1b7a43;
+
+  /* Elevación y forma */
+  --sombra:0 8px 24px rgba(21,35,62,.12);
+  --sh-1:0 2px 6px rgba(21,35,62,.10);
+  --sh-2:0 10px 30px rgba(21,35,62,.16);
+  --sh-btn:0 4px 14px;                /* + color-mix del botón */
+  --r-sm:10px;--r-md:14px;--r-lg:18px;--r-pill:999px;
+}
+
+/* ── 3 · Tema NOCTURNO ─────────────────────────────────────────────────────── */
+[data-theme="night"]{
+  --bg:#0b1120;--card:#172033;--card-2:#1e2a40;--ink:#eef3fb;--mut:#aab8cf;--ac:#7ea0ff;
+  --line:#3a4a66;--line-fuerte:#7488a8;--libre:#22304a;
+  --lienzo:#0e1626;--lienzo-punto:#3a4a66;
+  --banner-bg:#0a1020;
+
+  --libre-bg:#1f6e48;--libre-bd:#5fe0a0;--libre-ink:#f0fff6;
+  --ocupada-bg:#8f6410;--ocupada-bd:#ffc552;--ocupada-ink:#fff6e0;
+  --enviada-bg:#1f5f90;--enviada-bd:#7cc4f5;--enviada-ink:#eaf6ff;
+  --porcobrar-bg:#963232;--porcobrar-bd:#ff9696;--porcobrar-ink:#fff0f0;
+
+  --danger:#ff8a98;--danger-ink:#ffb4b4;--danger-bg:#3a1d22;--danger-bd:#7a3a44;--danger-deep:#ff9aa8;
+  --ok:#7be0a0;--ok-ink:#9ff0bd;--ok-bg:#12301f;--ok-bd:#2f6b45;
+  --warn:#ffc552;--warn-ink:#ffd27a;--warn-bg:#3a2e12;--warn-bd:#7a5f1c;--warn-solid:#f0a020;--warn-line:#c99a2e;
+  --warn-strong-bg:#3a2c07;--warn-strong-ink:#ffe9a8;
+
+  --sombra:0 8px 24px rgba(0,0,0,.45);--sh-1:0 2px 6px rgba(0,0,0,.35);--sh-2:0 10px 30px rgba(0,0,0,.55);
+}
+
+/* ── 4 · Tema BOSQUE ───────────────────────────────────────────────────────── */
+[data-theme="forest"]{
+  --bg:#c9e1c9;--card:#f4fbf3;--card-2:#e3f1e2;--ink:#102c1a;--mut:#3f6249;--ac:#1a6e45;
+  --line:#8dbb90;--line-fuerte:#4f8558;--libre:#d4ead4;
+  --lienzo:#a8cfab;--lienzo-punto:#6fa476;
+  --sel:var(--logo-green);
+
+  --libre-bg:#f3fff5;--libre-bd:#14663d;--libre-ink:#0b2a18;
+  --ocupada-bd:#8f5a08;
+  --enviada-bg:#b4defa;--enviada-bd:#17608f;
+  --porcobrar-bg:#ffbcbc;--porcobrar-bd:#a42222;
+}

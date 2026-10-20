@@ -10,7 +10,7 @@ export default function AppFooter() {
         <span className="lg-footer-badge">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 2l2.4 2.4 3.4-.4.4 3.4L21 10l-2.8 2.6.4 3.4-3.4-.4L12 18l-2.4-2.4-3.4.4-.4-3.4L3 10l2.8-2.6-.4-3.4 3.4.4z" />
-            <path d="M9.8 12.2l1.6 1.6 3-3.4" stroke="#fff" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M9.8 12.2l1.6 1.6 3-3.4" stroke="white" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           {t('login.softwareVerificado')}
         </span>

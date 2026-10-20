@@ -81,7 +81,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
       <Topbar sesion={{ ...sesion, empresa: sesion.empresa || s.config.nombre }} modulo={modulo} modulos={modulos}
         onModulo={setModulo} onSalir={onSalir} aviso={aviso || undefined} />
       {sesion.operando && (
-        <div className="topbar-rol" style={{ background: '#8a6d1a', color: '#fff', padding: '6px 14px', borderRadius: 0, display: 'block', width: '100%', textAlign: 'center' }}>
+        <div className="topbar-rol" style={{ background: 'var(--warn-line)', color: 'var(--on-btn)', padding: '6px 14px', borderRadius: 0, display: 'block', width: '100%', textAlign: 'center' }}>
           {tOr('super.banner.viendo', 'Estás viendo la empresa')} <b>{sesion.empresa}</b> —{' '}
           <button className="auth-enlace" type="button" onClick={onVolver}>{tOr('super.banner.volver', 'volver a mi empresa')}</button>
         </div>
