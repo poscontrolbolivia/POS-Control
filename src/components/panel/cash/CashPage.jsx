@@ -142,7 +142,7 @@ export default function CashPage({ rol, sesion }) {
           {puede(rol, 'abrir_turno') ? (
             <form className="caja-form" onSubmit={abrirTurno}>
               <label>{t('caja.fondoLabel')}
-                <input type="text" inputMode="decimal" autoComplete="off" placeholder="0.00"
+                <input name="fondo" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00"
                   value={fondo} onChange={e => setFondo(limpiarMonto(e.target.value))}
                   onBlur={() => fondo !== '' && setFondo(numMonto(fondo).toFixed(2))} onFocus={e => e.target.select()} />
               </label>
@@ -206,12 +206,12 @@ export default function CashPage({ rol, sesion }) {
             <form className="caja-form" onSubmit={agregarMov}>
               <span className={'caja-mov ' + mov.tipo}>{mov.tipo === 'ingreso' ? t('caja.ingreso') : t('caja.egreso')}</span>
               <label>{t('comun.monto')}
-                <input type="text" inputMode="decimal" autoComplete="off" autoFocus placeholder="0.00"
+                <input name="monto" type="text" inputMode="decimal" autoComplete="off" autoFocus placeholder="0.00"
                   value={mov.monto} onChange={e => setMov({ ...mov, monto: limpiarMonto(e.target.value), alto: false })}
                   onBlur={() => mov.monto !== '' && setMov({ ...mov, monto: numMonto(mov.monto).toFixed(2) })} onFocus={e => e.target.select()} />
               </label>
               <label>{t('caja.motivo')}
-                <input maxLength={60} placeholder={t('caja.motivoEjemplo')}
+                <input name="motivo-ejemplo" maxLength={60} placeholder={t('caja.motivoEjemplo')}
                   value={mov.motivo} onChange={e => setMov({ ...mov, motivo: e.target.value })} />
               </label>
               {mov.alto ? (
@@ -273,7 +273,7 @@ export default function CashPage({ rol, sesion }) {
           <div className="caja-form">
             <p className="caja-nota">{t('caja.esperadoA')} <b>{m(resumen.esperado)}</b> {t('caja.esperadoB')}</p>
             <label>{t('caja.contadoLabel')}
-              <input type="text" inputMode="decimal" autoComplete="off" autoFocus placeholder="0.00"
+              <input name="contado" type="text" inputMode="decimal" autoComplete="off" autoFocus placeholder="0.00"
                 value={pre.contado} onChange={e => setPre({ ...pre, contado: limpiarMonto(e.target.value) })}
                 onBlur={() => pre.contado !== '' && setPre({ ...pre, contado: numMonto(pre.contado).toFixed(2) })} onFocus={e => e.target.select()} />
             </label>
@@ -304,7 +304,7 @@ export default function CashPage({ rol, sesion }) {
             : (
               <form className="caja-form" onSubmit={cerrarTurno}>
                 <label>{t('caja.contadoLabel')}
-                  <input type="text" inputMode="decimal" autoComplete="off" autoFocus placeholder="0.00"
+                  <input name="contado" type="text" inputMode="decimal" autoComplete="off" autoFocus placeholder="0.00"
                     value={cierre.contado} onChange={e => setCierre({ ...cierre, contado: limpiarMonto(e.target.value), pedirConf: false })}
                     onBlur={() => cierre.contado !== '' && setCierre({ ...cierre, contado: numMonto(cierre.contado).toFixed(2) })} onFocus={e => e.target.select()} />
                 </label>

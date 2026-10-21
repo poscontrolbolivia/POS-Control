@@ -203,7 +203,7 @@ export default function QuickSalePage({ rol, sesion }) {
                 <b className="vd-pr">{m(l.p.precio * l.qty)}</b>
                 <button className="vd-x" onClick={() => quitar(l.id)} aria-label={t('venta.eliminar')}>×</button>
               </div>
-              <input className="vd-nota" list="vd-notas-rapidas" placeholder={t('venta.notaPlaceholder')}
+              <input name="nota-placeholder" className="vd-nota" list="vd-notas-rapidas" placeholder={t('venta.notaPlaceholder')}
                 value={l.nota} onChange={e => mudarNota(l.id, e.target.value)} />
             </li>
           ))}
@@ -224,7 +224,7 @@ export default function QuickSalePage({ rol, sesion }) {
                   ))}
                 </div>
                 <label className="vd-monto">{t('venta.recibido')}
-                  <input type="text" inputMode="decimal" autoComplete="off" autoFocus={i === 0}
+                  <input name="monto" type="text" inputMode="decimal" autoComplete="off" autoFocus={i === 0}
                     value={l.monto} onChange={e => setLinea(i, { monto: limpiarMonto(e.target.value) })} onFocus={e => e.target.select()} placeholder={m(total)} />
                 </label>
                 {l.metodo === 'qr' && hayQrNegocio && (
@@ -241,7 +241,7 @@ export default function QuickSalePage({ rol, sesion }) {
               {round2(total - Math.min(pagadoPreview, total)) > 0.009 && <span className="vd-falta">{t('venta.faltaLabel')} {m(round2(total - pagadoPreview))}</span>}
             </div>
             <label className="vd-check">
-              <input type="checkbox" checked={cobro.imprimir} onChange={e => setCobro({ ...cobro, imprimir: e.target.checked })} />
+              <input name="imprimir" type="checkbox" checked={cobro.imprimir} onChange={e => setCobro({ ...cobro, imprimir: e.target.checked })} />
               {t('venta.imprimirTicket')}
             </label>
           </div>

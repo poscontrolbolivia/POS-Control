@@ -16,7 +16,7 @@ import { hora as horaBase } from '../../../services/format.js'
 
 const hora = ts => horaBase(ts, { segundos: true })
 
-export default function StationPage({ rol, sesion }) {
+export default function StationPage({ rol, sesion, embebida = false }) {
   const { s, d } = useStore()
   const { t } = useIdioma()
   const cfg = s.config || {}
@@ -36,8 +36,9 @@ export default function StationPage({ rol, sesion }) {
     return () => { unsub(); clearInterval(poll) }
   }, [])
 
-  if (!permitido) return <div className="adm-panel"><div className="adm-aviso">{t('estacion.sinPermiso')}</div></div>
-  if (!conectado) return <div className="adm-panel"><div className="adm-aviso">{t('estacion.soloConectado')}</div></div>
+  const caja = embebida ? 'est-embebida' : 'adm-panel'
+  if (!permitido) return <div className={caja}><div className="adm-aviso">{t('estacion.sinPermiso')}</div></div>
+  if (!conectado) return <div className={caja}><div className="adm-aviso">{t('estacion.soloConectado')}</div></div>
 
   const nota = (id, txt, ok) => {
     setMsgs(m => ({ ...m, [id]: { txt, ok } }))
@@ -59,8 +60,10 @@ export default function StationPage({ rol, sesion }) {
   const totalPend = (st.jobs || []).filter(j => j.estado === 'pendiente' || j.estado === 'imprimiendo').length
 
   return (
-    <div className="adm-panel">
-      <div className="adm-cab"><h2>🖨️ {t('estacion.titulo')}</h2></div>
+    <div className={caja}>
+      {embebida
+        ? <p className="imp-subtitulo">🖨️ {t('estacion.titulo')}</p>
+        : <div className="adm-cab"><h2>🖨️ {t('estacion.titulo')}</h2></div>}
 
       {modoImpresion(cfg) !== 'estacion' && (
         <div className="adm-aviso est-aviso">

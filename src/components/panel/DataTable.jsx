@@ -60,7 +60,7 @@ export default function DataTable({ columns, rows, getRowId = (r) => r.id, searc
     <>
       {onSearchChange && (
         <div className="dt-toolbar">
-          <input className="dt-search" type="search" autoComplete="off"
+          <input name="search" className="dt-search" type="search" autoComplete="off"
             placeholder={searchPlaceholder || tOr('datatable.buscarPista', 'Buscar…')}
             value={search ?? ''} onChange={(e) => onSearchChange(e.target.value)} />
         </div>

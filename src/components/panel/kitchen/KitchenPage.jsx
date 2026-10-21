@@ -355,7 +355,7 @@ export default function KitchenPage({ rol, sesion }) {
                 <button key={m.clave} type="button" className={'ck-motivo' + (motivo === tOr(m.clave, m.txt) ? ' on' : '')} onClick={() => setMotivo(tOr(m.clave, m.txt))}>{tOr(m.clave, m.txt)}</button>
               ))}
             </div>
-            <input autoFocus className="ck-motivo-txt" maxLength={120} value={motivo} placeholder={tOr('cocina.motivoPlace', 'Escribe o elige un motivo…')}
+            <input name="motivo" autoFocus className="ck-motivo-txt" maxLength={120} value={motivo} placeholder={tOr('cocina.motivoPlace', 'Escribe o elige un motivo…')}
               onChange={e => setMotivo(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') pedirAnulacion(); if (e.key === 'Escape') cerrarAnular() }} />
             <div className="ck-anul-acc">
@@ -451,7 +451,7 @@ export default function KitchenPage({ rol, sesion }) {
             <div key={dv.id} className="ck-dev">
               <b>↩ {tOr('cocina.devuelto', 'Devuelto')}: {dv.qty}× {dv.nombre}</b>
               <span className="ck-dev-sub">{dv.mesa} · {tOr('cocina.devMotivo', 'motivo')}: {dv.motivo}{dv.pedida_por ? ` · ${dv.pedida_por}` : ''} · {hora(dv.pedida_en)}</span>
-              <input type="text" maxLength={300} value={notasDev[dv.id] || ''} placeholder={tOr('cocina.devNota', 'Comentario (opcional)')}
+              <input name="dev-nota" type="text" maxLength={300} value={notasDev[dv.id] || ''} placeholder={tOr('cocina.devNota', 'Comentario (opcional)')}
                 onChange={e => setNotasDev(n => ({ ...n, [dv.id]: e.target.value }))} />
               <button type="button" className="success" disabled={ocupado === dv.id} onClick={() => confirmarDev(dv)}>
                 {tOr('cocina.devConfirmar', 'Conversado / Confirmado')}
@@ -465,7 +465,7 @@ export default function KitchenPage({ rol, sesion }) {
         {areasMostradas.map(a => {
           const { enCurso } = filas[a] || { enCurso: [] }
           return (
-            <section key={a} className={'ck-fila ' + a} aria-label={nombreArea(a)}>
+            <section key={a} className={'ck-fila area-' + a} aria-label={nombreArea(a)}>
               <header className="ck-fila-cab">
                 <h3>{icono(a)} {nombreArea(a)}</h3>
                 <span className="ck-cuenta">{enCurso.length}</span>

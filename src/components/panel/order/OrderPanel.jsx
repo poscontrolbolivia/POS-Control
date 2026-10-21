@@ -10,7 +10,7 @@ import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
 import ComprobanteQr, { VerComprobante } from '../pago/ComprobanteQr.jsx'
 import PagoQrCard from '../pago/PagoQrCard.jsx'
 import '../pago/ComprobanteQr.css'
-import { listasDe, cumple, maxDe, notaDeUnidad, extraDe, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
+import { listasDe, cumple, maxDe, notaDeUnidad, indicacionesDeUnidad, componerNota, comentarioDe, MAX_NOTA, extraDe, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
 import './OrderPanel.css'
 import { round2, hora, limpiarMonto, numMonto } from '../../../services/format.js'
 
@@ -149,7 +149,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
           <span className="pm-pax">{t('pedido.comensales')}
             <button type="button" className="x" aria-label="−" disabled={(Number(apertura.comensales) || 1) <= 1}
               onClick={() => setApertura({ ...apertura, comensales: Math.max(1, (Number(apertura.comensales) || 1) - 1) })}>−</button>
-            <input type="text" inputMode="numeric" autoComplete="off" value={apertura.comensales} autoFocus onFocus={e => e.target.select()}
+            <input name="comensales" type="text" inputMode="numeric" autoComplete="off" value={apertura.comensales} autoFocus onFocus={e => e.target.select()}
               onChange={e => setApertura({ ...apertura, comensales: e.target.value.replace(/[^0-9]/g, '').slice(0, 2) })}
               onBlur={() => setApertura({ ...apertura, comensales: Math.min(99, Math.max(1, Number(apertura.comensales) || 1)) })} />
             <button type="button" className="x" aria-label="+" disabled={(Number(apertura.comensales) || 1) >= 99}
@@ -363,8 +363,6 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const agotados = agotadosHoy(s.config)
   const puedeMenu = puede(rol, 'gestionar_menu')
 
-  const tokens = txt => String(txt || '').split(',').map(x => x.trim()).filter(Boolean)
-  const alternarToken = (txt, o) => { const t0 = tokens(txt); return (t0.includes(o) ? t0.filter(x => x !== o) : [...t0, o]).join(', ') }
   const agregarProd = p => {
     if (agotados[p.id]) return avisar(t('agotado.bloqueado', { nombre: p.nombre, motivo: agotados[p.id].motivo ? t('agotado.motivoSep', { motivo: agotados[p.id].motivo }) : '' }))
     const listas = listasDe(s.config, p)
@@ -405,9 +403,10 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
     // Una unidad = un ítem con su nota; las iguales se juntan solas («2× Carne — Medio»).
     previa.unidades.forEach(u => {
       const nota = notaDeUnidad(previa.listas, u)
+      const indicaciones = indicacionesDeUnidad(previa.listas, u)
       const extra = extraDeUnidad(previa.listas, u)
       const sel = selDeUnidad(previa.listas, u)
-      d({ t: 'item+', cuentaId: c.id, p: previa.p, ...(nota ? { nota } : {}), ...(extra ? { extra } : {}), ...(sel.length ? { sel } : {}) })
+      d({ t: 'item+', cuentaId: c.id, p: previa.p, ...(nota ? { nota } : {}), ...(indicaciones ? { indicaciones } : {}), ...(extra ? { extra } : {}), ...(sel.length ? { sel } : {}) })
     })
     setPrevia(null)
   }
@@ -488,7 +487,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
               const mc = cuentaActiva(s, m.id)
               return (
                 <label key={m.id} className={'pm-opcion' + (aUnir.includes(m.id) ? ' on' : '')}>
-                  <input type="checkbox" checked={aUnir.includes(m.id)} style={{ width: 16, height: 16 }}
+                  <input name="unir-mesa" type="checkbox" checked={aUnir.includes(m.id)} style={{ width: 16, height: 16 }}
                     onChange={() => setAUnir(a => a.includes(m.id) ? a.filter(x => x !== m.id) : [...a, m.id])} />
                   {m.nombre}{mc ? ` · ${money(totalCuenta(mc))}` : ` · ${t('pedido.libre')}`}
                 </label>
@@ -535,8 +534,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
             {c.items.map(i => (
               <li key={i.id} className={i.estado + ' pm-item'}>
                 <Thumb producto={s.productos.find(x => x.id === i.productoId)} nombreFallback={i.nombre} />
-                {modo === 'mover' && puedeMover && editable && i.estado !== 'anulado' && <input type="checkbox" checked={marcados.includes(i.id)} onChange={() => toggle(i.id)} aria-label={t('pedido.moverTitle')} />}
-                {pagos && i.estado !== 'anulado' && <input type="checkbox" checked={marcados.includes(i.id)} onChange={() => toggle(i.id)} aria-label={t('pedido.marcarParaCobrar')} title={t('pedido.marcarParaCobrar')} />}
+                {modo === 'mover' && puedeMover && editable && i.estado !== 'anulado' && <input name="mover-title" type="checkbox" checked={marcados.includes(i.id)} onChange={() => toggle(i.id)} aria-label={t('pedido.moverTitle')} />}
+                {pagos && i.estado !== 'anulado' && <input name="marcar-para-cobrar" type="checkbox" checked={marcados.includes(i.id)} onChange={() => toggle(i.id)} aria-label={t('pedido.marcarParaCobrar')} title={t('pedido.marcarParaCobrar')} />}
                 <span className="n">
                   {i.nombre}
                   {i.estado === 'anulado' && t('pedido.anuladoTag')}
@@ -558,18 +557,17 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                 ) : <span>×{i.qty}</span>}
                 <span className="pr">{money(i.precio * i.qty)}</span>
                 {modo === 'eliminar' && editable && i.estado !== 'anulado' && i.estado !== 'anulacion' && <button className="x danger solid" title={t('pedido.borrarProducto')} aria-label={t('pedido.borrarProducto')} onClick={() => pedirBorrar(i)}>🗑</button>}
-                {editable && i.estado === 'pendiente' && <button className="x" title={t('pedido.notaTitle')} onClick={() => setNota(n => (n?.id === i.id ? null : { id: i.id, texto: i.nota || '' }))}>✎</button>}
+                {editable && i.estado === 'pendiente' && <button className="x" title={t('pedido.notaTitle')} onClick={() => setNota(n => (n?.id === i.id ? null : { id: i.id, texto: comentarioDe(i.nota, i.indicaciones) }))}>✎</button>}
 
                 {nota?.id === i.id && (
-                  <form className="pm-sub-fila" style={{ flexWrap: 'wrap' }} onSubmit={e => { e.preventDefault(); d({ t: 'nota', cuentaId: c.id, itemId: i.id, nota: nota.texto.slice(0, 120) }); setNota(null) }}>
-                    {(s.productos.find(x => x.id === i.productoId)?.opciones || []).length > 0 && (
-                      <div className="pm-opciones" style={{ width: '100%' }}>
-                        {s.productos.find(x => x.id === i.productoId).opciones.map(o => (
-                          <button key={o} type="button" className={'tab' + (tokens(nota.texto).includes(o) ? ' on' : '')} onClick={() => setNota({ ...nota, texto: alternarToken(nota.texto, o) })}>{o}</button>
-                        ))}
+                  <form className="pm-sub-fila" style={{ flexWrap: 'wrap' }} onSubmit={e => { e.preventDefault(); d({ t: 'nota', cuentaId: c.id, itemId: i.id, nota: componerNota(i.indicaciones, nota.texto) }); setNota(null) }}>
+                    {i.indicaciones && (
+                      <div className="pm-indic-fijas" style={{ width: '100%' }}>
+                        <span className="pm-chip">🔒 {t('pedido.indicaciones')}: {i.indicaciones}</span>
+                        <small>{t('pedido.indicacionesFijas')}</small>
                       </div>
                     )}
-                    <input autoFocus value={nota.texto} placeholder={t('pedido.notaPrompt')} onChange={e => setNota({ ...nota, texto: e.target.value })} style={{ flex: 1 }} />
+                    <input name="nota-prompt" autoFocus value={nota.texto} maxLength={Math.max(0, MAX_NOTA - (i.indicaciones ? i.indicaciones.length + 2 : 0))} placeholder={t('pedido.notaPrompt')} onChange={e => setNota({ ...nota, texto: e.target.value })} style={{ flex: 1 }} />
                     <button type="submit" className="primary" style={chico}>{t('comun.guardar')}</button>
                     <button type="button" className="danger" style={chico} onClick={() => setNota(null)}>✕</button>
                   </form>
@@ -583,7 +581,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                           onClick={() => setBorrando({ ...borrando, motivo: borrando.motivo === k ? '' : k })}>{t('pedido.motivo.' + k)}</button>
                       ))}
                     </div>
-                    <input value={borrando.texto} maxLength={80} placeholder={i.estado !== 'pendiente' ? t('pedido.motivoEscribe') : t('pedido.motivoOpcional')}
+                    <input name="texto" value={borrando.texto} maxLength={80} placeholder={i.estado !== 'pendiente' ? t('pedido.motivoEscribe') : t('pedido.motivoOpcional')}
                       onChange={e => setBorrando({ ...borrando, texto: e.target.value })} />
                     <div className="barra" style={{ margin: 0 }}>
                       <button type="button" className="danger solid" onClick={() => confirmarBorrar(i)}>{t('pedido.confirmarBorrar')}</button>
@@ -600,13 +598,13 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
           {esLlevar && editable && (
             <div className="pm-cliente">
               <label className="pm-campo">{t('salon.llevarNombre')}
-                <input value={cliente.nombre} maxLength={80} aria-label={t('salon.llevarNombre')}
+                <input name="llevar-nombre" value={cliente.nombre} maxLength={80} aria-label={t('salon.llevarNombre')}
                   onChange={e => setCliente(v => ({ ...v, nombre: e.target.value }))}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarCliente(); e.currentTarget.blur() } }}
                   onBlur={guardarCliente} />
               </label>
               <label className="pm-campo">{t('salon.llevarTel')}
-                <input value={cliente.tel} maxLength={40} inputMode="tel" aria-label={t('salon.llevarTel')}
+                <input name="llevar-tel" value={cliente.tel} maxLength={40} inputMode="tel" aria-label={t('salon.llevarTel')}
                   onChange={e => setCliente(v => ({ ...v, tel: e.target.value }))}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarCliente(); e.currentTarget.blur() } }}
                   onBlur={guardarCliente} />
@@ -618,7 +616,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
             <div className="pm-caja pm-mover">
               <b>{t('pedido.moverTitulo')}</b>
               <label className="pm-campo">{t('pedido.destino')}
-                <select value={destino} onChange={e => { setDestino(e.target.value); setCanje('') }}>
+                <select name="destino" value={destino} onChange={e => { setDestino(e.target.value); setCanje('') }}>
                   <option value="">{t('pedido.elegirMesa')}</option>
                   {destinos.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
                 </select>
@@ -629,7 +627,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
               {destino && marcados.length === 1 && (
                 itemsDestino.length ? (
                   <div className="barra" style={{ margin: 0 }}>
-                    <select value={canje} onChange={e => setCanje(e.target.value)} aria-label={t('pedido.intercambiarPor')}>
+                    <select name="intercambiar-por" value={canje} onChange={e => setCanje(e.target.value)} aria-label={t('pedido.intercambiarPor')}>
                       <option value="">{t('pedido.intercambiarPor')}</option>
                       {itemsDestino.map(i => <option key={i.id} value={i.id}>{i.qty}× {i.nombre}</option>)}
                     </select>
@@ -643,7 +641,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
           {(editable || c.detalle) && (
             <label className="pm-detalle">
               <span>{t('pedido.detalleCuenta')}</span>
-              <textarea rows={2} maxLength={500} value={detalle} readOnly={!editable} placeholder={t('pedido.detalleCuentaHint')}
+              <textarea name="detalle-cuenta-hint" rows={2} maxLength={500} value={detalle} readOnly={!editable} placeholder={t('pedido.detalleCuentaHint')}
                 onChange={e => setDetalle(e.target.value)}
                 onBlur={() => { if (editable && detalle.trim() !== (c.detalle || '')) d({ t: 'detalle', cuentaId: c.id, detalle: detalle.trim() }) }} />
             </label>
@@ -657,7 +655,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
               {prop === null
                 ? <button className="ghost" style={chico} onClick={() => setProp('15')}>{t('pedido.otraPct')}</button>
                 : <>
-                  <input type="text" inputMode="numeric" autoComplete="off" value={prop} style={{ width: 64 }} onChange={e => setProp(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))} onFocus={e => e.target.select()} placeholder="%" />
+                  <input name="prop" type="text" inputMode="numeric" autoComplete="off" value={prop} style={{ width: 64 }} onChange={e => setProp(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))} onFocus={e => e.target.select()} placeholder="%" />
                   <button className="primary" style={chico} onClick={() => { const v = Number(prop); if (v > 0) aplicarPropina(v / 100); else setProp(null) }}>{t('comun.ok')}</button>
                   <button className="danger" style={chico} onClick={() => setProp(null)}>✕</button>
                 </>}
@@ -671,11 +669,11 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                 <button className="primary" style={chico} onClick={() => setDesc({ modo: 'monto', valor: '', pin: '' })}>{t('pedido.aplicar')}</button>
                 {c.descuento > 0 && <button className="danger" style={chico} onClick={() => d({ t: 'extras', cuentaId: c.id, descuento: 0 })}>{t('comun.quitar')}</button>}
               </> : <>
-                <select value={desc.modo} onChange={e => setDesc({ ...desc, modo: e.target.value })}><option value="monto">{t('comun.monto')}</option><option value="pct">{t('pedido.pctSubtotal')}</option></select>
-                <input type="text" inputMode={desc.modo === 'pct' ? 'numeric' : 'decimal'} autoComplete="off" value={desc.valor} style={{ width: 80 }}
+                <select name="modo" value={desc.modo} onChange={e => setDesc({ ...desc, modo: e.target.value })}><option value="monto">{t('comun.monto')}</option><option value="pct">{t('pedido.pctSubtotal')}</option></select>
+                <input name="valor" type="text" inputMode={desc.modo === 'pct' ? 'numeric' : 'decimal'} autoComplete="off" value={desc.valor} style={{ width: 80 }}
                   onChange={e => setDesc({ ...desc, valor: desc.modo === 'pct' ? e.target.value.replace(/[^0-9]/g, '').slice(0, 3) : limpiarMonto(e.target.value) })}
                   onFocus={e => e.target.select()} placeholder={desc.modo === 'pct' ? t('pedido.pEjemplo10') : t('pedido.pEjemplo15')} />
-                {!puedeDescuento && <input type="password" inputMode="numeric" value={desc.pin} style={{ width: 90 }} onChange={e => setDesc({ ...desc, pin: e.target.value })} placeholder={t('pedido.pinAdmin')} />}
+                {!puedeDescuento && <input name="pin-admin" type="password" inputMode="numeric" value={desc.pin} style={{ width: 90 }} onChange={e => setDesc({ ...desc, pin: e.target.value })} placeholder={t('pedido.pinAdmin')} />}
                 <button className="primary" style={chico} onClick={aplicarDescuento}>{t('comun.ok')}</button>
                 <button className="danger" style={chico} onClick={() => setDesc(null)}>✕</button>
                 {!puedeDescuento && <small style={{ color: 'var(--mut)' }}>{t('pedido.avisoCajeroPin')}</small>}
@@ -707,7 +705,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
               <b>{t('pedido.sinTurno')}</b>
               <div className="barra" style={{ margin: 0, alignItems: 'flex-end' }}>
                 <label className="pm-campo">{t('caja.fondoLabel')}
-                  <input type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" autoFocus value={sinTurno.fondo}
+                  <input name="fondo" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" autoFocus value={sinTurno.fondo}
                     onChange={e => setSinTurno({ fondo: limpiarMonto(e.target.value) })} style={{ width: 120 }} />
                 </label>
                 <button className="success" onClick={abrirTurnoYCobrar}>{t('pedido.abrirTurnoCobrar')}</button>
@@ -730,8 +728,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
               {pagos.map((p, i) => (
                 <div key={p.id}>
                 <div className="barra" style={{ margin: 0 }}>
-                  <select value={p.metodo} onChange={e => setPagos(ps => ps.map((x, j) => j === i ? { ...x, metodo: e.target.value } : x))}>{METODOS.map(m => <option key={m} value={m}>{tOr('metodo.' + m, m)}</option>)}</select>
-                  <input type="text" inputMode="decimal" autoComplete="off" value={p.monto} style={{ flex: 1 }}
+                  <select name="metodo" value={p.metodo} onChange={e => setPagos(ps => ps.map((x, j) => j === i ? { ...x, metodo: e.target.value } : x))}>{METODOS.map(m => <option key={m} value={m}>{tOr('metodo.' + m, m)}</option>)}</select>
+                  <input name="monto" type="text" inputMode="decimal" autoComplete="off" value={p.monto} style={{ flex: 1 }}
                     ref={el => { if (el) montoRefs.current[p.id] = el; else delete montoRefs.current[p.id] }}
                     onChange={e => setPagos(ps => ps.map((x, j) => j === i ? { ...x, monto: limpiarMonto(e.target.value) } : x))}
                     onBlur={() => setPagos(ps => ps.map((x, j) => j === i && x.monto !== '' ? { ...x, monto: numMonto(x.monto).toFixed(2) } : x))}
@@ -833,7 +831,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                 </div>
               )
             })}
-            <input value={previa.unidades[previa.foco].texto} maxLength={60} placeholder={t('pedido.notaExtra')}
+            <input name="nota-extra" value={previa.unidades[previa.foco].texto} maxLength={60} placeholder={t('pedido.notaExtra')}
               onChange={e => setPrevia(v => ({ ...v, unidades: v.unidades.map((u, i) => (i === v.foco ? { ...u, texto: e.target.value } : u)) }))} />
             {!previaLista && <small className="pm-falta">{t('indic.faltan')}</small>}
             <div className="barra" style={{ margin: 0 }}>

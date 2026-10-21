@@ -225,7 +225,7 @@ export default function LoginPage({ onEntrar }) {
             <>
               <label className="lg-campo">
                 <span>{t('login.selEmpresa')}</span>
-                <select value={sel} onChange={e => { setSel(e.target.value); setError('') }} disabled={lista === undefined}>
+                <select name="sel" value={sel} onChange={e => { setSel(e.target.value); setError('') }} disabled={lista === undefined}>
                   <option value={DEMO}>{t('login.empresaDemo')}</option>
                   {(lista || []).map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
                 </select>
@@ -235,7 +235,7 @@ export default function LoginPage({ onEntrar }) {
                 <>
                   <label className="lg-campo">
                     <span>{t('login.entrarComo')}</span>
-                    <select value={demoRol} onChange={e => setDemoRol(e.target.value)}>
+                    <select name="demo-rol" value={demoRol} onChange={e => setDemoRol(e.target.value)}>
                       {['admin', 'cajero', 'mesero', 'cocina', 'barra'].map(r => <option key={r} value={r}>{tOr('rol.' + r, r)}</option>)}
                     </select>
                   </label>
@@ -245,12 +245,12 @@ export default function LoginPage({ onEntrar }) {
                 <>
                   <label className="lg-campo">
                     <span>{t('login.labelCorreo')}</span>
-                    <input value={usuario} onChange={e => setUsuario(e.target.value)} placeholder={t('login.placeholderCorreo')} autoComplete="username" required />
+                    <input name="correo" value={usuario} onChange={e => setUsuario(e.target.value)} placeholder={t('login.placeholderCorreo')} autoComplete="username" required />
                   </label>
                   <label className="lg-campo">
                     <span>{t('login.labelClave')}</span>
                     <div className="lg-clave">
-                      <input type={verClave ? 'text' : 'password'} value={clave} onChange={e => setClave(e.target.value)} placeholder="••••" autoComplete="current-password" required />
+                      <input name="clave" type={verClave ? 'text' : 'password'} value={clave} onChange={e => setClave(e.target.value)} placeholder="••••" autoComplete="current-password" required />
                       <button type="button" className="lg-ojo" onClick={() => setVerClave(v => !v)} aria-label={verClave ? t('login.ocultarClave') : t('login.mostrarClave')}><Ojo off={verClave} /></button>
                     </div>
                   </label>
@@ -288,21 +288,21 @@ export default function LoginPage({ onEntrar }) {
               <h2>{t('alta.titulo')}</h2>
               <p className="auth-sub">{t('alta.sub')}</p>
               <label className="lg-campo"><span>{t('alta.labelNegocio')}</span>
-                <input autoFocus value={alta.negocio} onChange={campo('negocio')} placeholder={t('alta.placeholderNegocio')} autoComplete="organization" maxLength={80} />
+                <input name="negocio" autoFocus value={alta.negocio} onChange={campo('negocio')} placeholder={t('alta.placeholderNegocio')} autoComplete="organization" maxLength={80} />
               </label>
               <label className="lg-campo"><span>{t('alta.labelCodigo')}</span>
-                <input value={alta.codigo} onChange={e => setAlta(a => ({ ...a, codigo: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '') }))}
+                <input name="codigo" value={alta.codigo} onChange={e => setAlta(a => ({ ...a, codigo: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '') }))}
                   placeholder={t('alta.placeholderCodigo')} spellCheck={false} autoComplete="off" maxLength={24} />
                 <small className="auth-ayuda">{t('alta.helpCodigo')}</small>
               </label>
               <label className="lg-campo"><span>{t('alta.labelEncargado')}</span>
-                <input value={alta.nombre} onChange={campo('nombre')} placeholder={t('alta.placeholderEncargado')} autoComplete="name" />
+                <input name="encargado" value={alta.nombre} onChange={campo('nombre')} placeholder={t('alta.placeholderEncargado')} autoComplete="name" />
               </label>
               <label className="lg-campo"><span>{t('alta.labelCorreo')}</span>
-                <input type="email" value={alta.correo} onChange={campo('correo')} placeholder={t('login.placeholderCorreo')} autoComplete="email" />
+                <input name="correo" type="email" value={alta.correo} onChange={campo('correo')} placeholder={t('login.placeholderCorreo')} autoComplete="email" />
               </label>
               <label className="lg-campo"><span>{t('alta.labelClave')}</span>
-                <input type="password" value={alta.clave} onChange={campo('clave')} placeholder="••••••" autoComplete="new-password" />
+                <input name="clave" type="password" value={alta.clave} onChange={campo('clave')} placeholder="••••••" autoComplete="new-password" />
                 <small className="auth-ayuda">{t('alta.helpClave')}</small>
               </label>
               {error && <p className="lg-alerta">{error}</p>}
@@ -318,7 +318,7 @@ export default function LoginPage({ onEntrar }) {
               <h2>{t('recupera.titulo')}</h2>
               <p className="auth-sub">{t('recupera.sub')} <b>{nombreEmpresa}</b></p>
               <label className="lg-campo"><span>{t('recupera.labelCorreo')}</span>
-                <input autoFocus type="email" value={correoRecup} onChange={e => setCorreoRecup(e.target.value)} placeholder={t('login.placeholderCorreo')} autoComplete="username" />
+                <input name="correo" autoFocus type="email" value={correoRecup} onChange={e => setCorreoRecup(e.target.value)} placeholder={t('login.placeholderCorreo')} autoComplete="username" />
               </label>
               <div className="auth-bloque">
                 <p className="auth-bloque-titulo">{t('recupera.admin')}</p>

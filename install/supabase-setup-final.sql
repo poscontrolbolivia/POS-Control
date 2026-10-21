@@ -115,6 +115,9 @@ create table if not exists public.cuenta_items (
   enviado_en       timestamptz,
   creada_en        timestamptz not null default now()
 );
+-- Parte de «nota» que son INDICACIONES elegidas en la comanda (término, salsas…): el resto de «nota» es el comentario libre.
+-- Las indicaciones no se editan después; solo el comentario.
+alter table public.cuenta_items add column if not exists indicaciones text not null default '';
 
 create table if not exists public.pagos (
   id         uuid primary key default gen_random_uuid(),
@@ -476,6 +479,7 @@ as $fn$
         'qty',            i.qty,
         'estado',         i.estado,
         'nota',           i.nota,
+        'indicaciones',   i.indicaciones,
         'motivo_anulacion', i.motivo_anulacion,
         'enviado_en',     i.enviado_en,
         'creada_en',      i.creada_en
@@ -639,6 +643,7 @@ declare
   v_det    jsonb;
   v_extras jsonb;
   v_extra  numeric;
+  v_ind    text;
 begin
   v_emp    := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
@@ -662,6 +667,10 @@ begin
     end if;
 
     v_qty := greatest(coalesce(nullif(v_it->>'qty','')::integer, 1), 1);
+
+    -- Las indicaciones deben ser el comienzo de la nota; si no lo son, se tratan como comentario libre.
+    v_ind := left(btrim(coalesce(v_it->>'indicaciones','')), 120);
+    if v_ind <> '' and left(coalesce(v_it->>'nota',''), length(v_ind)) <> v_ind then v_ind := ''; end if;
 
     -- Precio extra y productos de inventario de las opciones elegidas: se leen SIEMPRE de la configuración
     -- del negocio (el cliente solo manda qué lista y qué opción; nunca el precio).
@@ -688,6 +697,7 @@ begin
        and i.producto_id = v_prod.id
        and i.estado = 'pendiente'
        and coalesce(i.nota, '') = coalesce(v_it->>'nota', '')
+       and coalesce(i.indicaciones, '') = v_ind
        and i.extras = v_extras
      limit 1;
 
@@ -697,10 +707,10 @@ begin
        where id = v_item;
     else
       insert into public.cuenta_items
-        (empresa_id, cuenta_id, producto_id, nombre_snapshot, precio_snapshot, qty, estado, nota, areas, extras)
+        (empresa_id, cuenta_id, producto_id, nombre_snapshot, precio_snapshot, qty, estado, nota, indicaciones, areas, extras)
       values
         (v_emp, v_cuenta.id, v_prod.id, v_prod.nombre, v_prod.precio + v_extra, v_qty, 'pendiente',
-         coalesce(v_it->>'nota', ''),
+         coalesce(v_it->>'nota', ''), v_ind,
          coalesce(v_prod.areas, array['cocina']::text[]), v_extras)
       returning id into v_item;
     end if;
@@ -756,7 +766,7 @@ begin
     'id', p_item_id, 'eliminado', false,
     'item', (select jsonb_build_object('id', i.id, 'nombre', i.nombre_snapshot,
                                        'precio', i.precio_snapshot, 'qty', i.qty,
-                                       'estado', i.estado, 'nota', i.nota)
+                                       'estado', i.estado, 'nota', i.nota, 'indicaciones', i.indicaciones)
              from public.cuenta_items i where i.id = p_item_id));
 end $fn$;
 
@@ -773,6 +783,7 @@ as $fn$
 declare
   v_emp uuid;
   v_it  public.cuenta_items;
+  v_com text;
 begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
@@ -788,7 +799,19 @@ begin
     raise exception 'solo se puede anotar un ítem pendiente (estado: %)', v_it.estado;
   end if;
 
-  update public.cuenta_items set nota = coalesce(p_nota, '') where id = p_item_id;
+  -- Las INDICACIONES del producto no se borran ni se editan: solo cambia el comentario.
+  -- El cliente puede mandar el texto completo (indicaciones + comentario) o solo el comentario.
+  if coalesce(v_it.indicaciones, '') <> '' then
+    v_com := btrim(coalesce(p_nota, ''));
+    if left(v_com, length(v_it.indicaciones)) = v_it.indicaciones then
+      v_com := btrim(substr(v_com, length(v_it.indicaciones) + 1), ' ,');
+    end if;
+    update public.cuenta_items
+       set nota = left(case when v_com = '' then v_it.indicaciones else v_it.indicaciones || ', ' || v_com end, 120)
+     where id = p_item_id;
+  else
+    update public.cuenta_items set nota = coalesce(p_nota, '') where id = p_item_id;
+  end if;
 end $fn$;
 
 create or replace function public.enviar_items(
@@ -2479,14 +2502,14 @@ begin
     if v_cuenta is null then continue; end if;
     v_old    := nullif(v_map_productos->>(r->>'producto_id'), '')::uuid;
     insert into public.cuenta_items (empresa_id, cuenta_id, producto_id, nombre_snapshot,
-                                     precio_snapshot, qty, estado, nota, motivo_anulacion, enviado_en, areas)
+                                     precio_snapshot, qty, estado, nota, indicaciones, motivo_anulacion, enviado_en, areas)
     values (v_emp, v_cuenta, v_old,
             coalesce(nullif(r->>'nombre_snapshot',''),'(importado)'),
             coalesce((r->>'precio_snapshot')::numeric, 0),
             greatest(1, coalesce((r->>'qty')::int, 1)),
             case when coalesce(r->>'estado','pendiente') in ('pendiente','enviado','listo','anulacion','anulado')
                  then r->>'estado' else 'pendiente' end,
-            coalesce(r->>'nota',''), r->>'motivo_anulacion',
+            coalesce(r->>'nota',''), coalesce(r->>'indicaciones',''), r->>'motivo_anulacion',
             (r->>'enviado_en')::timestamptz,
             coalesce((select p.areas from public.productos p where p.id = v_old), array['cocina']::text[]));
   end loop;
@@ -5271,14 +5294,14 @@ begin
     if v_areas is null or coalesce(array_length(v_areas, 1), 0) = 0 then
       v_areas := coalesce((select p.areas from public.productos p where p.id = v_prod), array['cocina']::text[]);
     end if;
-    insert into public.cuenta_items (empresa_id, cuenta_id, producto_id, nombre_snapshot, precio_snapshot, qty, estado, nota,
+    insert into public.cuenta_items (empresa_id, cuenta_id, producto_id, nombre_snapshot, precio_snapshot, qty, estado, nota, indicaciones,
                                      motivo_anulacion, enviado_en, areas, areas_listas, extras, listo_en,
                                      anulacion_motivo, anulacion_por, anulacion_pedida_en, anulacion_estado_previo,
                                      anulacion_resuelta_por, anulacion_resuelta_en, creada_en)
     values (v_emp, v_cuenta, v_prod, coalesce(nullif(r->>'nombre_snapshot',''),'(importado)'),
             coalesce((r->>'precio_snapshot')::numeric, 0), greatest(1, coalesce((r->>'qty')::int, 1)),
             case when coalesce(r->>'estado','pendiente') in ('pendiente','enviado','listo','anulacion','anulado') then r->>'estado' else 'pendiente' end,
-            coalesce(r->>'nota',''), r->>'motivo_anulacion', (r->>'enviado_en')::timestamptz, v_areas,
+            coalesce(r->>'nota',''), coalesce(r->>'indicaciones',''), r->>'motivo_anulacion', (r->>'enviado_en')::timestamptz, v_areas,
             case when jsonb_typeof(r->'areas_listas') = 'array' then array(select jsonb_array_elements_text(r->'areas_listas')) else '{}'::text[] end,
             case when jsonb_typeof(r->'extras') = 'array' then r->'extras' else '[]'::jsonb end,
             (r->>'listo_en')::timestamptz, r->>'anulacion_motivo', nullif(v_map_users->>(r->>'anulacion_por'), '')::uuid,
@@ -6505,14 +6528,14 @@ begin
     if v_areas is null or coalesce(array_length(v_areas, 1), 0) = 0 then
       v_areas := coalesce((select p.areas from public.productos p where p.id = v_prod), array['cocina']::text[]);
     end if;
-    insert into public.cuenta_items (empresa_id, cuenta_id, producto_id, nombre_snapshot, precio_snapshot, qty, estado, nota,
+    insert into public.cuenta_items (empresa_id, cuenta_id, producto_id, nombre_snapshot, precio_snapshot, qty, estado, nota, indicaciones,
                                      motivo_anulacion, enviado_en, areas, areas_listas, extras, listo_en,
                                      anulacion_motivo, anulacion_por, anulacion_pedida_en, anulacion_estado_previo,
                                      anulacion_resuelta_por, anulacion_resuelta_en, creada_en)
     values (v_emp, v_cuenta, v_prod, coalesce(nullif(r->>'nombre_snapshot',''),'(importado)'),
             coalesce((r->>'precio_snapshot')::numeric, 0), greatest(1, coalesce((r->>'qty')::int, 1)),
             case when coalesce(r->>'estado','pendiente') in ('pendiente','enviado','listo','anulacion','anulado') then r->>'estado' else 'pendiente' end,
-            coalesce(r->>'nota',''), r->>'motivo_anulacion', (r->>'enviado_en')::timestamptz, v_areas,
+            coalesce(r->>'nota',''), coalesce(r->>'indicaciones',''), r->>'motivo_anulacion', (r->>'enviado_en')::timestamptz, v_areas,
             case when jsonb_typeof(r->'areas_listas') = 'array' then array(select jsonb_array_elements_text(r->'areas_listas')) else '{}'::text[] end,
             case when jsonb_typeof(r->'extras') = 'array' then r->'extras' else '[]'::jsonb end,
             (r->>'listo_en')::timestamptz, r->>'anulacion_motivo', nullif(v_map_users->>(r->>'anulacion_por'), '')::uuid,

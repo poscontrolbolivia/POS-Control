@@ -3,6 +3,10 @@
 // borde derecho, aunque el producto sea larguísimo o el precio tenga seis cifras.
 import { createServer } from 'vite'
 
+// Node 22 trae navigator.language = 'en-US' y la app elige idioma por ahí: el ticket salía en inglés
+// y la prueba (que mide el ticket en español) fallaba. Se fija el idioma de la app como lo haría el usuario.
+globalThis.localStorage = { getItem: k => (k === 'pos-idioma-app' ? 'es' : null), setItem() {}, removeItem() {} }
+
 let fallos = 0
 const ok = (cond, msg) => { console.log(`${cond ? '✓' : '✗'} ${msg}`); if (!cond) fallos++ }
 

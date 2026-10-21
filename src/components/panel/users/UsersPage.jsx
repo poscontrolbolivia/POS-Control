@@ -284,7 +284,7 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
                       <form className="eq-clave" onSubmit={guardarClave}>
                         <b className="eq-clave-titulo">{tOr('equipo.clave.titulo', 'Nueva clave para')} <span className="eq-clave-nombre">{claveFila.nombre}</span></b>
                         <div className="eq-clave-fila">
-                          <input autoFocus type="text" value={claveFila.clave} autoComplete="new-password"
+                          <input name="pista" autoFocus type="text" value={claveFila.clave} autoComplete="new-password"
                             placeholder={tOr('equipo.clave.pista', 'mínimo 4 caracteres')}
                             onChange={e => { setClaveFila(c => ({ ...c, clave: e.target.value })); setClaveMsg('') }} />
                           <button type="button" className="ghost" onClick={() => setClaveFila(c => ({ ...c, clave: generarClave() }))}>
@@ -316,23 +316,23 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
         <div className="eq-campos">
           <label className="adm-campo">
             <span>{tOr('equipo.invitar.nombre', 'Nombre')}</span>
-            <input value={form.nombre} onChange={set('nombre')} placeholder={tOr('equipo.invitar.nombrePista', 'p. ej. María Quispe')} autoComplete="off" />
+            <input name="nombre-pista" value={form.nombre} onChange={set('nombre')} placeholder={tOr('equipo.invitar.nombrePista', 'p. ej. María Quispe')} autoComplete="off" />
           </label>
           <label className="adm-campo">
             <span>{tOr('equipo.invitar.correo', 'Correo')}</span>
-            <input type="email" inputMode="email" value={form.correo} onChange={set('correo')}
+            <input name="correo-pista" type="email" inputMode="email" value={form.correo} onChange={set('correo')}
               placeholder={tOr('equipo.invitar.correoPista', 'maria@negocio.com')} autoComplete="off" />
           </label>
           <label className="adm-campo">
             <span>{tOr('equipo.invitar.rol', 'Rol')}</span>
-            <select value={form.rol} onChange={set('rol')}>
+            <select name="rol" value={form.rol} onChange={set('rol')}>
               {ROLES.map(r => <option key={r} value={r}>{rolEtiqueta(r, tOr)}</option>)}
             </select>
           </label>
           <label className="adm-campo">
             <span>{tOr('equipo.invitar.clave', 'Clave inicial')}</span>
             <span className="eq-clave-fila">
-              <input type="text" value={form.clave} onChange={set('clave')} autoComplete="new-password"
+              <input name="pista" type="text" value={form.clave} onChange={set('clave')} autoComplete="new-password"
                 placeholder={tOr('equipo.clave.pista', 'mínimo 4 caracteres')} />
               <button type="button" className="ghost" onClick={() => { setForm(f => ({ ...f, clave: generarClave() })); setValidando('') }}>
                 {tOr('equipo.generar', 'Generar')}
@@ -419,7 +419,7 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
             {claveFila?.usuario === u.usuario && (
               <form className="eq-clave" onSubmit={guardarClave}>
                 <div className="eq-clave-fila">
-                  <input autoFocus type="text" value={claveFila.clave} autoComplete="new-password" onChange={e => setClaveFila(c => ({ ...c, clave: e.target.value }))} />
+                  <input name="clave" autoFocus type="text" value={claveFila.clave} autoComplete="new-password" onChange={e => setClaveFila(c => ({ ...c, clave: e.target.value }))} />
                   <button type="button" className="ghost" onClick={() => setClaveFila(c => ({ ...c, clave: generarClave() }))}>{tOr('equipo.generar', 'Generar')}</button>
                 </div>
                 <div className="adm-fila">
@@ -434,14 +434,14 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
       <form className="eq-invitar" onSubmit={invitar}>
         <h4 className="eq-invitar-titulo">{tOr('equipo.invitar.titulo', 'Invitar a una persona')}</h4>
         <div className="eq-campos">
-          <label className="adm-campo"><span>{tOr('equipo.invitar.nombre', 'Nombre')}</span><input value={form.nombre} onChange={set('nombre')} autoComplete="off" /></label>
-          <label className="adm-campo"><span>{t('equipo.invitar.usuario')}</span><input value={form.usuario} onChange={set('usuario')} autoComplete="off" /></label>
+          <label className="adm-campo"><span>{tOr('equipo.invitar.nombre', 'Nombre')}</span><input name="nombre" value={form.nombre} onChange={set('nombre')} autoComplete="off" /></label>
+          <label className="adm-campo"><span>{t('equipo.invitar.usuario')}</span><input name="usuario" value={form.usuario} onChange={set('usuario')} autoComplete="off" /></label>
           <label className="adm-campo"><span>{tOr('equipo.invitar.rol', 'Rol')}</span>
-            <select value={form.rol} onChange={set('rol')}>{ROLES.map(r => <option key={r} value={r}>{rolEtiqueta(r, tOr)}</option>)}</select>
+            <select name="rol" value={form.rol} onChange={set('rol')}>{ROLES.map(r => <option key={r} value={r}>{rolEtiqueta(r, tOr)}</option>)}</select>
           </label>
           <label className="adm-campo"><span>{tOr('equipo.invitar.clave', 'Clave inicial')}</span>
             <span className="eq-clave-fila">
-              <input type="text" value={form.clave} onChange={set('clave')} autoComplete="new-password" />
+              <input name="clave" type="text" value={form.clave} onChange={set('clave')} autoComplete="new-password" />
               <button type="button" className="ghost" onClick={() => setForm(f => ({ ...f, clave: generarClave() }))}>{tOr('equipo.generar', 'Generar')}</button>
             </span>
           </label>

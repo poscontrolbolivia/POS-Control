@@ -138,29 +138,29 @@ export default function ProveedoresTab({ onPagar }) {
       <div className="inv-campos">
         <label className="adm-campo">
           <span>{tOr('inventario.provNombre', 'Nombre')}</span>
-          <input autoFocus value={form.nombre} onChange={setCampo('nombre')} maxLength={80}
+          <input name="pista-prov-nombre" autoFocus value={form.nombre} onChange={setCampo('nombre')} maxLength={80}
             placeholder={tOr('inventario.pistaProvNombre', 'p. ej. Distribuidora La Roca')} />
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.provTelefono', 'Teléfono')}</span>
-          <input type="tel" value={form.telefono} onChange={setCampo('telefono')} maxLength={30} placeholder="70000000" />
+          <input name="telefono" type="tel" value={form.telefono} onChange={setCampo('telefono')} maxLength={30} placeholder="70000000" />
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.provEmail', 'Email')}</span>
-          <input type="email" value={form.email} onChange={setCampo('email')} maxLength={60} placeholder="compras@…" />
+          <input name="email" type="email" value={form.email} onChange={setCampo('email')} maxLength={60} placeholder="compras@…" />
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.provDireccion', 'Dirección')}</span>
-          <input value={form.direccion} onChange={setCampo('direccion')} maxLength={120}
+          <input name="pista-prov-direccion" value={form.direccion} onChange={setCampo('direccion')} maxLength={120}
             placeholder={tOr('inventario.pistaProvDireccion', 'opcional')} />
         </label>
         <label className="adm-campo inv-mov-nota">
           <span>{tOr('inventario.nota', 'Nota')}</span>
-          <input value={form.nota} onChange={setCampo('nota')} maxLength={140}
+          <input name="pista-prov-nota" value={form.nota} onChange={setCampo('nota')} maxLength={140}
             placeholder={tOr('inventario.pistaProvNota', 'opcional: días de entrega, crédito…')} />
         </label>
         <label className="inv-check">
-          <input type="checkbox" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
+          <input name="activo" type="checkbox" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
           {tOr('inventario.activo', 'Activo')}
         </label>
       </div>
@@ -193,7 +193,7 @@ export default function ProveedoresTab({ onPagar }) {
 
       {(s.proveedores || []).length > 0 && (
         <div className="inv-filtros">
-          <input className="inv-buscador" value={buscador} onChange={e => setBuscador(e.target.value)}
+          <input name="prov-buscador" className="inv-buscador" value={buscador} onChange={e => setBuscador(e.target.value)}
             placeholder={tOr('inventario.provBuscador', 'Buscar proveedor por nombre…')} />
           <button type="button" className={'tab' + (soloPendiente ? ' on' : '')} aria-pressed={soloPendiente}
             onClick={() => setSoloPendiente(v => !v)}>

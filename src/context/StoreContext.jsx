@@ -4,6 +4,7 @@ import { fijarEmpresa } from '../services/supabaseClient.js'
 import { cargarEstadoInicial, despacharSupabase } from '../services/db.js'
 import { round2 } from '../services/format.js'
 import { repartirPorGrupo } from '../services/printing.js'
+import { notaProtegida } from '../services/indicaciones.js'
 const uid = () => crypto.randomUUID()
 
 // La base puede avisar con «codigo: texto legible» (raise exception); al mesero le sirve la frase sola.
@@ -223,10 +224,11 @@ function reducer(s, a) {
 
     case 'item+': return upd(a.cuentaId, c => {
       const nota = a.nota || ''
+      const indicaciones = a.indicaciones && nota.startsWith(a.indicaciones) ? a.indicaciones : ''
       const precio = a.p.precio + (Number(a.extra) || 0)
-      const ex = c.items.find(i => i.productoId === a.p.id && i.estado === 'pendiente' && (i.nota || '') === nota && i.precio === precio)
+      const ex = c.items.find(i => i.productoId === a.p.id && i.estado === 'pendiente' && (i.nota || '') === nota && (i.indicaciones || '') === indicaciones && i.precio === precio)
       if (ex) return { ...c, items: c.items.map(i => (i === ex ? { ...i, qty: i.qty + 1 } : i)) }
-      return { ...c, items: [...c.items, { id: uid(), productoId: a.p.id, nombre: a.p.nombre, precio, qty: 1, estado: 'pendiente', nota }] }
+      return { ...c, items: [...c.items, { id: uid(), productoId: a.p.id, nombre: a.p.nombre, precio, qty: 1, estado: 'pendiente', nota, indicaciones }] }
     })
     case 'dividir': {
       const c = s.cuentas.find(x => x.id === a.cuentaId)
@@ -240,7 +242,8 @@ function reducer(s, a) {
     }
     case 'qty': return upd(a.cuentaId, c => ({ ...c, items: c.items.flatMap(i => (i.id !== a.itemId ? [i] : i.qty + a.d <= 0 ? [] : [{ ...i, qty: i.qty + a.d }])) }))
     case 'detalle': return upd(a.cuentaId, c => ({ ...c, detalle: a.detalle || '' }))
-    case 'nota': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.id === a.itemId ? { ...i, nota: a.nota } : i)) }))
+    // Solo cambia el comentario: las indicaciones del ítem se conservan siempre.
+    case 'nota': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.id === a.itemId ? { ...i, nota: notaProtegida(i.indicaciones, a.nota) } : i)) }))
     // Un plato que ya salió del área deja devolución, igual que hace el servidor al anularlo.
     case 'anular': {
       const previo = s.cuentas.find(c => c.id === a.cuentaId)?.items.find(i => i.id === a.itemId)

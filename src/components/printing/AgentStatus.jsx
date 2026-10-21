@@ -8,10 +8,13 @@ export default function AgentStatus() {
   const [msg, setMsg] = useState(null)
   const [ocupado, setOcupado] = useState(false)
 
-  const sondear = async () => { try { setInfo(await estadoAgente()) } catch { setInfo(null) } }
+  const sondear = async (manual = false) => {
+    if (!manual && typeof document !== 'undefined' && document.hidden) return
+    try { setInfo(await estadoAgente({ fondo: !manual })) } catch { setInfo(null) }
+  }
   useEffect(() => {
     sondear()
-    const p = setInterval(sondear, 15000)
+    const p = setInterval(sondear, 30000)
     return () => clearInterval(p)
   }, [])
 
@@ -34,7 +37,7 @@ export default function AgentStatus() {
           {info ? '●' : info === null ? t('agente.estadoOff') : '…'}
         </span>
         <span className="sp" />
-        <button type="button" className="ghost" onClick={sondear}>↻ {t('agente.volverProbar')}</button>
+        <button type="button" className="ghost" onClick={() => sondear(true)}>↻ {t('agente.volverProbar')}</button>
         <button type="button" className="primary" disabled={ocupado} onClick={instalar}>
           {ocupado ? t('agente.descargando') : '⬇ ' + t('agente.descargar')}
         </button>

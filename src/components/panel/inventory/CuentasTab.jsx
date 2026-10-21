@@ -215,34 +215,34 @@ export default function CuentasTab({ filtroProveedor, onFiltro }) {
         <div className="inv-campos">
           <label className="adm-campo">
             <span>{tOr('inventario.provNombre', 'Proveedor')}</span>
-            <select value={form.proveedorId} onChange={setCampo('proveedorId')}>
+            <select name="proveedor-id" value={form.proveedorId} onChange={setCampo('proveedorId')}>
               <option value="">{tOr('inventario.elegirProveedor', 'Elige un proveedor')}</option>
               {activos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
             </select>
           </label>
           <label className="adm-campo inv-mov-nota">
             <span>{tOr('inventario.deudaConcepto', 'Concepto')}</span>
-            <input value={form.concepto} onChange={setCampo('concepto')} maxLength={120}
+            <input name="pista-concepto" value={form.concepto} onChange={setCampo('concepto')} maxLength={120}
               placeholder={tOr('inventario.pistaConcepto', 'p. ej. Compra de carne semanal')} />
           </label>
           <label className="adm-campo">
             <span>{tOr('inventario.deudaMonto', 'Monto')}</span>
-            <input type="text" inputMode="decimal" autoComplete="off" value={form.monto}
+            <input name="monto" type="text" inputMode="decimal" autoComplete="off" value={form.monto}
               onChange={e => { setForm(f => ({ ...f, monto: limpiarMonto(e.target.value) })); setFormErr('') }}
               onBlur={() => setForm(f => ({ ...f, monto: f.monto !== '' ? numMonto(f.monto).toFixed(2) : '' }))}
               onFocus={e => e.target.select()} placeholder="0" />
           </label>
           <label className="adm-campo">
             <span>{tOr('inventario.deudaFecha', 'Fecha')}</span>
-            <input type="date" value={form.fecha} onChange={setCampo('fecha')} />
+            <input name="fecha" type="date" value={form.fecha} onChange={setCampo('fecha')} />
           </label>
           <label className="adm-campo">
             <span>{tOr('inventario.deudaVencimiento', 'Vencimiento')} ({tOr('inventario.deudaOpcional', 'opcional')})</span>
-            <input type="date" value={form.vencimiento} onChange={setCampo('vencimiento')} />
+            <input name="vencimiento" type="date" value={form.vencimiento} onChange={setCampo('vencimiento')} />
           </label>
           <label className="adm-campo inv-mov-nota">
             <span>{tOr('inventario.nota', 'Nota')}</span>
-            <input value={form.nota} onChange={setCampo('nota')} maxLength={140}
+            <input name="pista-nota-deuda" value={form.nota} onChange={setCampo('nota')} maxLength={140}
               placeholder={tOr('inventario.pistaNotaDeuda', 'opcional: factura, plazo hablado…')} />
           </label>
         </div>
@@ -306,14 +306,14 @@ export default function CuentasTab({ filtroProveedor, onFiltro }) {
                         <div className="inv-mov-campos">
                           <label className="adm-campo">
                             <span>{tOr('inventario.abonoMonto', 'Monto del abono')}</span>
-                            <input autoFocus type="text" inputMode="decimal" autoComplete="off" value={abono.monto}
+                            <input name="monto" autoFocus type="text" inputMode="decimal" autoComplete="off" value={abono.monto}
                               onChange={e => { setAbono(a => ({ ...a, monto: limpiarMonto(e.target.value) })); setAbonoErr('') }}
                               onBlur={() => setAbono(a => (a ? { ...a, monto: a.monto !== '' ? numMonto(a.monto).toFixed(2) : '' } : a))}
                               onFocus={e => e.target.select()} placeholder="0" />
                           </label>
                           <label className="adm-campo inv-mov-nota">
                             <span>{tOr('inventario.nota', 'Nota')}</span>
-                            <input value={abono.nota} onChange={e => setAbono(a => ({ ...a, nota: e.target.value }))}
+                            <input name="pista-nota-abono" value={abono.nota} onChange={e => setAbono(a => ({ ...a, nota: e.target.value }))}
                               placeholder={tOr('inventario.pistaNotaAbono', 'opcional: transferencia, efectivo…')} />
                           </label>
                         </div>
@@ -331,26 +331,26 @@ export default function CuentasTab({ filtroProveedor, onFiltro }) {
                         <div className="inv-mov-campos">
                           <label className="adm-campo inv-mov-nota">
                             <span>{tOr('inventario.deudaConcepto', 'Concepto')}</span>
-                            <input autoFocus value={edicion.concepto} onChange={e => { setEdicion(x => ({ ...x, concepto: e.target.value })); setEditErr('') }} maxLength={120} />
+                            <input name="concepto" autoFocus value={edicion.concepto} onChange={e => { setEdicion(x => ({ ...x, concepto: e.target.value })); setEditErr('') }} maxLength={120} />
                           </label>
                           <label className="adm-campo">
                             <span>{tOr('inventario.deudaMonto', 'Monto')}</span>
-                            <input type="text" inputMode="decimal" autoComplete="off" value={edicion.monto}
+                            <input name="monto" type="text" inputMode="decimal" autoComplete="off" value={edicion.monto}
                               onChange={e => { setEdicion(x => ({ ...x, monto: limpiarMonto(e.target.value) })); setEditErr('') }}
                               onBlur={() => setEdicion(x => (x ? { ...x, monto: x.monto !== '' ? numMonto(x.monto).toFixed(2) : '' } : x))}
                               onFocus={e => e.target.select()} placeholder="0" />
                           </label>
                           <label className="adm-campo">
                             <span>{tOr('inventario.deudaFecha', 'Fecha')}</span>
-                            <input type="date" value={edicion.fecha} onChange={e => setEdicion(x => ({ ...x, fecha: e.target.value }))} />
+                            <input name="fecha" type="date" value={edicion.fecha} onChange={e => setEdicion(x => ({ ...x, fecha: e.target.value }))} />
                           </label>
                           <label className="adm-campo">
                             <span>{tOr('inventario.deudaVencimiento', 'Vencimiento')} ({tOr('inventario.deudaOpcional', 'opcional')})</span>
-                            <input type="date" value={edicion.vencimiento} onChange={e => setEdicion(x => ({ ...x, vencimiento: e.target.value }))} />
+                            <input name="vencimiento" type="date" value={edicion.vencimiento} onChange={e => setEdicion(x => ({ ...x, vencimiento: e.target.value }))} />
                           </label>
                           <label className="adm-campo inv-mov-nota">
                             <span>{tOr('inventario.nota', 'Nota')}</span>
-                            <input value={edicion.nota} onChange={e => setEdicion(x => ({ ...x, nota: e.target.value }))} maxLength={140} />
+                            <input name="nota" value={edicion.nota} onChange={e => setEdicion(x => ({ ...x, nota: e.target.value }))} maxLength={140} />
                           </label>
                         </div>
                         {editErr && <span className="adm-msg warn">{editErr}</span>}

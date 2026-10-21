@@ -35,8 +35,8 @@ export default function ComprobanteQr({ valor, onCambio }) {
 
   return (
     <div className="cq">
-      <input ref={camara} type="file" accept="image/*" capture="environment" hidden onChange={elegir} />
-      <input ref={galeria} type="file" accept="image/*" hidden onChange={elegir} />
+      <input name="file" ref={camara} type="file" accept="image/*" capture="environment" hidden onChange={elegir} />
+      <input name="file" ref={galeria} type="file" accept="image/*" hidden onChange={elegir} />
       {valor ? (
         <>
           {vista && <img className="cq-mini" src={vista} alt={t('comp.titulo')} />}

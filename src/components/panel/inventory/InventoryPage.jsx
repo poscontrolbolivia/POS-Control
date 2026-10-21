@@ -343,37 +343,37 @@ export default function InventoryPage({ rol }) {
       <div className="inv-campos">
         <label className="adm-campo">
           <span>{tOr('inventario.nombre', 'Nombre')}</span>
-          <input autoFocus value={form.nombre} onChange={setCampo('nombre')} maxLength={80}
+          <input name="pista-nombre" autoFocus value={form.nombre} onChange={setCampo('nombre')} maxLength={80}
             placeholder={tOr('inventario.pistaNombre', 'p. ej. Aceite, Carne molida')} />
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.unidad', 'Unidad')}</span>
-          <input value={form.unidad} onChange={setCampo('unidad')} maxLength={20}
+          <input name="pista-unidad" value={form.unidad} onChange={setCampo('unidad')} maxLength={20}
             placeholder={tOr('inventario.pistaUnidad', 'kg, litro, unidad')} />
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.stock', 'Stock')}</span>
-          <input type="text" inputMode="decimal" autoComplete="off" value={form.stock}
+          <input name="stock" type="text" inputMode="decimal" autoComplete="off" value={form.stock}
             onChange={e => { setForm(f => ({ ...f, stock: limpiarCant(e.target.value) })); setFormErr('') }}
             onBlur={() => setForm(f => ({ ...f, stock: normalizarCant(f.stock) }))}
             onFocus={e => e.target.select()} placeholder="0" />
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.minimo', 'Mínimo')}</span>
-          <input type="text" inputMode="decimal" autoComplete="off" value={form.stock_min}
+          <input name="stock-min" type="text" inputMode="decimal" autoComplete="off" value={form.stock_min}
             onChange={e => { setForm(f => ({ ...f, stock_min: limpiarCant(e.target.value) })); setFormErr('') }}
             onBlur={() => setForm(f => ({ ...f, stock_min: normalizarCant(f.stock_min) }))}
             onFocus={e => e.target.select()} placeholder="0" />
         </label>
         <label className="adm-campo">
           <span>{tOr('inventario.costo', 'Costo')} ({MONEDA})</span>
-          <input type="text" inputMode="decimal" autoComplete="off" value={form.costo}
+          <input name="costo" type="text" inputMode="decimal" autoComplete="off" value={form.costo}
             onChange={e => { setForm(f => ({ ...f, costo: limpiarMonto(e.target.value) })); setFormErr('') }}
             onBlur={() => setForm(f => ({ ...f, costo: normalizarCosto(f.costo) }))}
             onFocus={e => e.target.select()} placeholder="0" />
         </label>
         <label className="inv-check">
-          <input type="checkbox" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
+          <input name="activo" type="checkbox" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
           {tOr('inventario.activo', 'Activo')}
         </label>
       </div>
@@ -489,14 +489,14 @@ export default function InventoryPage({ rol }) {
                             <div className="inv-mov-campos">
                               <label className="adm-campo">
                                 <span>{tOr('inventario.cantidad', 'Cantidad')} ({i.unidad})</span>
-                                <input autoFocus type="text" inputMode="decimal" autoComplete="off" value={mov.cantidad}
+                                <input name="cantidad" autoFocus type="text" inputMode="decimal" autoComplete="off" value={mov.cantidad}
                                   onChange={e => { setMov(m => ({ ...m, cantidad: limpiarCant(e.target.value) })); setMovErr('') }}
                                   onBlur={() => setMov(m => (m ? { ...m, cantidad: normalizarCant(m.cantidad) } : m))}
                                   onFocus={e => e.target.select()} placeholder="0" />
                               </label>
                               <label className="adm-campo inv-mov-nota">
                                 <span>{tOr('inventario.nota', 'Nota')}</span>
-                                <input type="text" value={mov.nota} onChange={e => setMov(m => ({ ...m, nota: e.target.value }))}
+                                <input name="pista-nota" type="text" value={mov.nota} onChange={e => setMov(m => ({ ...m, nota: e.target.value }))}
                                   placeholder={tOr('inventario.pistaNota', 'opcional: motivo, proveedor…')} />
                               </label>
                             </div>
@@ -536,7 +536,7 @@ export default function InventoryPage({ rol }) {
 
           {!!productosMenu.length && (
             <>
-              <input className="inv-buscador" value={buscador} onChange={e => setBuscador(e.target.value)}
+              <input name="rec-buscador" className="inv-buscador" value={buscador} onChange={e => setBuscador(e.target.value)}
                 placeholder={tOr('inventario.recBuscador', 'Buscar producto…')} />
               <div className="inv-lista">
                 {productosFiltrados.map(p => {
@@ -562,13 +562,13 @@ export default function InventoryPage({ rol }) {
                           {!lineas.length && <span className="adm-vacio">{tOr('inventario.sinLineas', 'Sin líneas todavía: añade la primera. (Dejar la receta vacía también es válido: guárdala sin líneas.)')}</span>}
                           {lineas.map((l, ix) => (
                             <div key={ix} className="inv-linea">
-                              <select className="inv-sel-insumo" value={l.insumo_id} onChange={e => cambiarLinea(ix, 'insumo_id', e.target.value)}>
+                              <select name="insumo-id" className="inv-sel-insumo" value={l.insumo_id} onChange={e => cambiarLinea(ix, 'insumo_id', e.target.value)}>
                                 <option value="">{tOr('inventario.elegirInsumo', 'Elige un insumo')}</option>
                                 {insumos.map(i => (
                                   <option key={i.id} value={i.id}>{i.nombre} ({i.unidad}) · {tOr('inventario.disponibles', 'disponibles')}: {fmt(i.stock)}</option>
                                 ))}
                               </select>
-                              <input className="inv-cant" type="text" inputMode="decimal" autoComplete="off" value={l.cantidad}
+                              <input name="pista-cantidad" className="inv-cant" type="text" inputMode="decimal" autoComplete="off" value={l.cantidad}
                                 onChange={e => cambiarLinea(ix, 'cantidad', limpiarCant(e.target.value))}
                                 onBlur={() => cambiarLinea(ix, 'cantidad', normalizarCant(l.cantidad))}
                                 onFocus={e => e.target.select()}

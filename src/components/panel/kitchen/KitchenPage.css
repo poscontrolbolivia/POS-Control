@@ -23,13 +23,13 @@
 
 .ck-filas { display: flex; flex-direction: column; gap: 12px; }
 .ck-fila { background: color-mix(in srgb, var(--card) 70%, transparent); border: 1.5px solid var(--line); border-radius: 16px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-.ck-fila.cocina { border-color: color-mix(in srgb, var(--btn-orange) 45%, var(--line)); }
-.ck-fila.barra { border-color: color-mix(in srgb, var(--btn-blue, var(--ac)) 45%, var(--line)); }
+.ck-fila.area-cocina { border-color: color-mix(in srgb, var(--btn-orange) 45%, var(--line)); }
+.ck-fila.area-barra { border-color: color-mix(in srgb, var(--btn-blue, var(--ac)) 45%, var(--line)); }
 .ck-fila-cab { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
 .ck-fila-cab h3 { margin: 0; font-size: 1.05rem; }
 .ck-cuenta { min-width: 26px; height: 26px; padding: 0 8px; display: inline-grid; place-items: center; border-radius: 999px; font-weight: 800; font-size: .85rem; background: var(--ac); color: var(--on-btn); }
-.ck-fila.cocina .ck-cuenta { background: var(--btn-orange); }
-.ck-fila.barra .ck-cuenta { background: var(--btn-blue, var(--ac)); }
+.ck-fila.area-cocina .ck-cuenta { background: var(--btn-orange); }
+.ck-fila.area-barra .ck-cuenta { background: var(--btn-blue, var(--ac)); }
 
 .ck-filas.dos .ck-fila .ck-grid { max-height: calc((100dvh - 190px) / 2); min-height: 150px; overflow-y: auto; padding-right: 2px; }
 .ck-filas:not(.dos) .ck-fila .ck-grid { max-height: calc(100dvh - 170px); overflow-y: auto; }

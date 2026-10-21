@@ -74,7 +74,7 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
       <div className="super-campo">
         <span>{tOr('super.importar.archivo', 'Archivo exportado')}</span>
         <div className="barra">
-          <input ref={entrada} type="file" accept="application/json,.json,application/zip,.zip" style={{ flex: 1, minWidth: 220 }}
+          <input name="file" ref={entrada} type="file" accept="application/json,.json,application/zip,.zip" style={{ flex: 1, minWidth: 220 }}
             disabled={ocupadisimo} onChange={e => cargarArchivo(e.target.files?.[0])} />
           {archivo && <span className="super-chip">{archivo}</span>}
           {crudo && (
@@ -89,7 +89,7 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
 
       <label className="super-campo">
         <span>{tOr('super.importar.pegar', '…o pega el JSON aquí')}</span>
-        <textarea value={crudo} disabled={ocupadisimo} spellCheck={false}
+        <textarea name="crudo" value={crudo} disabled={ocupadisimo} spellCheck={false}
           placeholder='{ "empresa": { "nombre": "…" }, "zonas": [], "mesas": [], "productos": [] }'
           onChange={e => { zipRef.current = null; setCrudo(e.target.value); setCreada(null); setError('') }} />
       </label>
@@ -134,12 +134,12 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
       <div className="super-dos">
         <label className="super-campo">
           <span>{tOr('super.importar.codigoNuevo', 'Código nuevo de la empresa')}</span>
-          <input value={codigo} disabled={ocupadisimo} placeholder="cafe-nuevo"
+          <input name="codigo" value={codigo} disabled={ocupadisimo} placeholder="cafe-nuevo"
             onChange={e => { setCodigo(e.target.value); setCreada(null) }} />
         </label>
         <label className="super-campo">
           <span>{tOr('super.importar.claveInicial', 'Clave inicial de los usuarios recreados (opcional)')}</span>
-          <input value={clave} disabled={ocupadisimo} placeholder="pos12345" onChange={e => setClave(e.target.value)} />
+          <input name="clave" value={clave} disabled={ocupadisimo} placeholder="pos12345" onChange={e => setClave(e.target.value)} />
         </label>
       </div>
 

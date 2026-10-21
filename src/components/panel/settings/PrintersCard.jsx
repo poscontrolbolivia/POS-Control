@@ -102,7 +102,7 @@ export default function PrintersCard({ rol, sesion }) {
       <p className="imp-subtitulo">{tOr('impresoras.gruposTitulo', 'Grupos de comanda')}</p>
       {nuevo !== null && (
         <form className="adm-fila adm-nuevo" onSubmit={e => { e.preventDefault(); crearGrupo() }}>
-          <input autoFocus value={nuevo} maxLength={40} placeholder={t('impresoras.nombreGrupoPlace')} onChange={e => setNuevo(e.target.value)} />
+          <input name="nombre-grupo" autoFocus value={nuevo} maxLength={40} placeholder={t('impresoras.nombreGrupoPlace')} onChange={e => setNuevo(e.target.value)} />
           <button type="submit" className="success" disabled={!nuevo.trim()}>{t('comun.guardar')}</button>
           <button type="button" className="danger" onClick={() => setNuevo(null)}>{t('comun.cancelar')}</button>
         </form>
@@ -116,19 +116,19 @@ export default function PrintersCard({ rol, sesion }) {
           return (
             <section key={g.id} className={'imp-grupo' + (g.tickets ? ' tickets' : '')}>
               <header className="imp-grupo-cab">
-                <input className="imp-nombre" value={g.nombre} maxLength={40} aria-label={t('impresoras.nombreGrupo')}
+                <input name="nombre-grupo" className="imp-nombre" value={g.nombre} maxLength={40} aria-label={t('impresoras.nombreGrupo')}
                   onChange={e => cambiarGrupo(g.id, { nombre: e.target.value })} />
                 <span className="adm-chip">{g.tickets ? t('impresoras.grupoTickets') : t('impresoras.grupoComanda')}</span>
               </header>
               <div className="imp-opciones">
                 <label className="adm-campo"><span>{t('impresoras.anchoLabel')}</span>
-                  <select value={Number(g.ancho) >= 42 ? 48 : 32} onChange={e => cambiarGrupo(g.id, { ancho: Number(e.target.value) })}>
+                  <select name="ancho" value={Number(g.ancho) >= 42 ? 48 : 32} onChange={e => cambiarGrupo(g.id, { ancho: Number(e.target.value) })}>
                     <option value={32}>{t('impresoras.ancho58')}</option>
                     <option value={48}>{t('impresoras.ancho80')}</option>
                   </select>
                 </label>
                 <label className="adm-campo"><span>{t('impresoras.baudLabel')}</span>
-                  <select value={Number(g.baud) || 9600} onChange={e => { fijarBaud(g.id, e.target.value); cambiarGrupo(g.id, { baud: Number(e.target.value) }) }}>
+                  <select name="baud" value={Number(g.baud) || 9600} onChange={e => { fijarBaud(g.id, e.target.value); cambiarGrupo(g.id, { baud: Number(e.target.value) }) }}>
                     <option value={9600}>9600 bps (POS-580)</option>
                     <option value={115200}>115200 bps (Xprinter)</option>
                   </select>
@@ -136,7 +136,7 @@ export default function PrintersCard({ rol, sesion }) {
               </div>
               <div className="imp-opciones">
                 <label className="adm-campo"><span>{t('impresoras.copiasLabel')}</span>
-                  <select value={Math.min(3, Math.max(1, Number(g.copias) || 1))} title={t('impresoras.copiasAyuda')}
+                  <select name="copias" value={Math.min(3, Math.max(1, Number(g.copias) || 1))} title={t('impresoras.copiasAyuda')}
                     onChange={e => cambiarGrupo(g.id, { copias: Number(e.target.value) })}>
                     <option value={1}>1</option>
                     <option value={2}>2</option>
@@ -144,10 +144,10 @@ export default function PrintersCard({ rol, sesion }) {
                   </select>
                 </label>
                 <label className="adm-campo"><span>{t('impresoras.pieLabel')}</span>
-                  <input defaultValue={g.pie || ''} maxLength={120} placeholder={t('impresoras.piePlace')}
+                  <input name="pie" defaultValue={g.pie || ''} maxLength={120} placeholder={t('impresoras.piePlace')}
                     onBlur={e => { const v = e.target.value.trim(); if (v !== String(g.pie || '').trim()) cambiarGrupo(g.id, { pie: v }) }} />
                 </label>
-                <label className="imp-radio"><input type="checkbox" checked={g.corte !== false} onChange={e => cambiarGrupo(g.id, { corte: e.target.checked })} /> {t('impresoras.corte')}</label>
+                <label className="imp-radio"><input name="corte" type="checkbox" checked={g.corte !== false} onChange={e => cambiarGrupo(g.id, { corte: e.target.checked })} /> {t('impresoras.corte')}</label>
               </div>
               <PrinterOutput g={g} cfg={cfg} onCambio={refrescar} />
               <div className="adm-fila">
@@ -203,13 +203,13 @@ export default function PrintersCard({ rol, sesion }) {
           <label className="imp-radio"><input type="radio" name="imp-donde" checked={cfg.modoImpresion !== 'estacion'} onChange={() => guardar({ modoImpresion: 'local' })} /> {t('impresoras.dondeLocal')}</label>
           <label className="imp-radio"><input type="radio" name="imp-donde" checked={cfg.modoImpresion === 'estacion'} onChange={() => guardar({ modoImpresion: 'estacion' })} /> {t('impresoras.dondeEstacion')}</label>
         </div>
-        <p className="adm-sub" style={{ margin: 0 }}>{t('impresoras.dondeAyuda', { modulo: t('app.mod.estacion') })}</p>
+        <p className="adm-sub" style={{ margin: 0 }}>{t('impresoras.dondeAyuda')}</p>
       </div>
 
       <div className="imp-bloque">
         <span className="imp-label">{t('impresoras.ticketsLabel')}</span>
         <div className="adm-fila">
-          <label className="imp-radio"><input type="checkbox" checked={Boolean(cfg.impresoraBeep)} onChange={e => guardar({ impresoraBeep: e.target.checked })} /> {t('impresoras.beep')}</label>
+          <label className="imp-radio"><input name="impresora-beep" type="checkbox" checked={Boolean(cfg.impresoraBeep)} onChange={e => guardar({ impresoraBeep: e.target.checked })} /> {t('impresoras.beep')}</label>
         </div>
         <p className="adm-sub" style={{ margin: 0 }}>{t('impresoras.notaComandas', { boton: t('pedido.enviarCocina') })}</p>
       </div>

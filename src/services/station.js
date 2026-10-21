@@ -49,7 +49,7 @@ export async function autoConfigurarAgente(grupos = []) {
   const nuevos = grupos.filter(g => !pref.salidas?.[g.id])
   if (!escritorio || !nuevos.length) return false
   try {
-    const { predeterminada } = await listarImpresorasAgente()
+    const { predeterminada } = await listarImpresorasAgente({ fondo: true })
     if (!predeterminada) return false
     const salidas = { ...pref.salidas }
     const impresoras = { ...pref.impresoras }

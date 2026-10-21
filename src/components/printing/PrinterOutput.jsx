@@ -64,7 +64,7 @@ export default function PrinterOutput({ g, cfg, onCambio }) {
     <div className="imp-salida">
       <div className="imp-opciones">
         <label className="adm-campo"><span>{t('estacion.salidaLabel')}</span>
-          <select value={salida} onChange={e => { fijarSalida(g.id, e.target.value); cambio() }}>
+          <select name="salida" value={salida} onChange={e => { fijarSalida(g.id, e.target.value); cambio() }}>
             <option value="serial">{t('estacion.salidaSerial')}</option>
             <option value="agente">{t('estacion.salidaAgente')}</option>
             <option value="windows">{t('estacion.salidaWindows')}</option>
@@ -90,7 +90,7 @@ export default function PrinterOutput({ g, cfg, onCambio }) {
         )}
         {salida === 'agente' && (
           <label className="adm-campo"><span>{t('agente.textoLabel')}</span>
-            <select value={modoAgenteDe(g.id)} onChange={e => { fijarModoAgente(g.id, e.target.value); cambio() }}>
+            <select name="modo-agente" value={modoAgenteDe(g.id)} onChange={e => { fijarModoAgente(g.id, e.target.value); cambio() }}>
               <option value="raw">{t('agente.modoRaw')}</option>
               <option value="texto">{t('agente.modoTexto')}</option>
             </select>
@@ -121,7 +121,7 @@ export default function PrinterOutput({ g, cfg, onCambio }) {
           {ag.ok === false && <div className="imp-err">❌ {ag.error} <span className="imp-dato">{t('agente.ayuda')}</span></div>}
           {ag.ok && !ag.impresoras.length && <div className="imp-err">⚠️ {t('agente.sinImpresoras')}</div>}
           <label className="adm-campo imp-url"><span>{t('agente.urlLabel')}</span>
-            <input value={url} onChange={e => setUrl(e.target.value)} onBlur={() => { fijarUrlAgente(url); setUrl(urlAgente()); buscar() }} />
+            <input name="url" value={url} onChange={e => setUrl(e.target.value)} onBlur={() => { fijarUrlAgente(url); setUrl(urlAgente()); buscar() }} />
           </label>
         </>
       )}

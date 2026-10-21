@@ -1,4 +1,4 @@
-import { listasDe, cumple, notaDeUnidad, maxDe, extraDeUnidad, selDeUnidad } from '../src/services/indicaciones.js'
+import { listasDe, cumple, notaDeUnidad, maxDe, extraDeUnidad, selDeUnidad, indicacionesDeUnidad, componerNota, comentarioDe, notaProtegida } from '../src/services/indicaciones.js'
 let ok = 0, mal = 0
 const ck = (n, c) => { if (c) ok++; else { mal++; console.log('✗', n) } }
 const cfg = { indicaciones: [
@@ -19,4 +19,17 @@ const C = { id: 'C', nombre: 'Gaseosa', obligatoria: true, min: 2, max: 2, opcio
 ck('min 2 exacto', !cumple(C, ['Cola']) && cumple(C, ['Cola', 'Lima']) && !cumple(C, ['Cola', 'Lima', 'Cola']))
 ck('extra por unidad', extraDeUnidad([C], { sel: { C: ['Cola', 'Lima'] } }) === 2)
 ck('sel al servidor sin precios', JSON.stringify(selDeUnidad([C], { sel: { C: ['Cola'] } })) === '[{"l":"C","o":"Cola"}]')
+// Indicaciones ≠ comentario: el comentario se edita, las indicaciones no se pueden borrar.
+const u = { sel: { T: ['Azul'], S: ['BBQ'] }, texto: 'sin sal' }
+const ind = indicacionesDeUnidad(L, u)
+ck('indicaciones sin el comentario', ind === 'Azul, BBQ')
+ck('la nota empieza con las indicaciones', notaDeUnidad(L, u).startsWith(ind))
+ck('comentario = nota sin indicaciones', comentarioDe('Azul, BBQ, sin sal', ind) === 'sin sal')
+ck('sin comentario queda vacío', comentarioDe('Azul, BBQ', ind) === '')
+ck('compone indicaciones + comentario', componerNota(ind, 'poco hecha') === 'Azul, BBQ, poco hecha')
+ck('comentario vacío conserva indicaciones', componerNota(ind, '  ') === 'Azul, BBQ')
+ck('borrar todo el texto NO borra las indicaciones', notaProtegida(ind, '') === 'Azul, BBQ')
+ck('texto sin las indicaciones se vuelve a anteponer', notaProtegida(ind, 'sin sal') === 'Azul, BBQ, sin sal')
+ck('texto completo no duplica indicaciones', notaProtegida(ind, 'Azul, BBQ, sin sal') === 'Azul, BBQ, sin sal')
+ck('ítem sin indicaciones: nota libre', notaProtegida('', 'sin cebolla') === 'sin cebolla' && notaProtegida('', '') === '')
 console.log(`indicaciones: ${ok} ✓ ${mal} ✗`); process.exit(mal ? 1 : 0)

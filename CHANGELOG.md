@@ -1,3 +1,34 @@
+# v0.33.7 · Arreglo: las comandas de Barra se veían más pequeñas que las de Cocina
+- **Causa**: la fila de cada área en la pantalla de Cocina usaba el nombre del área como clase (`barra`, `cocina`). `barra` coincide con la clase global `.barra` de `base.css` (la que alinea barras de botones: centrado, envoltura y margen), que se aplicaba por error a la fila entera y hacía que sus tarjetas se encogieran al ancho de su contenido. Cocina no tenía esa regla, por eso solo Barra se veía distinta.
+- **Arreglo**: la fila usa ahora la clase `ck-fila area-<id>` (prefijo propio). Así tampoco chocará una impresora nueva (p. ej. «barra-2», «parrilla») con ninguna clase global. Cocina y Barra usan exactamente las mismas reglas.
+- Verificado: `npm test` completo (nuevo `tests/kitchenClases.mjs`) y `npm run build`. NO probado en pantalla con comandas reales: compara Cocina y Barra tras publicar. Sin SQL nuevo.
+
+# v0.33.6 · Avisos del navegador: campos sin id/name y red local
+- **«A form field element should have an id or name attribute»** (26 avisos en la pantalla abierta; 162 campos en total): **todos los campos de formulario** (input, select, textarea) ahora tienen `name` con un nombre que describe el campo (`nombre`, `precio`, `monto`, `clave`…). Chrome ya no los marca y el autocompletado deja de dar problemas. Sin cambios visibles.
+- **«Ensure that local network requests are compatible with restrictions»** (22 avisos): la app consultaba al **agente de impresión** en `127.0.0.1` sin declarar a dónde apuntaba. Ahora cada petición lleva `targetAddressSpace` (`loopback` para esta PC, `local` para otra PC de la red del local), que es lo que Chrome pide para la restricción de red local. Además se evitan peticiones inútiles: **en celulares sin agente configurado no se hace ninguna**, y si una consulta automática falla no se repite durante **1 minuto** (antes el estado del agente se consultaba cada 15 s aunque no existiera); el sondeo ya no corre con la pestaña oculta.
+- Nota: en PC con agente, Chrome puede pedir **una vez** «Permitir acceso a dispositivos en tu red local» al abrir la sección de impresión; hay que aceptarlo. Es un permiso del navegador, no de la app.
+- Verificado: `npm test` completo (nuevo `tests/agenteLocal.mjs`, 7 ✓), `npm run build` ✓, 0 campos sin id/name en todo `src`. NO probado en el navegador con el panel de Problemas abierto: debería mostrar 0 y 0. Sin SQL nuevo.
+
+# v0.33.5 · Impresión en un solo lugar (Configuración) y pruebas del ticket arregladas
+- **Impresión duplicada**: había una pestaña **Impresión** en el menú de arriba (la «estación») y otra **Impresoras** dentro de Configuración. Ahora **solo queda Configuración → Impresoras**: la estación de impresión (iniciar/detener en esta PC, estado, cola de trabajos, reintentar, guía de la PC del local) pasó **dentro del mismo bloque**, debajo de los grupos y opciones de impresión. No se perdió ninguna función.
+- **Cajeros**: como antes podían usar la estación, en Configuración ven solo el bloque **Impresoras** con la estación (los grupos y opciones siguen siendo solo del admin).
+- **Enlace de la PC de impresión**: `…/#estacion` (el del modo kiosco) sigue funcionando: abre Configuración con Impresoras ya desplegado.
+- Texto de ayuda actualizado en es/en/pt («abre Estación de impresión, más abajo en esta misma sección»).
+- **Pruebas del ticket (12 fallas)**: no era un error del ticket. Node 22 informa idioma inglés y el ticket salía en inglés mientras la prueba medía el español. La prueba ahora fija el idioma de la app. Ticket real sin cambios.
+- Verificado: `npm test` completo, `npm run build` ✓, `npm run i18n` ✓. NO probado en navegador con una PC de impresión real. Sin SQL nuevo.
+
+# v0.33.4 · Arreglo: «Cannot access 'i' before initialization» y aviso de dos clientes
+- **ERROR (cartel rojo «Cannot access … before initialization — estado sincronizado desde la base»)**: al refrescar los datos del negocio, la lista de consultas usaba `nombres` dentro de sí misma antes de que existiera. Ahora los nombres se piden primero y los datos extras esperan a ese resultado, sin perder el paralelismo con el resto. Afectaba al refresco de cuentas, caja y devoluciones (`refrescarNegocio`).
+- **Aviso de consola «Multiple GoTrueClient instances detected»**: el panel de super creaba un segundo cliente de Supabase con la misma llave de sesión. Ahora usa el **mismo cliente** que el resto de la app (misma sesión, sin avisos).
+- Verificado: revisión estática de «uso antes de definir» en todo `src` (0 casos), `npm run build` ✓, tests de i18n, indicaciones, cierre y respaldo ✓. **Aviso**: `tests/ticket.mjs` tiene **12 fallas que ya existían en la v0.33.3** (anchos del ticket y estructura Soft Restaurant); no las causa este cambio y siguen pendientes. NO probado contra tu base: tras publicar, el cartel rojo no debería volver a salir.
+
+# v0.33.3 · Pantalla de carga, comentarios extras e indicaciones protegidas
+- **Pantalla de carga**: al entrar a una empresa ahora se ve una pantalla completa con el aro de carga hasta que llegan los datos (ya no se ve el salón a medias). Si la carga falla muestra el motivo con **Reintentar** y **Salir**.
+- **«Detalles de la cuenta» → «Comentarios extras»** (es/en/pt), también en el ticket («Comentarios»).
+- **BUG: las indicaciones se podían borrar** al editar el texto de un producto en la comanda (✎). Ahora la nota del ítem se separa en **indicaciones** (lo elegido: término, salsas…; **no se editan**, salen con candado 🔒) y **comentario** (texto libre, editable). Para cambiar una indicación hay que quitar el producto y volver a agregarlo. Se quitaron los botones de opciones del editor, que permitían lo mismo por otro camino.
+- **SQL**: columna nueva `cuenta_items.indicaciones` (idempotente, con respaldo/importación incluidos). `agregar_items` la guarda y `poner_nota` **las conserva siempre en el servidor**: aunque llegue un texto vacío o distinto, las indicaciones no se pierden. Los ítems anteriores sin indicaciones guardadas siguen editables como antes. **Pegar el SQL completo antes de publicar la web.**
+- Verificado: SQL en Postgres 16 (base nueva y re-ejecutado, sin errores) y prueba del bug en la base (borrar todo, sustituir, cambiar comentario). `npm run build` ✓, `npm run i18n` ✓ (1510 × 3), tests de indicaciones 22 ✓.
+
 # v0.33.2 · Mesas de ejemplo al entrar a una empresa
 - **Arreglado**: al entrar a una empresa se veían unos segundos las mesas de la demo (Mesa 1–5, Salón/Terraza) y luego se cambiaban por las reales. No era caché: el estado «cargando» copiaba por error los datos de ejemplo del modo demo. Ahora arranca **vacío** (con el aviso «Conectando…») y, si la carga falla, tampoco muestra mesas falsas.
 

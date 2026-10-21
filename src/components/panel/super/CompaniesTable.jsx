@@ -173,7 +173,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
                   <button key={n} type="button" className="success" disabled={ocupadoCuota} onClick={() => aplicarPlan('pago', n)}>+{n} {tOr('super.plan.dias', 'días')}</button>
                 ))}
                 <span className="super-plan-custom">
-                  <input type="number" min="1" max="3650" step="1" inputMode="numeric" value={diasCustom} disabled={ocupadoCuota}
+                  <input name="dias-placeholder" type="number" min="1" max="3650" step="1" inputMode="numeric" value={diasCustom} disabled={ocupadoCuota}
                     placeholder={tOr('super.plan.diasPlaceholder', 'N días')} onChange={ev => setDiasCustom(ev.target.value)} />
                   <button type="button" className="info" disabled={ocupadoCuota || !diasCustom} onClick={() => aplicarPlan('pago', diasCustom)}>{tOr('super.plan.sumar', 'Sumar días')}</button>
                 </span>
@@ -188,7 +188,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
               <div className="super-dos">
                 <label className="super-campo">
                   <span>{tOr('super.cuota.max', 'Máximo de artículos a la venta (vacío = sin límite)')}</span>
-                  <input
+                  <input name="max-articulos"
                     type="number" min="1" step="1" inputMode="numeric" value={form.max}
                     disabled={ocupadoCuota || form.plan === 'pago'}
                     placeholder={form.plan === 'pago' ? tOr('super.cuota.noAplicaPago', 'no aplica: plan de pago') : tOr('super.cuota.ejemplo30', 'p. ej. 20')}
@@ -197,7 +197,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
                 </label>
                 <label className="super-campo">
                   <span>{tOr('super.cuota.maxMiembros', 'Máximo de personas en el equipo (vacío = sin límite)')}</span>
-                  <input
+                  <input name="max-m"
                     type="number" min="1" step="1" inputMode="numeric" value={form.maxM}
                     disabled={ocupadoCuota || form.plan === 'pago'}
                     placeholder={form.plan === 'pago' ? tOr('super.cuota.noAplicaPago', 'no aplica: plan de pago') : tOr('super.cuota.ejemplo3', 'p. ej. 3')}
@@ -206,7 +206,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
                 </label>
                 <label className="super-campo">
                   <span>{tOr('super.cuota.planLabel', 'Plan del comercio')}</span>
-                  <select
+                  <select name="plan"
                     value={form.plan} disabled={ocupadoCuota}
                     onChange={ev => { setForm(f => ({ ...f, plan: ev.target.value })); setCuotaOk('') }}
                   >
@@ -217,7 +217,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
               </div>
               <label className="super-campo">
                 <span>{tOr('super.cuota.nota', 'Nota interna (solo la ve el super)')}</span>
-                <input value={form.notas} disabled={ocupadoCuota}
+                <input name="nota-ejemplo" value={form.notas} disabled={ocupadoCuota}
                   placeholder={tOr('super.cuota.notaEjemplo', 'p. ej. negocia suscripción desde octubre')}
                   onChange={ev => setForm(f => ({ ...f, notas: ev.target.value }))} />
                 <span className="super-ayuda">{tOr('super.cuota.notaAviso', 'Aviso: la RPC de lectura no devuelve la nota guardada; al guardar, lo que escribas aquí la reemplaza (vacío = nota vacía).')}</span>

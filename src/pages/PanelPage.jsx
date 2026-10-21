@@ -4,6 +4,7 @@ import { puede } from '../services/permissions.js'
 import { suscribirVista } from '../services/notifications.js'
 import { useIdioma } from '../i18n/index.jsx'
 import Topbar from '../components/panel/Topbar.jsx'
+import PantallaCarga from '../components/PantallaCarga.jsx'
 import HallPage from '../components/panel/hall/HallPage.jsx'
 import CashPage from '../components/panel/cash/CashPage.jsx'
 import QuickSalePage from '../components/panel/quicksale/QuickSalePage.jsx'
@@ -19,14 +20,13 @@ const InventoryPage = lazy(() => import('../components/panel/inventory/Inventory
 const ReportsPage = lazy(() => import('../components/panel/reports/ReportsPage.jsx'))
 const AlertasPage = lazy(() => import('../components/panel/alerts/AlertasPage.jsx'))
 const SuperPage = lazy(() => import('../components/panel/super/SuperPage.jsx'))
-const StationPage = lazy(() => import('../components/panel/station/StationPage.jsx'))
 
-const VISTAS = { '#salon': 'salon', '#cocina': 'cocina', '#caja': 'caja', '#estacion': 'estacion', '#venta': 'venta', '#menu': 'menu', '#config': 'config', '#auditoria': 'auditoria', '#inventario': 'inventario', '#reportes': 'reportes', '#alertas': 'alertas' }
+const VISTAS = { '#salon': 'salon', '#cocina': 'cocina', '#caja': 'caja', '#estacion': 'config', '#venta': 'venta', '#menu': 'menu', '#config': 'config', '#auditoria': 'auditoria', '#inventario': 'inventario', '#reportes': 'reportes', '#alertas': 'alertas' }
 
 const EN_PANTALLA = ['cocina', 'barra']
 
 export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
-  const { s } = useStore()
+  const { s, error } = useStore()
   const { t, tOr } = useIdioma()
   const enPantalla = EN_PANTALLA.includes(sesion.rol)
 
@@ -44,7 +44,6 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   if (puede(sesion.rol, 'ver_alertas')) modulos.push({ id: 'alertas', nombre: tOr('app.mod.alertas', 'Alertas'), contador: contarAbiertas(s.alertas) })
   if (puede(sesion.rol, 'gestionar_menu')) modulos.push({ id: 'menu', nombre: t('app.mod.menu') })
   if (puede(sesion.rol, 'ver_reportes')) modulos.push({ id: 'reportes', nombre: tOr('app.mod.reportes', 'Reportes') })
-  if (sesion.supabase && (sesion.rol === 'admin' || sesion.rol === 'cajero')) modulos.push({ id: 'estacion', nombre: t('app.mod.estacion') })
   if (puede(sesion.rol, 'ver_inventario')) modulos.push({ id: 'inventario', nombre: tOr('app.mod.inventario', 'Inventario') })
   if (puede(sesion.rol, 'ver_auditoria')) modulos.push({ id: 'auditoria', nombre: tOr('app.mod.auditoria', 'Auditoría') })
   modulos.push({ id: 'config', nombre: t('app.mod.config') })
@@ -74,6 +73,8 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   useEffect(() => {
     const aplicar = hash => {
       const destino = VISTAS[hash]
+      // El enlace viejo de la PC de impresión (#estacion) ahora abre Configuración con Impresoras desplegado.
+      if (hash === '#estacion') { try { localStorage.setItem('pos-cfg-impresoras', '1') } catch { /* noop */ } }
       if (destino && permitidos.split(',').includes(destino)) setModulo(destino)
     }
     aplicar(window.location.hash)
@@ -87,6 +88,9 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
     }
   }, [permitidos])
 
+  // Mientras llegan los datos de la empresa: pantalla de carga completa (sin salto de mesas de relleno).
+  if (s._supCargando) return <PantallaCarga error={error} onSalir={onSalir} />
+
   return (
     <div className="app">
       <Topbar sesion={{ ...sesion, empresa: sesion.empresa || s.config.nombre }} modulo={modulo} modulos={modulos}
@@ -97,14 +101,12 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
           <button className="auth-enlace" type="button" onClick={onVolver}>{tOr('super.banner.volver', 'volver a mi empresa')}</button>
         </div>
       )}
-      {s._supCargando && <div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}
       <Suspense fallback={<div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}>
         {modulo === 'salon' && <HallPage rol={sesion.rol} sesion={sesion} foco={foco} />}
         {modulo === 'caja' && <CashPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'venta' && <QuickSalePage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'cocina' && <KitchenPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'menu' && <MenuPage rol={sesion.rol} />}
-        {modulo === 'estacion' && <StationPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'inventario' && <InventoryPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'reportes' && <ReportsPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'alertas' && <AlertasPage rol={sesion.rol} sesion={sesion} onAbrirCuenta={abrirDeAlerta} />}

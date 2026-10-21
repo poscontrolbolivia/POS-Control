@@ -76,7 +76,7 @@ function EditorOpciones({ opciones, pendiente, setPendiente, onAgregar, onQuitar
         </span>
       )}
       <span className="mn-pill-add">
-        <input type="text" value={pendiente} maxLength={40} placeholder={place}
+        <input name="pendiente" type="text" value={pendiente} maxLength={40} placeholder={place}
           onChange={e => setPendiente(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onAgregar() } }} />
         <button type="button" className="mn-circ" aria-label={ariaAgregar} onClick={onAgregar}>＋</button>
@@ -270,7 +270,7 @@ export default function MenuPage({ rol }) {
     <span className="menu-areas" role="group" aria-label={tOr('areas.label', 'Imprimir en')}>
       {areasIds.map(id => (
         <label key={id} className="menu-area" title={tOr('areas.ayuda', 'Marca todos los grupos donde se imprime este artículo')}>
-          <input type="checkbox" checked={lista.includes(id)} onChange={() => alternarArea(lista, setLista, id)} />
+          <input name="area-impresion" type="checkbox" checked={lista.includes(id)} onChange={() => alternarArea(lista, setLista, id)} />
           {nombreArea(id)}
         </label>
       ))}
@@ -516,15 +516,15 @@ export default function MenuPage({ rol }) {
   // Controles de costo en la barra masiva (se reutilizan con o sin selección).
   const controlesCosto = veCostos && (
     <span className="adm-masivo-grupo">
-      <input className="adm-num" type="text" inputMode="numeric" autoComplete="off" value={costoPctTmp}
+      <input name="costo-pct" className="adm-num" type="text" inputMode="numeric" autoComplete="off" value={costoPctTmp}
         onChange={e => setCostoPctTmp(e.target.value.replace(/\D/g, '').slice(0, 3))}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); aplicarCostoPct() } }}
         onFocus={e => e.target.select()} placeholder={tOr('menu.costoPctPlace', 'Costo % del precio')}
         title={tOr('menu.costoPctAyuda', '¿Qué porcentaje del precio será el costo? Ej.: 40 para el 40 %')}
         aria-label={tOr('menu.costoPctPlace', 'Costo % del precio')} />
       <button type="button" className="info" onClick={aplicarCostoPct}>{tOr('menu.costoPctBtn', 'Asignar costo')}</button>
-      <label className="mn-costo-reemp"><input type="checkbox" checked={costoReemplazar} onChange={e => setCostoReemplazar(e.target.checked)} /> {tOr('menu.costoPctReemplazar', 'Reemplazar también los que ya tienen costo')}</label>
-      <input className="adm-num" type="text" inputMode="numeric" autoComplete="off" value={margenTmp}
+      <label className="mn-costo-reemp"><input name="costo-reemplazar" type="checkbox" checked={costoReemplazar} onChange={e => setCostoReemplazar(e.target.checked)} /> {tOr('menu.costoPctReemplazar', 'Reemplazar también los que ya tienen costo')}</label>
+      <input name="masivo-margen" className="adm-num" type="text" inputMode="numeric" autoComplete="off" value={margenTmp}
         onChange={e => setMargenTmp(e.target.value.replace(/\D/g, '').slice(0, 2))}
         onFocus={e => e.target.select()} placeholder={tOr('menu.masivoMargen', 'Margen %')} aria-label={tOr('menu.masivoMargen', 'Margen %')} />
       <button type="button" className="info" onClick={simularMargenMasiva} disabled={masivaCarg !== null}>{masivaCarg === 'margen' ? tOr('menu.simulando', 'Simulando…') : tOr('menu.simular', 'Simular')}</button>
@@ -581,7 +581,7 @@ export default function MenuPage({ rol }) {
 
       {!vacio && (
         <div className="adm-fila menu-barra mn-barra">
-          <input className="mn-buscar" type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+          <input name="buscar" className="mn-buscar" type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)}
             placeholder={tOr('items.buscarPlace', 'Buscar en grupos, productos e indicaciones…')}
             aria-label={tOr('items.buscarPlace', 'Buscar en grupos, productos e indicaciones…')} />
           {tipo === 'productos' && (
@@ -621,17 +621,17 @@ export default function MenuPage({ rol }) {
         <div className="adm-masivo">
           <span className="adm-chip">{t('menu.masivoSel', { n: sel.size })}</span>
           <span className="adm-masivo-grupo">
-            <input className="adm-num" type="text" inputMode="decimal" autoComplete="off" value={pctTmp}
+            <input name="masivo-porcentaje" className="adm-num" type="text" inputMode="decimal" autoComplete="off" value={pctTmp}
               onChange={e => setPctTmp(limpiarPct(e.target.value))} onBlur={() => setPctTmp(normalizarPct(pctTmp))}
               onFocus={e => e.target.select()} placeholder={t('menu.masivoPorcentaje')} aria-label={t('menu.masivoPorcentaje')} />
             <button type="button" className="ghost" onClick={aplicarPorcentaje}>{t('menu.masivoAplicar')}</button>
-            <input className="adm-num" type="text" inputMode="decimal" autoComplete="off" value={fijoTmp}
+            <input name="masivo-fijo" className="adm-num" type="text" inputMode="decimal" autoComplete="off" value={fijoTmp}
               onChange={e => setFijoTmp(limpiarMonto(e.target.value))} onBlur={() => setFijoTmp(normalizarMonto(fijoTmp))}
               onFocus={e => e.target.select()} placeholder={t('menu.masivoFijo')} aria-label={t('menu.masivoFijo')} />
             <button type="button" className="ghost" onClick={aplicarPrecioFijo}>{t('menu.masivoAplicar')}</button>
           </span>
           <span className="adm-masivo-grupo">
-            <select value={seccionTmp} onChange={e => setSeccionTmp(e.target.value)} aria-label={t('menu.masivoSeccion')}>
+            <select name="masivo-seccion" value={seccionTmp} onChange={e => setSeccionTmp(e.target.value)} aria-label={t('menu.masivoSeccion')}>
               <option value="">{t('menu.masivoSeccion')}</option>
               {secciones.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
             </select>
@@ -644,7 +644,7 @@ export default function MenuPage({ rol }) {
           <button type="button" className="success" onClick={() => aplicarASeleccion({ activo: true })}>{t('menu.activar')}</button>
           <button type="button" className="warning" onClick={() => aplicarASeleccion({ activo: false })}>{t('menu.desactivar')}</button>
           <span className="adm-masivo-grupo">
-            <input value={motivoTmp} maxLength={60} onChange={e => setMotivoTmp(e.target.value)} placeholder={t('agotado.motivoPlace')} aria-label={t('agotado.motivoPlace')} />
+            <input name="motivo" value={motivoTmp} maxLength={60} onChange={e => setMotivoTmp(e.target.value)} placeholder={t('agotado.motivoPlace')} aria-label={t('agotado.motivoPlace')} />
             <button type="button" className="danger" onClick={() => { marcarAgotado(idsSel(), { motivo: motivoTmp }); setMotivoTmp('') }}>{t('agotado.hoy')}</button>
             <button type="button" className="ghost" onClick={() => marcarAgotado(idsSel(), null)}>{t('agotado.disponible')}</button>
           </span>
@@ -717,7 +717,7 @@ export default function MenuPage({ rol }) {
                 {prods.length === 0 ? <div className="adm-vacio">{hayBusqueda ? t('menu.sinResultados') : t('menu.sinProductos')}</div> : (
                   <ul className="mn-lista">
                     <li className={'mn-fila mn-fila-cab' + (conDato ? ' con-dato' : '')}>
-                      <input type="checkbox" className="adm-sel" aria-label={t('menu.todoSeccion')}
+                      <input name="todo-seccion" type="checkbox" className="adm-sel" aria-label={t('menu.todoSeccion')}
                         checked={prods.length > 0 && prods.every(p => sel.has(p.id))} onChange={e => selSeccion(prods, e.target.checked)} />
                       <button type="button" className="mn-orden" onClick={() => ordenarPor('numero')}>{t('menu.colNum')}{flecha('numero')}</button>
                       <button type="button" className="mn-orden mn-orden-nombre" onClick={() => ordenarPor('nombre')}>{t('menu.colNombre')}{flecha('nombre')}</button>
@@ -732,7 +732,7 @@ export default function MenuPage({ rol }) {
                     </li>
                     {prods.map(p => (
                       <li key={p.id} className={'mn-fila' + (p.activo ? '' : ' inactivo') + (agotados[p.id] ? ' agotado' : '') + (sel.has(p.id) ? ' sel' : '') + (conDato ? ' con-dato' : '')}>
-                        <input type="checkbox" className="adm-sel" checked={sel.has(p.id)} onChange={() => alternarSel(p.id)} aria-label={t('menu.seleccionar')} />
+                        <input name="seleccionar" type="checkbox" className="adm-sel" checked={sel.has(p.id)} onChange={() => alternarSel(p.id)} aria-label={t('menu.seleccionar')} />
                         <span className="mn-num">#{numeroDe(p)}</span>
                         <span className="mn-nombre">{p.nombre}
                           {!p.activo && <small> {t('menu.oculto')}</small>}
@@ -756,7 +756,7 @@ export default function MenuPage({ rol }) {
         <Ventana titulo={vInd.id ? t('indic.editar') : t('indic.nueva')} onCerrar={() => setVInd(null)}>
           <form className="mn-form" onSubmit={guardarInd}>
             <label className="adm-campo"><span>{t('menu.nombre')}</span>
-              <input autoFocus value={vInd.nombre} maxLength={60} onChange={e => setVInd({ ...vInd, nombre: e.target.value })} placeholder={t('indic.nombrePlace')} />
+              <input name="nombre" autoFocus value={vInd.nombre} maxLength={60} onChange={e => setVInd({ ...vInd, nombre: e.target.value })} placeholder={t('indic.nombrePlace')} />
             </label>
             <div className="adm-campo"><span>{tOr('items.indOpciones', 'Opciones de la lista')}</span>
               <EditorOpciones
@@ -768,16 +768,16 @@ export default function MenuPage({ rol }) {
             </div>
             <div className="mn-reglas">
               <label className="mn-check" title={tOr('items.indObligarAyuda', 'Si es obligatoria, el mesero debe elegir al menos una opción al pedir.')}>
-                <input type="checkbox" checked={vInd.obligatoria} onChange={e => setVInd({ ...vInd, obligatoria: e.target.checked })} />
+                <input name="obligatoria" type="checkbox" checked={vInd.obligatoria} onChange={e => setVInd({ ...vInd, obligatoria: e.target.checked })} />
                 <span>{t('indic.obligatoria')}</span>
               </label>
               <div className="mn-dos">
                 <label className="adm-campo"><span>{t('indic.min')}</span>
-                  <input type="text" inputMode="numeric" autoComplete="off" value={!vInd.min ? '' : String(vInd.min)} placeholder="1"
+                  <input name="v-ind" type="text" inputMode="numeric" autoComplete="off" value={!vInd.min ? '' : String(vInd.min)} placeholder="1"
                     onChange={e => setVInd({ ...vInd, min: e.target.value.replace(/\D/g, '').slice(0, 2) })} onFocus={e => e.target.select()} />
                 </label>
                 <label className="adm-campo"><span>{t('indic.max')}</span>
-                  <input type="text" inputMode="numeric" autoComplete="off" value={vInd.max === 0 ? '' : String(vInd.max)} placeholder={t('indic.sinLimite')}
+                  <input name="sin-limite" type="text" inputMode="numeric" autoComplete="off" value={vInd.max === 0 ? '' : String(vInd.max)} placeholder={t('indic.sinLimite')}
                     onChange={e => setVInd({ ...vInd, max: e.target.value.replace(/\D/g, '').slice(0, 2) })} onFocus={e => e.target.select()} />
                 </label>
               </div>
@@ -789,10 +789,10 @@ export default function MenuPage({ rol }) {
                 {opcInd.map(o => (
                   <div key={o} className="mn-dos mn-det">
                     <span className="mn-nombre">{o}</span>
-                    <input type="text" inputMode="decimal" autoComplete="off" aria-label={t('indic.extra')} placeholder={t('indic.extra')}
+                    <input name="extra" type="text" inputMode="decimal" autoComplete="off" aria-label={t('indic.extra')} placeholder={t('indic.extra')}
                       value={vInd.detalle?.[o]?.extra ?? ''} onFocus={e => e.target.select()}
                       onChange={e => setVInd(v => ({ ...v, detalle: { ...(v.detalle || {}), [o]: { ...(v.detalle?.[o] || {}), extra: limpiarMonto(e.target.value) } } }))} />
-                    <select aria-label={t('indic.producto')} value={vInd.detalle?.[o]?.producto_id || ''}
+                    <select name="producto" aria-label={t('indic.producto')} value={vInd.detalle?.[o]?.producto_id || ''}
                       onChange={e => setVInd(v => ({ ...v, detalle: { ...(v.detalle || {}), [o]: { ...(v.detalle?.[o] || {}), producto_id: e.target.value } } }))}>
                       <option value="">{t('indic.sinProducto')}</option>
                       {s.productos.map(p => <option key={p.id} value={p.id}>#{numeroDe(p)} {p.nombre}</option>)}
@@ -854,7 +854,7 @@ export default function MenuPage({ rol }) {
         <Ventana titulo={vGrupo.id ? t('menu.grupoEditar') : t('menu.grupoNuevo')} onCerrar={() => setVGrupo(null)}>
           <form className="mn-form" onSubmit={guardarGrupo}>
             <label className="adm-campo"><span>{t('menu.grupoNombre')}</span>
-              <input autoFocus value={vGrupo.nombre} maxLength={80} onChange={e => setVGrupo({ ...vGrupo, nombre: e.target.value })} placeholder={t('menu.grupoPlace')} />
+              <input name="grupo" autoFocus value={vGrupo.nombre} maxLength={80} onChange={e => setVGrupo({ ...vGrupo, nombre: e.target.value })} placeholder={t('menu.grupoPlace')} />
             </label>
             <p className="mn-nota">{tOr('menu.grupoImpAyuda', 'La impresora de cada grupo se elige en Configuración → Impresión. Ahí una sección puede mandar a varios grupos a la vez.')}</p>
             <div className="mn-pie">
@@ -878,16 +878,16 @@ export default function MenuPage({ rol }) {
           <form className="mn-form" onSubmit={guardarProducto}>
             {prodEditando && <p className="mn-itemnum">{t('menu.itemNum', { n: numeroDe(prodEditando) })}</p>}
             <label className="adm-campo"><span>{t('menu.nombre')}</span>
-              <input autoFocus value={vProd.nombre} maxLength={120} onChange={e => setVProd({ ...vProd, nombre: e.target.value })} placeholder={t('menu.nombreProducto')} />
+              <input name="nombre-producto" autoFocus value={vProd.nombre} maxLength={120} onChange={e => setVProd({ ...vProd, nombre: e.target.value })} placeholder={t('menu.nombreProducto')} />
             </label>
             <div className="mn-dos">
               <label className="adm-campo"><span>{t('menu.precioMoneda', { moneda })}</span>
-                <input type="text" inputMode="decimal" autoComplete="off" value={vProd.precio}
+                <input name="precio" type="text" inputMode="decimal" autoComplete="off" value={vProd.precio}
                   onChange={e => setVProd({ ...vProd, precio: limpiarMonto(e.target.value) })}
                   onBlur={() => setVProd(x => ({ ...x, precio: normalizarMonto(x.precio) }))} onFocus={e => e.target.select()} />
               </label>
               <label className="adm-campo"><span>{t('menu.grupoLabel')}</span>
-                <select value={vProd.seccionId} onChange={e => setVProd({ ...vProd, seccionId: e.target.value, areas: areasPorDefecto(prodEditando, e.target.value) })}>
+                <select name="seccion-id" value={vProd.seccionId} onChange={e => setVProd({ ...vProd, seccionId: e.target.value, areas: areasPorDefecto(prodEditando, e.target.value) })}>
                   {secciones.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
                 </select>
               </label>
@@ -930,13 +930,13 @@ export default function MenuPage({ rol }) {
                 <>
                   <div className="mn-dos">
                     <label className="adm-campo"><span>{tOr('menu.campoCosto', `Costo (${moneda})`, { moneda })}</span>
-                      <input type="text" inputMode="decimal" autoComplete="off" value={vProd.costo}
+                      <input name="costo" type="text" inputMode="decimal" autoComplete="off" value={vProd.costo}
                         onChange={e => setVProd({ ...vProd, costo: limpiarMonto(e.target.value) })}
                         onBlur={() => setVProd(x => ({ ...x, costo: normalizarMonto(x.costo) }))}
                         onFocus={e => e.target.select()} placeholder="0.00" />
                     </label>
                     <label className="adm-campo"><span>{tOr('menu.campoProveedor', 'Proveedor')}</span>
-                      <select value={vProd.proveedorId || ''} onChange={e => setVProd({ ...vProd, proveedorId: e.target.value || null })}>
+                      <select name="proveedor-id" value={vProd.proveedorId || ''} onChange={e => setVProd({ ...vProd, proveedorId: e.target.value || null })}>
                         <option value="">{tOr('menu.sinProveedor', '— sin proveedor —')}</option>
                         {provOpciones(vProd.proveedorId).map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
                       </select>
@@ -969,7 +969,7 @@ export default function MenuPage({ rol }) {
                   ) : (
                     <>
                       <label className="adm-btn-foto">
-                        <input type="file" accept="image/*" onChange={e => subirFoto(prodEditando, e)} />
+                        <input name="file" type="file" accept="image/*" onChange={e => subirFoto(prodEditando, e)} />
                         {prodEditando.imagen_path || prodEditando.imagen_dataurl ? tOr('menu.cambiarFoto', 'Cambiar foto') : tOr('menu.subirFoto', 'Subir foto')}
                       </label>
                       {urlImagenProducto(prodEditando) && <button type="button" className="danger" onClick={() => quitarFoto(prodEditando)}>{tOr('menu.quitarFoto', 'Quitar foto')}</button>}
@@ -985,7 +985,7 @@ export default function MenuPage({ rol }) {
                     <button type="button" className="success" title={agotados[prodEditando.id]?.motivo || undefined} onClick={() => marcarAgotado([prodEditando.id], null)}>{t('agotado.disponible')}</button>
                   ) : (
                     <>
-                      <input className="adm-motivo" maxLength={60} value={motivoTmp} onChange={e => setMotivoTmp(e.target.value)} placeholder={t('agotado.motivoPlace')} aria-label={t('agotado.motivoPlace')} />
+                      <input name="motivo" className="adm-motivo" maxLength={60} value={motivoTmp} onChange={e => setMotivoTmp(e.target.value)} placeholder={t('agotado.motivoPlace')} aria-label={t('agotado.motivoPlace')} />
                       <button type="button" className="danger" onClick={() => { marcarAgotado([prodEditando.id], { motivo: motivoTmp }); setMotivoTmp('') }}>{t('agotado.hoy')}</button>
                     </>
                   )}

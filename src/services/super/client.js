@@ -1,7 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
-import { SUPABASE_URL, SUPABASE_ANON_KEY, USAR_SUPABASE } from '../config.js'
-
-export const sb = USAR_SUPABASE ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null
+// Mismo cliente que el resto de la app (misma sesión): un segundo createClient con la misma llave de
+// almacenamiento provoca el aviso «Multiple GoTrueClient instances detected».
+import { sb } from '../supabaseClient.js'
+export { sb }
 
 export const CONFIG_FALTA = 'Falta la configuración de Supabase (SUPABASE_URL / SUPABASE_ANON_KEY en src/services/config.js). El panel de super necesita una base real.'
 export const SIN_SESION = 'No hay sesión iniciada. Entra en POS Control con el correo del super administrador y vuelve a intentarlo.'

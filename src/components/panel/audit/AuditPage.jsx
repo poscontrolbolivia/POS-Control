@@ -199,25 +199,25 @@ export default function AuditPage({ rol, sesion }) {
         ) : (
           <>
             <div className="aud-filtros">
-              <input className="aud-buscar" type="search" autoComplete="off"
+              <input name="buscar-pista" className="aud-buscar" type="search" autoComplete="off"
                 placeholder={tOr('auditoria.buscarPista', 'Buscar persona, acción o registro…')}
                 value={search} onChange={e => setSearch(e.target.value)} />
               <label className="aud-filtro">
                 <span>{tOr('auditoria.filtroRango', 'Rango')}</span>
-                <select value={dias} disabled={cargando} onChange={e => cambiarDias(Number(e.target.value))}>
+                <select name="dias" value={dias} disabled={cargando} onChange={e => cambiarDias(Number(e.target.value))}>
                   {RANGOS_DIAS.map(n => <option key={n} value={n}>{tOr('auditoria.dias.' + n, `${n} días`)}</option>)}
                 </select>
               </label>
               <label className="aud-filtro">
                 <span>{tOr('auditoria.filtroAccion', 'Acción')}</span>
-                <select value={filtroAccion} onChange={e => setFiltroAccion(e.target.value)}>
+                <select name="filtro-accion" value={filtroAccion} onChange={e => setFiltroAccion(e.target.value)}>
                   <option value="todas">{tOr('auditoria.todasAcciones', 'Todas las acciones')}</option>
                   {accionesDisponibles.map(a => <option key={a} value={a}>{etiquetaAccion(a, tOr)}</option>)}
                 </select>
               </label>
               <label className="aud-filtro">
                 <span>{tOr('auditoria.filtroActor', 'Persona')}</span>
-                <select value={filtroActor} onChange={e => setFiltroActor(e.target.value)}>
+                <select name="filtro-actor" value={filtroActor} onChange={e => setFiltroActor(e.target.value)}>
                   <option value="todos">{tOr('auditoria.todosActores', 'Todas las personas')}</option>
                   {actoresDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>

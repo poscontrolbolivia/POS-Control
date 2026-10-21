@@ -73,8 +73,8 @@ export default function ClosingsHistory({ moneda = 'Bs' }) {
       <div className="caja-head"><h2>{t('cierres.titulo')}</h2></div>
       <p className="caja-nota">{t('cierres.ayuda')}</p>
       <div className="cierres-filtros">
-        <label>{t('cierres.desde')}<input type="date" value={desde} max={hasta} onChange={e => setDesde(e.target.value)} /></label>
-        <label>{t('cierres.hasta')}<input type="date" value={hasta} min={desde} onChange={e => setHasta(e.target.value)} /></label>
+        <label>{t('cierres.desde')}<input name="desde" type="date" value={desde} max={hasta} onChange={e => setDesde(e.target.value)} /></label>
+        <label>{t('cierres.hasta')}<input name="hasta" type="date" value={hasta} min={desde} onChange={e => setHasta(e.target.value)} /></label>
         <button type="button" className="info" disabled={cargando || !desde || !hasta} onClick={() => buscar()}>{cargando ? t('cierres.cargando') : t('cierres.buscar')}</button>
       </div>
       <div className="cierres-rapidos">

@@ -29,10 +29,29 @@ export const selDeUnidad = (listas, u) => listas.filter(l => !l.legacy).flatMap(
 // Una unidad cumple una lista si eligió entre min y max opciones.
 export const cumple = (l, elegidas) => (elegidas || []).length >= minDe(l) && (elegidas || []).length <= maxDe(l)
 
+// INDICACIONES = lo elegido en las listas (término, salsas…). COMENTARIO = el texto libre del mesero.
+// La nota del ítem es «indicaciones, comentario». Las indicaciones no se editan después; el comentario sí.
+export const indicacionesDeUnidad = (listas, unidad) => listas.flatMap(l => unidad.sel[l.id] || []).join(', ').slice(0, MAX_NOTA)
+
+export const componerNota = (indicaciones, comentario) => {
+  const ind = String(indicaciones || '').trim()
+  const com = String(comentario || '').trim()
+  return (ind && com ? `${ind}, ${com}` : ind || com).slice(0, MAX_NOTA)
+}
+
+// El comentario es lo que queda de la nota quitando el comienzo que son las indicaciones.
+export const comentarioDe = (nota, indicaciones) => {
+  const n = String(nota || '')
+  const ind = String(indicaciones || '')
+  if (!ind) return n
+  return n.startsWith(ind) ? n.slice(ind.length).replace(/^[\s,]+/, '') : n
+}
+
+// Aunque llegue un texto sin las indicaciones, siempre se conservan.
+export const notaProtegida = (indicaciones, nota) => (indicaciones ? componerNota(indicaciones, comentarioDe(nota, indicaciones)) : String(nota || '').slice(0, MAX_NOTA))
+
 export function notaDeUnidad(listas, unidad) {
-  const partes = listas.flatMap(l => unidad.sel[l.id] || [])
-  if (unidad.texto?.trim()) partes.push(unidad.texto.trim())
-  return partes.join(', ').slice(0, MAX_NOTA)
+  return componerNota(indicacionesDeUnidad(listas, unidad), unidad.texto)
 }
 
 export const nuevaLista = () => ({ nombre: '', obligatoria: true, max: 1, opciones: [], secciones: [], productos: [] })

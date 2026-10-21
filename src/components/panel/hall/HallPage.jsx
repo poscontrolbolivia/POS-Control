@@ -267,7 +267,7 @@ export default function HallPage({ rol, sesion, foco }) {
             </button>
             {zonas.map((z, i) => (ren && ren.id === z.id ? (
               <span className="zren" key={z.id}>
-                <input autoFocus className="zinput" value={ren.nombre} maxLength={LARGO_ZONA}
+                <input name="renombrar" autoFocus className="zinput" value={ren.nombre} maxLength={LARGO_ZONA}
                   aria-label={t('salon.renombrar')}
                   onChange={e => setRen({ ...ren, nombre: e.target.value })}
                   onKeyDown={e => { if (e.key === 'Enter') guardarRen(); if (e.key === 'Escape') setRen(null) }} />
@@ -331,7 +331,7 @@ export default function HallPage({ rol, sesion, foco }) {
 
         {edit && admin && nueva !== null && (
           <div className="barra zona-alta">
-            <input autoFocus className="zinput" placeholder={t('salon.nuevaZonaPlace')} value={nueva} maxLength={LARGO_ZONA}
+            <input name="nueva-zona" autoFocus className="zinput" placeholder={t('salon.nuevaZonaPlace')} value={nueva} maxLength={LARGO_ZONA}
               aria-label={t('salon.nuevaZona')}
               onChange={e => setNueva(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') crearZona(); if (e.key === 'Escape') setNueva(null) }} />
@@ -355,10 +355,10 @@ export default function HallPage({ rol, sesion, foco }) {
             <div className="me-cab"><b>{t('salon.mesaSel')}</b><span className="me-nom">{mesaSel.nombre}</span></div>
             <div className="me-grid">
               <label className="me-campo me-ancho2"><span>{t('pedido.mesaCorta')}</span>
-                <input value={mesaSel.nombre} maxLength={LARGO_MESA} onChange={e => renombrarMesa(e.target.value)} />
+                <input name="nombre" value={mesaSel.nombre} maxLength={LARGO_MESA} onChange={e => renombrarMesa(e.target.value)} />
               </label>
               <label className="me-campo"><span>{t('salon.zona')}</span>
-                <select value={mesaSel.zona ?? ''} onChange={e => cambiarZona(e.target.value)}>
+                <select name="zona" value={mesaSel.zona ?? ''} onChange={e => cambiarZona(e.target.value)}>
                   <option value="">{t('salon.sinZona')}</option>
                   {zonas.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}
                 </select>
@@ -481,9 +481,9 @@ export default function HallPage({ rol, sesion, foco }) {
             )}
             {cli && (
               <div className="llevar-form">
-                <input autoFocus value={cli.nombre} maxLength={80} placeholder={t('salon.llevarNombre')} aria-label={t('salon.llevarNombre')}
+                <input name="llevar-nombre" autoFocus value={cli.nombre} maxLength={80} placeholder={t('salon.llevarNombre')} aria-label={t('salon.llevarNombre')}
                   onChange={e => setCli({ ...cli, nombre: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') guardarCli(); if (e.key === 'Escape') setCli(null) }} />
-                <input value={cli.tel} maxLength={40} inputMode="tel" placeholder={t('salon.llevarTel')} aria-label={t('salon.llevarTel')}
+                <input name="llevar-tel" value={cli.tel} maxLength={40} inputMode="tel" placeholder={t('salon.llevarTel')} aria-label={t('salon.llevarTel')}
                   onChange={e => setCli({ ...cli, tel: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') guardarCli(); if (e.key === 'Escape') setCli(null) }} />
                 <button className="primary" onClick={guardarCli}>{t('comun.guardar')}</button>
                 <button className="ghost" onClick={() => setCli(null)}>{t('comun.cancelar')}</button>
@@ -510,11 +510,11 @@ export default function HallPage({ rol, sesion, foco }) {
                     <div className="llevar-mesa">
                       {mesasLibres.length === 0 ? <small>{t('salon.llevarSinMesas')}</small> : (
                         <>
-                          <select value={aMesa.mesaId} aria-label={t('salon.llevarElegirMesa')} onChange={e => setAMesa({ ...aMesa, mesaId: e.target.value })}>
+                          <select name="llevar-elegir-mesa" value={aMesa.mesaId} aria-label={t('salon.llevarElegirMesa')} onChange={e => setAMesa({ ...aMesa, mesaId: e.target.value })}>
                             <option value="">{t('salon.llevarElegirMesa')}</option>
                             {mesasLibres.map(m => <option key={m.id} value={m.id}>{m.nombre} · {zonaNombre(m.zona)}</option>)}
                           </select>
-                          <input type="number" min={COM_MIN} max={COM_MAX} value={aMesa.com} aria-label={t('pedido.comensales')} onChange={e => setAMesa({ ...aMesa, com: e.target.value })} />
+                          <input name="comensales" type="number" min={COM_MIN} max={COM_MAX} value={aMesa.com} aria-label={t('pedido.comensales')} onChange={e => setAMesa({ ...aMesa, com: e.target.value })} />
                           <button className="primary" disabled={!aMesa.mesaId} onClick={pasarAMesa}>{t('salon.llevarMover')}</button>
                         </>
                       )}

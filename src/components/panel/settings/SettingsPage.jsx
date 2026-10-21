@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
 import LanguageSelect from '../../login/LanguageSelect.jsx'
 import ThemeSelect from '../../login/ThemeSelect.jsx'
 import PrintersCard from './PrintersCard.jsx'
+const StationPage = lazy(() => import('../station/StationPage.jsx'))
 import UsersPage from '../users/UsersPage.jsx'
 import PlanCard from './PlanCard.jsx'
 import ClosingsHistory from '../cash/ClosingsHistory.jsx'
@@ -56,6 +57,11 @@ export default function SettingsPage({ rol, sesion }) {
       <div className="adm-panel">
         <div className="adm-cab"><h2>{t('config.titulo')}</h2></div>
         <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')}>{cuerpoPreferencias}</Bloque>
+        {rol === 'cajero' && sesion?.supabase && (
+          <Bloque id="impresoras" icono="🖨️" titulo={t('config.impresoras')}>
+            <Suspense fallback={null}><StationPage embebida rol={rol} sesion={sesion} /></Suspense>
+          </Bloque>
+        )}
       </div>
     )
   }
@@ -102,51 +108,51 @@ export default function SettingsPage({ rol, sesion }) {
           {sesion && <p className="adm-sub">{t('config.sesionLabel')} <b>{sesion.nombre}</b> ({tOr('rol.' + sesion.rol, sesion.rol)}) · {sesion.empresa}</p>}
           <label className="adm-campo">
             <span>{t('config.nombreLabel')}</span>
-            <input value={form.nombre} onChange={set('nombre')} placeholder={t('comun.miNegocio')} />
+            <input name="mi-negocio" value={form.nombre} onChange={set('nombre')} placeholder={t('comun.miNegocio')} />
           </label>
           <p className="adm-sub">{t('config.ticketEncabezado')}</p>
           <div className="adm-fila2">
             <label className="adm-campo">
               <span>{t('config.sucursalLabel')}</span>
-              <input value={form.sucursal} onChange={set('sucursal')} placeholder={t('config.sucursalPlace')} maxLength={40} />
+              <input name="sucursal" value={form.sucursal} onChange={set('sucursal')} placeholder={t('config.sucursalPlace')} maxLength={40} />
             </label>
             <label className="adm-campo">
               <span>{t('config.telefonoLabel')}</span>
-              <input value={form.telefono} onChange={set('telefono')} maxLength={24} inputMode="tel" />
+              <input name="telefono" value={form.telefono} onChange={set('telefono')} maxLength={24} inputMode="tel" />
             </label>
             <label className="adm-campo">
               <span>{t('config.direccionLabel')}</span>
-              <input value={form.direccion} onChange={set('direccion')} placeholder={t('config.direccionPlace')} maxLength={80} />
+              <input name="direccion" value={form.direccion} onChange={set('direccion')} placeholder={t('config.direccionPlace')} maxLength={80} />
             </label>
             <label className="adm-campo">
               <span>{t('config.nitLabel')}</span>
-              <input value={form.nit} onChange={set('nit')} maxLength={20} />
+              <input name="nit" value={form.nit} onChange={set('nit')} maxLength={20} />
             </label>
           </div>
           <div className="adm-fila2">
             <label className="adm-campo">
               <span>{t('config.monedaLabel')}</span>
-              <input value={form.moneda} onChange={set('moneda')} placeholder={MONEDA} maxLength={MONEDA_MAX} list="adm-monedas" />
+              <input name="moneda" value={form.moneda} onChange={set('moneda')} placeholder={MONEDA} maxLength={MONEDA_MAX} list="adm-monedas" />
               <datalist id="adm-monedas">
                 {MONEDAS_COMUNES.map(m => <option key={m} value={m} />)}
               </datalist>
             </label>
             <label className="adm-campo">
               <span>{t('config.ivaLabel')}</span>
-              <input type="text" inputMode="decimal" autoComplete="off" value={form.ivaPct}
+              <input name="iva-pct" type="text" inputMode="decimal" autoComplete="off" value={form.ivaPct}
                 onChange={e => setForm(f => ({ ...f, ivaPct: limpiarMonto(e.target.value) }))}
                 onBlur={() => setForm(f => ({ ...f, ivaPct: f.ivaPct !== '' ? numMonto(f.ivaPct).toFixed(2) : '' }))}
                 onFocus={e => e.target.select()} placeholder="0.00" />
             </label>
             <label className="adm-campo">
               <span>{t('config.propinaLabel')}</span>
-              <input type="text" inputMode="decimal" autoComplete="off" value={form.propinaPct}
+              <input name="propina-pct" type="text" inputMode="decimal" autoComplete="off" value={form.propinaPct}
                 onChange={e => setForm(f => ({ ...f, propinaPct: limpiarMonto(e.target.value) }))}
                 onBlur={() => setForm(f => ({ ...f, propinaPct: f.propinaPct !== '' ? numMonto(f.propinaPct).toFixed(2) : '' }))}
                 onFocus={e => e.target.select()} placeholder="0.00" />
             </label>
             <label className="adm-check">
-              <input type="checkbox" checked={form.propinaIncluida} onChange={e => setForm(f => ({ ...f, propinaIncluida: e.target.checked }))} />
+              <input name="propina-incluida" type="checkbox" checked={form.propinaIncluida} onChange={e => setForm(f => ({ ...f, propinaIncluida: e.target.checked }))} />
               <span><b>{t('config.propinaIncluir')}</b><small>{t('config.propinaIncluirAyuda')}</small></span>
             </label>
             <div className="adm-check cfg-switch-fila">
@@ -207,6 +213,9 @@ export default function SettingsPage({ rol, sesion }) {
         chip={s.config?.impresion === 'silenciosa' ? <span className="adm-chip">{t('config.modoSilenciosoActivo')}</span> : null}
       >
         <PrintersCard rol={rol} sesion={sesion} />
+        {sesion?.supabase && (rol === 'admin' || rol === 'cajero') && (
+          <Suspense fallback={null}><StationPage embebida rol={rol} sesion={sesion} /></Suspense>
+        )}
       </Bloque>
 
       {(sesion ? sesion.rol === 'admin' : rol === 'admin') && (
@@ -312,7 +321,7 @@ function CfgImagen({ tipo, titulo, ayuda, config, modo, empresaId, onCambios }) 
       <div className="cfg-img-datos">
         <b>{titulo}</b>
         <small className="cfg-img-ayuda">{ayuda}</small>
-        <input ref={input} type="file" accept="image/*" hidden onChange={elegir} />
+        <input name="file" ref={input} type="file" accept="image/*" hidden onChange={elegir} />
         <div className="cfg-img-botones">
           <button type="button" className={url ? 'ghost' : 'primary'} onClick={() => input.current?.click()} disabled={ocupada}>
             {ocupada

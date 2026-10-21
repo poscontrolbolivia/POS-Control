@@ -257,11 +257,11 @@ export default function ReportsPage({ rol, sesion }) {
           ))}
           <label className="rp-fecha">
             <span>{tOr('reportes.desde', 'Desde')}</span>
-            <input type="date" value={desdeTxt} onChange={e => setDesdeTxt(e.target.value)} />
+            <input name="desde-txt" type="date" value={desdeTxt} onChange={e => setDesdeTxt(e.target.value)} />
           </label>
           <label className="rp-fecha">
             <span>{tOr('reportes.hasta', 'Hasta')}</span>
-            <input type="date" value={hastaTxt} onChange={e => setHastaTxt(e.target.value)} />
+            <input name="hasta-txt" type="date" value={hastaTxt} onChange={e => setHastaTxt(e.target.value)} />
           </label>
           <button type="button" className="ghost" onClick={aplicar}>{tOr('reportes.aplicar', 'Aplicar')}</button>
         </div>

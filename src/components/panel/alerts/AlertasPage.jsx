@@ -304,7 +304,7 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
           <b>{tOr('alertas.form.titulo', 'Nueva alerta')}</b>
           <label className="ala-campo">
             <span>{tOr('alertas.form.camposTitulo', 'Título')}</span>
-            <input autoFocus value={form.titulo} maxLength={MAX_TITULO}
+            <input name="campos-titulo" autoFocus value={form.titulo} maxLength={MAX_TITULO}
               placeholder={tOr('alertas.form.tituloPista', 'Qué pasa, en pocas palabras')}
               aria-label={tOr('alertas.form.camposTitulo', 'Título')}
               onChange={e => { setForm(f => ({ ...f, titulo: e.target.value })); setFormErr('') }} />
@@ -312,7 +312,7 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
           </label>
           <label className="ala-campo">
             <span>{tOr('alertas.form.camposMensaje', 'Mensaje')}</span>
-            <textarea value={form.mensaje} maxLength={MAX_MENSAJE} rows={3}
+            <textarea name="campos-mensaje" value={form.mensaje} maxLength={MAX_MENSAJE} rows={3}
               placeholder={tOr('alertas.form.mensajePista', 'Detalle para quien la reciba')}
               aria-label={tOr('alertas.form.camposMensaje', 'Mensaje')}
               onChange={e => setForm(f => ({ ...f, mensaje: e.target.value }))} />
@@ -321,21 +321,21 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
           <div className="ala-campos">
             <label className="ala-campo">
               <span>{tOr('alertas.form.tipo', 'Tipo')}</span>
-              <select value={form.tipo} aria-label={tOr('alertas.form.tipo', 'Tipo')}
+              <select name="tipo" value={form.tipo} aria-label={tOr('alertas.form.tipo', 'Tipo')}
                 onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
                 {TIPOS.map(k => <option key={k} value={k}>{etiquetaTipo(k, tOr)}</option>)}
               </select>
             </label>
             <label className="ala-campo">
               <span>{tOr('alertas.form.prioridad', 'Prioridad')}</span>
-              <select value={form.prioridad} aria-label={tOr('alertas.form.prioridad', 'Prioridad')}
+              <select name="prioridad" value={form.prioridad} aria-label={tOr('alertas.form.prioridad', 'Prioridad')}
                 onChange={e => setForm(f => ({ ...f, prioridad: Number(e.target.value) }))}>
                 {PRIORIDADES.map(p => <option key={p} value={p}>{tOr('alertas.prio.' + p, ETIQUETA_PRIO[p])}</option>)}
               </select>
             </label>
             <label className="ala-campo ala-ancho2">
               <span>{tOr('alertas.form.cuenta', 'Cuenta abierta')}</span>
-              <select value={form.cuentaId} aria-label={tOr('alertas.form.cuenta', 'Cuenta abierta')}
+              <select name="cuenta" value={form.cuentaId} aria-label={tOr('alertas.form.cuenta', 'Cuenta abierta')}
                 onChange={e => setForm(f => ({ ...f, cuentaId: e.target.value }))}>
                 <option value="">{tOr('alertas.form.sinCuenta', 'Sin cuenta (aviso general)')}</option>
                 {cuentasAbiertas.map(c => (

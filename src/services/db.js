@@ -17,7 +17,7 @@ const mapProducto = p => ({
 
 const mapItem = i => ({
   id: i.id, productoId: i.producto_id, nombre: i.nombre_snapshot, precio: N(i.precio_snapshot),
-  qty: N(i.qty), estado: i.estado, nota: i.nota || '', motivo: i.anulacion_motivo ?? i.motivo_anulacion,
+  qty: N(i.qty), estado: i.estado, nota: i.nota || '', indicaciones: i.indicaciones || '', motivo: i.anulacion_motivo ?? i.motivo_anulacion,
   areas: Array.isArray(i.areas) && i.areas.length ? i.areas : undefined,
   areasListas: Array.isArray(i.areas_listas) ? i.areas_listas : [],
   enviadoEn: ts(i.enviado_en), creadaEn: ts(i.creada_en),
@@ -234,11 +234,14 @@ export async function cargarEstadoInicial(empresaId) {
 
 async function refrescarNegocio(estado) {
   const empresaId = estado._empresaId
+  // «nombres» se usa dentro de la propia lista de consultas: se pide primero la promesa y los extras
+  // esperan a ella (antes se leía la variable aún sin crear → «Cannot access … before initialization»).
+  const nombresP = fetchNombres()
   const [cajaT, data, nombres, extras] = await Promise.all([
     fetchCaja(empresaId),
     fetchCuentas(empresaId, estado.caja),
-    fetchNombres(),
-    fetchExtras(empresaId, nombres),
+    nombresP,
+    nombresP.then(n => fetchExtras(empresaId, n)),
   ])
   return {
     ...estado,
@@ -332,7 +335,7 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       return refrescarNegocio(E)
     case 'item+': {
 
-      const itemsDb = await rpc('agregar_items', { p_cuenta_id: rid(mapa, a.cuentaId), p_items: [{ producto_id: a.p.id, qty: 1, ...(a.nota ? { nota: a.nota } : {}), ...(a.sel?.length ? { sel: a.sel } : {}) }] })
+      const itemsDb = await rpc('agregar_items', { p_cuenta_id: rid(mapa, a.cuentaId), p_items: [{ producto_id: a.p.id, qty: 1, ...(a.nota ? { nota: a.nota } : {}), ...(a.indicaciones ? { indicaciones: a.indicaciones } : {}), ...(a.sel?.length ? { sel: a.sel } : {}) }] })
       const c = cuentaRecien(estado.cuentas, x => x.id === a.cuentaId || x.id === rid(mapa, a.cuentaId))
       if (c) remapItems(mapa, c.items, itemsDb)
       return refrescarNegocio(E)
