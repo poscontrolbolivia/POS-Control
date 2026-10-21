@@ -114,7 +114,12 @@
 .imp-opciones .adm-campo{flex:1 1 130px}
 .imp-secciones{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
 .imp-seccion{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--card-2);border:1.5px solid var(--line);border-radius:10px;padding:6px 10px;font-weight:600}
-.imp-seccion select{min-width:110px}
+.imp-seccion-multi{flex-direction:column;align-items:stretch;gap:6px}
+.imp-seccion-nombre{font-size:.9rem}
+.imp-multi{flex:1 1 220px;display:flex;flex-direction:column;gap:6px}
+.imp-multi>span{font-size:.85rem;color:var(--mut);font-weight:600}
+.imp-multi-chips{display:flex;flex-wrap:wrap;gap:6px}
+.imp-op{min-height:34px;padding:5px 12px;font-size:.85rem}
 
 .menu-barra{margin:-4px 0 0}
 .menu-grupo{display:inline-flex;align-items:center;gap:6px;font-size:.9rem;font-weight:600;border:1.5px solid var(--line-fuerte);border-radius:10px;padding:2px 8px;background:var(--card)}
@@ -124,8 +129,6 @@
 .menu-toggle:hover:not(:disabled){background:var(--card-2)}
 .menu-toggle h3{margin:0;font-size:1.1rem}
 .menu-flecha{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--ac);color:var(--on-btn);font-size:.8rem}
-.menu-chip-imp{background:color-mix(in srgb,var(--btn-orange) 18%,var(--card));color:var(--ink);border:1px solid color-mix(in srgb,var(--btn-orange) 60%,var(--line))}
-
 .adm-opciones{flex:1 1 220px;min-width:160px}
 
 .adm-masivo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0;padding:10px 12px;

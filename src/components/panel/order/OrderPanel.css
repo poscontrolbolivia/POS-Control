@@ -70,7 +70,18 @@
 .prod.agotado{opacity:.6;border-style:dashed;border-color:var(--porcobrar-bd)}
 .prod.agotado:hover{background:var(--card-2);border-color:var(--porcobrar-bd)}
 .prod small.prod-agotado{color:var(--porcobrar-bd);font-weight:750}
-.pm-sugerida{opacity:.7;font-style:italic}
+.pm-sugerida{opacity:.7;font-style:italic;font-size:.92rem}
+/* «Total a pagar»: el número más grande y en negrita de todo el bloque de totales. */
+.pm-total{font-size:1.9rem;font-weight:800;margin:12px 0}
+.pm-total span{font-weight:800}
+.pm-total b{font-weight:800}
+/* «Total a pagar con propina»: línea normal/discreta, nunca más grande que el Total. */
+.pm-conpropina{font-size:.92rem;color:var(--mut);margin:2px 0 8px}
+.pm-conpropina b{font-weight:650;color:var(--ink)}
+/* Cliente del pedido para llevar: tarjeta coherente con .pm-caja, inputs en píldora. */
+.pm-cliente{display:flex;flex-wrap:wrap;gap:10px;background:var(--card-2);border:1.5px solid var(--line);border-radius:12px;padding:10px;margin:8px 0}
+.pm-cliente .pm-campo{flex:1 1 150px;min-width:0}
+.pm-cliente input{min-height:40px;border-radius:999px;padding:6px 14px;font:inherit;color:var(--ink);background:var(--card)}
 .pm-pagado b{color:var(--ok)}
 .pm-saldo b{color:var(--danger-ink);font-size:1.05rem}
 .pm-abono{font-size:.76rem;color:var(--mut);border-top:1px dashed var(--line)}
@@ -91,3 +102,16 @@
 .pm-lista{display:flex;flex-direction:column;gap:6px}
 .pm-lista-tit{opacity:.8}
 .pm-falta{color:var(--warn-ink,#b45309)}
+
+/* Stepper del ticket: Prep · Parcial · Listo · Cuenta · Pagada.
+   La cabecera admite salto de línea para que las cinco píldoras no empujen el botón ⋯. */
+.pm-cab{flex-wrap:wrap}
+.pm-pasos{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;margin-left:auto}
+.pm-paso{font-style:normal;padding:3px 10px;border:1px solid var(--line);border-radius:999px;
+  background:var(--card-2);color:var(--mut);font-size:.72rem;font-weight:650;white-space:nowrap}
+.pm-paso.on{border-color:var(--chip-bd);background:var(--chip-bg);color:var(--chip-ink);font-weight:800}
+.pm-paso.on[data-paso="listo"]{border-color:var(--ok-bd);background:var(--ok-bg);color:var(--ok-ink)}
+.pm-paso.on[data-paso="cuenta"]{border-color:var(--ocupada-bd);background:var(--ocupada-bg);color:var(--ocupada-ink)}
+.pm-paso.on[data-paso="pagada"]{border-color:var(--libre-bd);background:var(--libre-bg);color:var(--libre-ink)}
+.pm-desglose{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.88rem;color:var(--mut);margin:2px 0 6px}
+.pm-desglose b{color:var(--ink)}

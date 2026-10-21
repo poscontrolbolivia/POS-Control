@@ -31,6 +31,30 @@ const mapPago = p => ({ id: p.id, metodo: p.metodo, monto: N(p.monto), ...(p.det
 
 const mapMov = m => ({ id: m.id, t: m.tipo, monto: N(m.monto), motivo: m.motivo, creadaEn: ts(m.creada_en) })
 
+const r2 = x => Math.round((Number(x) || 0) * 100) / 100
+
+const mapCosto = c => ({ productoId: c.producto_id, costo: N(c.costo), proveedorId: c.proveedor_id ?? null })
+
+const mapProveedor = p => ({
+  id: p.id, nombre: p.nombre, telefono: p.telefono || '', email: p.email || '',
+  direccion: p.direccion || '', nota: p.nota || '', activo: p.activo,
+})
+
+const mapDeuda = d => ({
+  id: d.id, proveedorId: d.proveedor_id, fecha: d.fecha, vencimiento: d.vencimiento || null,
+  concepto: d.concepto, monto: N(d.monto), pagado: N(d.pagado),
+  saldo: Math.max(0, r2(N(d.monto) - N(d.pagado))), nota: d.nota || '',
+  creadaEn: ts(d.creada_en), pagadaEn: ts(d.pagada_en) ?? null,
+})
+
+const mapAlerta = (a, nombres) => ({
+  id: a.id, tipo: a.tipo, titulo: a.titulo, mensaje: a.mensaje || '',
+  cuentaId: a.cuenta_id || null, mesaId: a.mesa_id || null, prioridad: N(a.prioridad) || 5,
+  creadaPor: a.creada_por || undefined, creadaPorNombre: nombres[a.creada_por] || '',
+  creadaEn: ts(a.creada_en), resueltaPor: a.resuelta_por || undefined,
+  resueltaPorNombre: nombres[a.resuelta_por] || '', resueltaEn: ts(a.resuelta_en) ?? null,
+})
+
 const mapTurno = (t, nombres) => ({
   id: t.id,
   abiertoEn: ts(t.abierto_en),
@@ -105,6 +129,29 @@ async function fetchNombres() {
   } catch { return {} }
 }
 
+// Costos, proveedores, deudas y alertas. Las cuatro las lee la misma RLS: quien no
+// tiene permiso recibe filas cero en lugar de un error, así la pantalla no se cae.
+async function fetchExtras(empresaId, nombres) {
+  const suave = async (query, vacío) => {
+    try { return await selectAll(query) } catch { return vacío }
+  }
+  const [costos, proveedores, deudas, alertas, insumos] = await Promise.all([
+    suave(sb.from('costos_producto').select('producto_id, costo, proveedor_id').eq('empresa_id', empresaId), []),
+    suave(sb.from('proveedores').select('*').eq('empresa_id', empresaId).order('nombre'), []),
+    suave(sb.from('cuentas_por_pagar').select('*').eq('empresa_id', empresaId).order('fecha', { ascending: false }).limit(500), []),
+    suave(sb.from('alertas').select('*').eq('empresa_id', empresaId).order('creada_en', { ascending: false }).limit(300), []),
+    // Solo para las alertas automáticas de stock; la tabla es de admin, así que en otro rol viene vacía.
+    suave(sb.from('insumos').select('id, nombre, stock, stock_min, unidad, activo').eq('empresa_id', empresaId), []),
+  ])
+  return {
+    costos: costos.map(mapCosto),
+    proveedores: proveedores.map(mapProveedor),
+    deudas: deudas.map(mapDeuda),
+    alertas: alertas.map(a => mapAlerta(a, nombres)),
+    insumos,
+  }
+}
+
 function armarCuentas(cuentas, items, pagos, cms, nombres) {
   const porCuenta = (rows, key) => {
     const m = {}
@@ -153,7 +200,7 @@ export async function cargarEstadoInicial(empresaId) {
   const nombres = await fetchNombres()
 
   const cajaP = fetchCaja(empresaId)
-  const [empresas, zonas, mesas, secciones, productos, cajaT, dataCuentas, numeradas] = await Promise.all([
+  const [empresas, zonas, mesas, secciones, productos, cajaT, dataCuentas, numeradas, extras] = await Promise.all([
     selectAll(sb.from('empresas').select('*').eq('id', empresaId)),
     selectAll(sb.from('zonas').select('*').eq('empresa_id', empresaId).order('orden')),
     selectAll(sb.from('mesas').select('*').eq('empresa_id', empresaId).eq('activa', true).order('nombre')),
@@ -163,6 +210,7 @@ export async function cargarEstadoInicial(empresaId) {
     cajaP.then(t => fetchCuentas(empresaId, { turno: t.abierto ? mapTurno(t.abierto, nombres) : null, historial: t.historial.map(x => mapTurno(x, nombres)) })),
 
     selectAll(sb.from('cuentas').select('numero').eq('empresa_id', empresaId).eq('tipo', 'directa').is('canal', null).gte('abierta_en', hoyISO()).order('numero', { ascending: false }).limit(1)),
+    fetchExtras(empresaId, nombres),
   ])
   const emp = empresas[0]
   if (!emp) throw new Error('No tienes acceso a esta empresa (o no existe)')
@@ -177,6 +225,7 @@ export async function cargarEstadoInicial(empresaId) {
     productos: productos.map(mapProducto),
     cuentas,
     devoluciones,
+    ...extras,
     caja: armarCaja(cajaT.abierto, cajaT.historial, nombres, N(numeradas[0]?.numero || 0) + 1, undefined, cajaT.otros),
     usuariosDemo: [],
     _sup: true,
@@ -185,17 +234,32 @@ export async function cargarEstadoInicial(empresaId) {
 
 async function refrescarNegocio(estado) {
   const empresaId = estado._empresaId
-  const [cajaT, data, nombres] = await Promise.all([
+  const [cajaT, data, nombres, extras] = await Promise.all([
     fetchCaja(empresaId),
     fetchCuentas(empresaId, estado.caja),
     fetchNombres(),
+    fetchExtras(empresaId, nombres),
   ])
   return {
     ...estado,
     cuentas: armarCuentas(data.cuentas, data.items, data.pagos, data.cms, nombres),
     devoluciones: await fetchDevoluciones(empresaId, cajaT, nombres),
     caja: armarCaja(cajaT.abierto, cajaT.historial, nombres, undefined, estado.caja, cajaT.otros),
+    ...extras,
   }
+}
+
+// Después de tocar precios o costos conviene recargar también la carta: el mapa
+// producto ↔ costo la usa tanto el Menú como los reportes.
+async function refrescarCarta(estado) {
+  const fresco = await refrescarNegocio(estado)
+  const empresaId = estado._empresaId
+  const [nombres, productos] = await Promise.all([
+    fetchNombres(),
+    selectAll(sb.from('productos').select('*').eq('empresa_id', empresaId).order('nombre')),
+  ])
+  const extras = await fetchExtras(empresaId, nombres)
+  return { ...fresco, productos: productos.map(mapProducto), ...extras }
 }
 
 const rid = (mapa, id) => (id ? mapa.get(id) || id : id)
@@ -222,6 +286,16 @@ const mapPagos = pagos => (pagos || []).map(p => {
   const detalle = {}
   for (const k of DETALLE_KEYS) if (p[k] !== undefined && p[k] !== null) detalle[k] = p[k]
   return { metodo: p.metodo, monto: p.monto, ...(Object.keys(detalle).length ? { detalle } : {}) }
+})
+
+// Las RPCs asignan campos directos, así que un payload parcial borraría lo que no se envía.
+const provJson = p => ({
+  nombre: p?.nombre || '', telefono: p?.telefono || '', email: p?.email || '',
+  direccion: p?.direccion || '', nota: p?.nota || '', activo: p?.activo !== false,
+})
+const deudaJson = d => ({
+  proveedor_id: d?.proveedorId || null, fecha: d?.fecha || null, vencimiento: d?.vencimiento || null,
+  concepto: d?.concepto || '', monto: Number(d?.monto) || 0, pagado: Number(d?.pagado) || 0, nota: d?.nota || '',
 })
 
 export async function despacharSupabase(estado, a, ctx = {}) {
@@ -465,6 +539,96 @@ export async function despacharSupabase(estado, a, ctx = {}) {
         _configRaw: emp.config || {},
         config: { nombre: emp.nombre, moneda: emp.moneda, ivaPct: N(emp.iva_pct), propinaPct: N(emp.propina_pct), ...(emp.config || {}) },
       }
+    }
+
+    case 'listo':
+      await rpc(a.lista ? 'marcar_pedido_listo' : 'deshacer_pedido_listo', { p_cuenta_id: rid(mapa, a.cuentaId) })
+      return refrescarNegocio(E)
+
+    // COSTO, MARGEN Y PROVEEDOR (solo admin por RLS)
+    case 'costo~':
+      await rpc('costo_guardar', {
+        p_producto_id: rid(mapa, a.productoId),
+        p_costo: Number(a.costo) || 0,
+        p_proveedor_id: a.proveedorId ? rid(mapa, a.proveedorId) : null,
+      })
+      return refrescarNegocio(E)
+    case 'margen-aplicar':
+      await rpc('costos_margen_aplicar', {
+        p_producto_ids: (a.productoIds || []).length ? (a.productoIds || []).map(i => rid(mapa, i)) : null,
+        p_margen_pct: a.margenPct,
+        p_aplicar: true,
+      })
+      return refrescarCarta(E)
+    case 'costo-pct':
+      await rpc('costos_pct_aplicar', {
+        p_pct: a.pct,
+        p_producto_ids: (a.productoIds || []).length ? (a.productoIds || []).map(i => rid(mapa, i)) : null,
+        p_reemplazar: Boolean(a.reemplazar),
+      })
+      return refrescarCarta(E)
+    case 'receta-costo':
+      await rpc('costos_desde_receta', {
+        p_producto_ids: (a.productoIds || []).length ? (a.productoIds || []).map(i => rid(mapa, i)) : null,
+        p_aplicar: true,
+      })
+      return refrescarCarta(E)
+
+    case 'prov+': {
+      const id = await rpc('proveedor_guardar', { p_proveedor: provJson(a.proveedor) })
+      const locId = (a._nuevos?.proveedores || [])[0]
+      if (locId && id && locId !== id) mapa.set(locId, id)
+      return refrescarNegocio(E)
+    }
+    case 'prov~': {
+      const prev = (estado.proveedores || []).find(p => p.id === a.id) || {}
+      await rpc('proveedor_guardar', { p_proveedor: { id: rid(mapa, a.id), ...provJson({ ...prev, ...a.cambios }) } })
+      return refrescarNegocio(E)
+    }
+    case 'prov-':
+      await rpc('proveedor_borrar', { p_proveedor_id: rid(mapa, a.id) })
+      return refrescarNegocio(E)
+
+    case 'deuda+': {
+      const id = await rpc('cpp_guardar', { p_deuda: deudaJson(a.deuda) })
+      const locId = (a._nuevos?.deudas || [])[0]
+      if (locId && id && locId !== id) mapa.set(locId, id)
+      return refrescarNegocio(E)
+    }
+    case 'deuda~': {
+      const prev = (estado.deudas || []).find(x => x.id === a.id) || {}
+      await rpc('cpp_guardar', { p_deuda: { id: rid(mapa, a.id), ...deudaJson({ ...prev, ...a.cambios }) } })
+      return refrescarNegocio(E)
+    }
+    case 'deuda-abono':
+      await rpc('cpp_abonar', { p_deuda_id: rid(mapa, a.id), p_monto: Number(a.monto) || 0, p_nota: a.nota || null })
+      return refrescarNegocio(E)
+    case 'deuda-':
+      await rpc('cpp_borrar', { p_deuda_id: rid(mapa, a.id) })
+      return refrescarNegocio(E)
+
+    // ALERTAS: las escribe cualquiera del equipo, por política de RLS
+    case 'alerta+': {
+      const locId = (a._nuevos?.alertas || [])[0]
+      const { data, error } = await sb.from('alertas').insert({
+        empresa_id: empresaId,
+        tipo: a.alerta.tipo || 'general',
+        titulo: a.alerta.titulo,
+        mensaje: a.alerta.mensaje || '',
+        cuenta_id: a.alerta.cuentaId ? rid(mapa, a.alerta.cuentaId) : null,
+        mesa_id: a.alerta.mesaId ? rid(mapa, a.alerta.mesaId) : null,
+        prioridad: Number(a.alerta.prioridad) || 5,
+      }).select('id').single()
+      if (error) throw new Error(error.message)
+      if (locId && data?.id) mapa.set(locId, data.id)
+      return E
+    }
+    case 'alerta-resolver': {
+      const { error } = await sb.from('alertas')
+        .update({ resuelta_en: a.resuelta ? new Date().toISOString() : null, resuelta_por: null })
+        .eq('id', rid(mapa, a.id)).eq('empresa_id', empresaId)
+      if (error) throw new Error(error.message)
+      return E
     }
 
     case 'reset':

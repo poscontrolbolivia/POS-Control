@@ -1,0 +1,20 @@
+/* Tarjeta del QR de pago: funciona en el móvil del cliente y en el PC de caja */
+.pqc{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px;border:1.5px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);max-width:520px;margin:0 auto;width:100%}
+.pqc-cab{display:flex;align-items:center;gap:10px;width:100%;justify-content:center;flex-wrap:wrap}
+.pqc-logo{width:40px;height:40px;object-fit:contain;border-radius:50%;border:1px solid var(--line);background:var(--card-2)}
+.pqc-negocio{font-weight:700;font-size:1.05rem;text-align:center}
+.pqc-qr{width:100%;max-width:340px;aspect-ratio:1;background:#fff;border:1.5px solid var(--line-fuerte);border-radius:14px;display:flex;align-items:center;justify-content:center;padding:10px;overflow:hidden}
+.pqc-qr img{max-width:100%;max-height:100%;object-fit:contain}
+.pqc-monto{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:8px;margin:0;font-size:.95rem;color:var(--mut)}
+.pqc-monto b{font-size:1.5rem;color:var(--ink)}
+.pqc-metodo{color:var(--mut)}
+.pqc-ayuda{margin:0;text-align:center;color:var(--ok-ink,#1d7a35);font-weight:600}
+.pqc-vacio{text-align:center;color:var(--mut);background:var(--card-2);border:1px dashed var(--line-fuerte);border-radius:12px;padding:14px;width:100%}
+.pqc-vacio a{color:var(--ac);font-weight:600}
+.pqc-cerrar{min-height:44px}
+/* En pantallas angostas del móvil el QR aprovecha todo el ancho disponible */
+@media (max-width:420px){
+  .pqc{padding:10px;gap:10px}
+  .pqc-qr{max-width:100%}
+  .pqc-monto b{font-size:1.25rem}
+}

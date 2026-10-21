@@ -10,11 +10,20 @@ export const gruposDe = config => (
 export const gruposDeComanda = config => gruposDe(config).filter(g => !g.tickets)
 export const grupoTickets = config => gruposDe(config).find(g => g.tickets) || null
 
-export function grupoDeSeccion(config, seccionId) {
+// Una sección puede mandar su comanda a varios grupos a la vez; el valor guardado admite
+// `'cocina'` (una) o `['cocina','barra']` (varias), y sin asignación válida cae en el primer grupo.
+export function gruposDeSeccion(config, seccionId) {
   const lista = gruposDeComanda(config)
-  const id = config?.impresoraPorSeccion?.[seccionId]
-  return lista.find(g => g.id === id) || lista[0] || null
+  const guardado = config?.impresoraPorSeccion?.[seccionId]
+  const ids = Array.isArray(guardado) ? guardado : (guardado ? [guardado] : [])
+  const elegidos = []
+  for (const id of ids) {
+    const g = lista.find(x => x.id === String(id).toLowerCase())
+    if (g && !elegidos.includes(g)) elegidos.push(g)
+  }
+  return elegidos.length ? elegidos : lista.slice(0, 1)
 }
+export const grupoDeSeccion = (config, seccionId) => gruposDeSeccion(config, seccionId)[0] || null
 export const nombreDeArea = (config, id, respaldo) => gruposDeComanda(config).find(g => g.id === id)?.nombre || respaldo || id
 
 export const SIN_AREA = '_sin_area'
@@ -37,8 +46,7 @@ function gruposDelItem(item, productos = [], config = {}) {
   if (areas) areas.forEach(agregar)
   if (validos.length) return validos
   const prod = productos.find(p => p.id === item?.productoId)
-  const g = grupoDeSeccion(config, prod?.seccionId)
-  return g ? [g] : []
+  return gruposDeSeccion(config, prod?.seccionId)
 }
 
 export function repartirPorGrupo(items, productos, config) {

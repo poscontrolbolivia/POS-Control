@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useStore, nuevoId } from '../../../context/StoreContext.jsx'
 import { puede } from '../../../services/permissions'
 import { MONEDA } from '../../../services/config'
-import { LADO_VISUAL_PX, urlImagenProducto } from '../../../services/imageUpload.js'
+import { LADO_VISUAL_PX, urlImagenProducto, urlImagenNegocio } from '../../../services/imageUpload.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
 import { imprimirCuenta, precalcularCambio } from '../../printing/Ticket.jsx'
 import ComprobanteQr from '../pago/ComprobanteQr.jsx'
+import PagoQrCard from '../pago/PagoQrCard.jsx'
 import '../pago/ComprobanteQr.css'
 import './QuickSalePage.css'
 import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
@@ -65,6 +66,7 @@ export default function QuickSalePage({ rol, sesion }) {
   const agotados = agotadosHoy(s.config)
   const agotadosEnSeccion = productos.filter(p => agotados[p.id])
   const total = round2(carrito.reduce((acc, l) => acc + l.p.precio * l.qty, 0))
+  const hayQrNegocio = Boolean(urlImagenNegocio(s.config, 'qr'))
 
   const agregar = p => {
     if (!puede(rol, 'pedir')) return setAviso(t('venta.sinPermisoPedir'))
@@ -225,6 +227,9 @@ export default function QuickSalePage({ rol, sesion }) {
                   <input type="text" inputMode="decimal" autoComplete="off" autoFocus={i === 0}
                     value={l.monto} onChange={e => setLinea(i, { monto: limpiarMonto(e.target.value) })} onFocus={e => e.target.select()} placeholder={m(total)} />
                 </label>
+                {l.metodo === 'qr' && hayQrNegocio && (
+                  <PagoQrCard config={s.config} monto={numMonto(l.monto) > 0 ? numMonto(l.monto) : total} empresaNombre={s.config?.nombre} />
+                )}
                 {l.metodo === 'qr' && <ComprobanteQr valor={l.comprobante} onCambio={v => setLinea(i, v)} />}
               </div>
             ))}

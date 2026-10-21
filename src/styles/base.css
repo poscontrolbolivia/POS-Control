@@ -8,9 +8,12 @@ button{border:1.5px solid var(--chip-bd);background:var(--chip-bg);border-radius
 button:hover:not(:disabled){background:var(--chip-hover)}
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 button:disabled{opacity:.5;cursor:not-allowed}
-button.ghost{background:transparent;border-color:var(--chip-bd);color:var(--chip-ink)}
-button.ghost:hover:not(:disabled){background:var(--chip-hover)}
+/* «ghost» ya no es un botón blanco: lleva color (pizarra) como el resto de los botones de acción. */
+button.ghost{--pc:var(--btn-slate);border:0;color:var(--on-btn);font-weight:650;background:var(--gloss),var(--pc);box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 38%,transparent);text-shadow:0 1px 1px rgba(0,0,0,.25)}
+button.ghost:hover:not(:disabled){filter:brightness(.94);transform:translateY(-1px);background:var(--gloss),var(--pc)}
 button.big{width:100%;padding:16px;font-size:1.1rem}
+/* En los paneles de administración «big» ya no es gigante: mismo tamaño que los demás botones. */
+.adm-panel button.big{width:auto;min-width:160px;padding:9px 22px;font-size:1rem}
 button.primary, button.info, button.success, button.danger.solid, button.warning, button.orange, button.violet, button.teal, button.slate, button.rojo{
   --pc:var(--btn-green);border:0;border-radius:999px;color:var(--on-btn);font-weight:650;
   background:var(--gloss),var(--pc);

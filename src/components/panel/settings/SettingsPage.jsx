@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
 import LanguageSelect from '../../login/LanguageSelect.jsx'
@@ -11,12 +11,14 @@ import { calcularResumen } from '../cash/calcularResumen.js'
 import { USAR_SUPABASE, MONEDA } from '../../../services/config.js'
 import { MONEDAS_COMUNES, MONEDA_MAX, limpiarMoneda, formatearMonto } from '../../../services/money.js'
 import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
+import { sb } from '../../../services/supabaseClient.js'
+import { urlImagenNegocio, procesarImagenNegocio, borrarImagen } from '../../../services/imageUpload.js'
 import '../../../styles/admin.css'
 import '../cash/CashPage.css'
 import './SettingsPage.css'
 
 export default function SettingsPage({ rol, sesion }) {
-  const { s, d } = useStore()
+  const { s, d, modo } = useStore()
   const { t, tOr } = useIdioma()
   const [form, setForm] = useState({
     nombre: s.config?.nombre ?? '',
@@ -28,6 +30,7 @@ export default function SettingsPage({ rol, sesion }) {
     ivaPct: String(s.config?.ivaPct ?? 0),
     propinaPct: String(s.config?.propinaPct ?? 10),
     propinaIncluida: Boolean(s.config?.propinaIncluida),
+    propinaMostrar: s.config?.propinaMostrar !== false,
     cajaModo: s.config?.cajaModo === 'por_cajero' ? 'por_cajero' : 'compartida',
   })
   const [msg, setMsg] = useState('')
@@ -58,6 +61,12 @@ export default function SettingsPage({ rol, sesion }) {
   }
 
   const set = k => e => setForm({ ...form, [k]: e.target.value })
+  // La plaquita de propina guardona al instante, sin esperar el botón Guardar (OrderPanel la lee de s.config).
+  const alternarPropinaMostrar = () => {
+    const nuevo = !form.propinaMostrar
+    setForm(f => ({ ...f, propinaMostrar: nuevo }))
+    d({ t: 'cfg~', cambios: { propinaMostrar: nuevo } })
+  }
   const guardar = e => {
     e.preventDefault()
     const ivaPct = numMonto(form.ivaPct)
@@ -140,6 +149,16 @@ export default function SettingsPage({ rol, sesion }) {
               <input type="checkbox" checked={form.propinaIncluida} onChange={e => setForm(f => ({ ...f, propinaIncluida: e.target.checked }))} />
               <span><b>{t('config.propinaIncluir')}</b><small>{t('config.propinaIncluirAyuda')}</small></span>
             </label>
+            <div className="adm-check cfg-switch-fila">
+              <button type="button" role="switch" aria-checked={form.propinaMostrar}
+                aria-label={tOr('config.propinaMostrar', 'Mostrar la propina sugerida en la cuenta')}
+                className={'cfg-switch' + (form.propinaMostrar ? ' on' : '')}
+                onClick={alternarPropinaMostrar}>
+                <span className="cfg-switch-pista"><span className="cfg-switch-nudo" /></span>
+              </button>
+              <span><b>{tOr('config.propinaMostrar', 'Mostrar la propina sugerida en la cuenta')}</b>
+                <small>{tOr('config.propinaMostrarAyuda', 'Apagado: al cobrar no se ofrece propina al cliente; el porcentaje configurado se sigue usando si alguien la escribe a mano.')}</small></span>
+            </div>
           </div>
           <fieldset className="adm-caja-modo" disabled={Boolean(s.caja?.turno) || (s.caja?.otros || []).length > 0}>
             <legend>{t('config.cajaModo')}</legend>
@@ -157,6 +176,28 @@ export default function SettingsPage({ rol, sesion }) {
             {msg && <span className={'adm-msg' + (msg.startsWith('✅') ? ' ok' : ' warn')}>{msg}</span>}
           </div>
         </form>
+
+        {/* Subidas independientes: logo del negocio y foto del QR de pago (se guardan solas, sin el botón Guardar) */}
+        <div className="cfg-imagenes">
+          <CfgImagen
+            tipo="logo"
+            titulo={tOr('config.imgLogoTitulo', 'Logo del negocio')}
+            ayuda={tOr('config.imgLogoAyuda', 'Cuadrado o rectangular, máx 8 MB. Se optimiza automáticamente y aparece junto al nombre en el comprobante y el cobro.')}
+            config={s.config}
+            modo={modo}
+            empresaId={s._empresaId}
+            onCambios={cambios => d({ t: 'cfg~', cambios })}
+          />
+          <CfgImagen
+            tipo="qr"
+            titulo={tOr('config.imgQrTitulo', 'QR de pago')}
+            ayuda={tOr('config.imgQrAyuda', 'Foto del QR bancario / QRIS / plin que el cliente escanea para pagar. Cuadrada o rectangular, máx 8 MB; no se recorta para que siga escaneando.')}
+            config={s.config}
+            modo={modo}
+            empresaId={s._empresaId}
+            onCambios={cambios => d({ t: 'cfg~', cambios })}
+          />
+        </div>
       </Bloque>
 
       <Bloque
@@ -211,6 +252,87 @@ function Bloque({ id, icono, titulo, chip = null, children }) {
         {chip}
       </div>
       {children}
+    </div>
+  )
+}
+
+// Subida de una imagen del negocio (logo o QR de pago) dentro de Datos del negocio.
+// Previsualiza la guardada, permite reemplazarla y quitarla en dos pasos (Sí/No con temporizador,
+// nunca confirm() nativo). Los avisos van en línea, sin alert().
+function CfgImagen({ tipo, titulo, ayuda, config, modo, empresaId, onCambios }) {
+  const { tOr } = useIdioma()
+  const input = useRef(null)
+  const [ocupada, setOcupada] = useState(false)
+  const [aviso, setAviso] = useState(null)        // { ok: true|false, msg }
+  const [preguntando, setPreguntando] = useState(false)
+  const timerPregunta = useRef(null)
+  const claves = tipo === 'qr' ? { path: 'qrPath', data: 'qrDataUrl' } : { path: 'logoPath', data: 'logoDataUrl' }
+  const url = urlImagenNegocio(config, tipo)
+
+  useEffect(() => () => clearTimeout(timerPregunta.current), [])
+
+  const elegir = async e => {
+    const file = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    setOcupada(true); setAviso(null); setPreguntando(false)
+    try {
+      const { path, dataUrl } = await procesarImagenNegocio({ sb, modo, empresaId, carpeta: tipo === 'qr' ? 'qr' : 'logos', file })
+      onCambios({ [claves.path]: path, [claves.data]: dataUrl })
+      setAviso({ ok: true, msg: tOr('config.imgGuardada', 'Imagen guardada.') })
+    } catch (err) {
+      setAviso({ ok: false, msg: err?.message || tOr('config.imgError', 'No se pudo guardar la imagen.') })
+    } finally { setOcupada(false) }
+  }
+
+  const pulsarBorrar = () => {
+    clearTimeout(timerPregunta.current)
+    setPreguntando(true)
+    timerPregunta.current = setTimeout(() => setPreguntando(false), 4000)
+  }
+  const confirmarBorrar = async () => {
+    clearTimeout(timerPregunta.current)
+    setPreguntando(false); setOcupada(true); setAviso(null)
+    try {
+      if (modo === 'supabase' && config?.[claves.path]) await borrarImagen(sb, config[claves.path])
+      onCambios({ [claves.path]: null, [claves.data]: null })
+      setAviso({ ok: true, msg: tOr('config.imgBorrada', 'Imagen quitada.') })
+    } catch (err) {
+      setAviso({ ok: false, msg: err?.message || tOr('config.imgErrorBorrar', 'No se pudo quitar la imagen.') })
+    } finally { setOcupada(false) }
+  }
+
+  return (
+    <div className={'cfg-img' + (tipo === 'qr' ? ' cfg-img-qr' : '')}>
+      <div className="cfg-img-vista">
+        {url
+          ? <img src={url} alt={titulo} />
+          : <span className="cfg-img-vacio" aria-hidden="true">🖼️</span>}
+      </div>
+      <div className="cfg-img-datos">
+        <b>{titulo}</b>
+        <small className="cfg-img-ayuda">{ayuda}</small>
+        <input ref={input} type="file" accept="image/*" hidden onChange={elegir} />
+        <div className="cfg-img-botones">
+          <button type="button" className={url ? 'ghost' : 'primary'} onClick={() => input.current?.click()} disabled={ocupada}>
+            {ocupada
+              ? tOr('config.imgProcesando', 'Procesando…')
+              : url
+                ? tOr('config.imgReemplazar', 'Reemplazar')
+                : tOr('config.imgSubir', 'Subir imagen')}
+          </button>
+          {url && (preguntando ? (
+            <>
+              <span className="cfg-img-conf">{tOr('config.imgSeguro', '¿Seguro?')}</span>
+              <button type="button" className="danger solid" onClick={confirmarBorrar} disabled={ocupada}>{tOr('config.imgSisi', 'Sí')}</button>
+              <button type="button" className="ghost" onClick={() => { clearTimeout(timerPregunta.current); setPreguntando(false) }} disabled={ocupada}>{tOr('config.imgNo', 'No')}</button>
+            </>
+          ) : (
+            <button type="button" className="danger" onClick={pulsarBorrar} disabled={ocupada}>{tOr('config.imgQuitar', 'Quitar')}</button>
+          ))}
+        </div>
+        {aviso && <small className={'adm-msg ' + (aviso.ok ? 'ok' : 'warn')} role="status">{aviso.msg}</small>}
+      </div>
     </div>
   )
 }

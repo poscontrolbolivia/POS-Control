@@ -50,4 +50,6 @@ export async function rpc(nombre, params = {}, { conEmpresa = true } = {}) {
   return data
 }
 
+// Los raise exception de la base pueden venir como «codigo: texto legible». Aquí se deja el crudo
+// para que la capa de pantalla (StoreContext) traduzca los códigos que conoce y muestre el resto.
 export const mensajeError = e => (e && (e.message || e.error_description || String(e))) || 'Error inesperado'

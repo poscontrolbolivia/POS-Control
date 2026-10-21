@@ -14,6 +14,8 @@ const LLEVAR = 'llevar'
 const LARGO_ZONA = 80, LARGO_MESA = 60, CAP_MIN = 1, CAP_MAX = 50
 const COM_MIN = 1, COM_MAX = 99
 const TAM_MIN = 60
+const PASO_TAM = 25
+const ZOOM_MIN = 0.6, ZOOM_MAX = 2.5, ZOOM_PASO = 0.25
 const MAX_PX_MOVIL = 768
 
 const estadoMesa = c => (!c ? 'libre' : c.estado === 'precuenta' ? 'porcobrar' : c.items.some(i => i.estado === 'enviado') ? 'enviada' : 'ocupada')
@@ -51,6 +53,9 @@ const proximaMesaNombre = mesas => {
   return 'Mesa ' + (Math.max(0, ...nums) + 1)
 }
 
+// El número manda en el mapa: se saca del nombre (las cifras del final); si no hay, se muestra el nombre entero.
+const numeroDeMesa = m => String(m.nombre).match(/(\d+)\s*$/)?.[1] ?? ''
+
 const mesasPorZona = (mesas, id) => mesas.filter(m => m.zona === id).length
 
 const capacidadCuenta = (c, mesas) => {
@@ -59,7 +64,7 @@ const capacidadCuenta = (c, mesas) => {
   return ids.reduce((t, id) => t + (mesas.find(m => m.id === id)?.cap ?? 0), 0)
 }
 
-export default function HallPage({ rol, sesion }) {
+export default function HallPage({ rol, sesion, foco }) {
   const { s, d, modo } = useStore()
   const { money } = useMoneda()
   const { t, tOr } = useIdioma()
@@ -85,6 +90,20 @@ export default function HallPage({ rol, sesion }) {
 
   const [aviso, setAviso] = useState('')
   const avisoTimer = useRef(null)
+
+  // Zoom del lienzo: escale de TODO el mapa (mesas, textos y rejilla) sin cambiar las coordenadas guardadas.
+  const [zoom, setZoom] = useState(1)
+  const aplicarZoom = z => setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100)))
+  const zoomAcercar = () => aplicarZoom(zoom + ZOOM_PASO)
+  const zoomAlejar = () => aplicarZoom(zoom - ZOOM_PASO)
+
+  // Una alerta puede traer el foco de vuelta: se abre el salón completo y se selecciona su mesa.
+  useEffect(() => {
+    if (!foco?.seq || !foco.mesaId) return
+    setZona(TODAS)
+    setSel(foco.mesaId)
+    setEdit(false)
+  }, [foco?.seq])
 
   const [mueve, setMueve] = useState(null)
   const of = useRef(null)
@@ -115,12 +134,13 @@ export default function HallPage({ rol, sesion }) {
     clearTimeout(avisoTimer.current)
     avisoTimer.current = setTimeout(() => setAviso(''), 4500)
   }
+  // ✎ Editar (para teléfono): cambia nombre/teléfono de un pedido «para llevar» ya creado.
+  // La creación ya no pasa por aquí: el botón «Nuevo pedido» abre el pedido de una.
   const guardarCli = () => {
-    const nombre = (cli?.nombre || '').trim().slice(0, 80)
-    if (!nombre) return
+    if (!cli?.id) return
+    const nombre = (cli.nombre || '').trim().slice(0, 80)
     const tel = (cli.tel || '').trim().slice(0, 40)
-    if (cli.id) d({ t: 'llevar~', cuentaId: cli.id, nombre, tel })
-    else d({ t: 'abrir-llevar', nombre, tel, usuario: sesion?.usuario || sesion?.nombre || rol })
+    d({ t: 'llevar~', cuentaId: cli.id, nombre, tel })
     setCli(null)
   }
   const pasarAMesa = () => {
@@ -133,6 +153,15 @@ export default function HallPage({ rol, sesion }) {
   }
   const zonaNombre = id => zonas.find(z => z.id === id)?.nombre ?? t('salon.sinZona')
   const nMesasZona = id => mesasPorZona(s.mesas, id)
+
+  // Un toque: crea el pedido para llevar vacío, lo deja abierto y trae el panel de la orden enfrente.
+  // El nombre del cliente se escribe después, dentro del panel (OrderPanel).
+  const nuevoLlevar = () => {
+    const id = nuevoId()
+    d({ t: 'abrir-llevar', id, nombre: '', tel: '', usuario: sesion?.usuario || sesion?.nombre || rol })
+    setZona(LLEVAR)
+    setLlevarSelId(id)
+  }
 
   const aCoord = e => {
     const r = lienzo.current.getBoundingClientRect()
@@ -347,17 +376,17 @@ export default function HallPage({ rol, sesion }) {
               </div>
               <div className="me-campo"><span>{mesaSel.forma === 'rect' ? t('salon.ancho') : t('salon.tamano')}</span>
                 <div className="me-step">
-                  <button type="button" title={t('salon.tamanoMenos')} aria-label={t('salon.tamanoMenos')} onClick={() => tam('w', -10)}>−</button>
+                  <button type="button" title={t('salon.tamanoMenos')} aria-label={t('salon.tamanoMenos')} onClick={() => tam('w', -PASO_TAM)}>−</button>
                   <b>{mesaSel.forma === 'rect' ? mesaSel.w : Math.min(mesaSel.w, mesaSel.h)}</b>
-                  <button type="button" title={t('salon.tamanoMas')} aria-label={t('salon.tamanoMas')} onClick={() => tam('w', 10)}>＋</button>
+                  <button type="button" title={t('salon.tamanoMas')} aria-label={t('salon.tamanoMas')} onClick={() => tam('w', PASO_TAM)}>＋</button>
                 </div>
               </div>
               {mesaSel.forma === 'rect' && (
                 <div className="me-campo"><span>{t('salon.alto')}</span>
                   <div className="me-step">
-                    <button type="button" title={t('salon.tamanoMenos')} aria-label={t('salon.tamanoMenos')} onClick={() => tam('h', -10)}>−</button>
+                    <button type="button" title={t('salon.tamanoMenos')} aria-label={t('salon.tamanoMenos')} onClick={() => tam('h', -PASO_TAM)}>−</button>
                     <b>{mesaSel.h}</b>
-                    <button type="button" title={t('salon.tamanoMas')} aria-label={t('salon.tamanoMas')} onClick={() => tam('h', 10)}>＋</button>
+                    <button type="button" title={t('salon.tamanoMas')} aria-label={t('salon.tamanoMas')} onClick={() => tam('h', PASO_TAM)}>＋</button>
                   </div>
                 </div>
               )}
@@ -401,32 +430,30 @@ export default function HallPage({ rol, sesion }) {
           </div>
         )}
 
-        <div ref={lienzo} hidden={(vista === 'lista' && !edit) || enLlevar} className={'lienzo' + (edit ? ' edit' : '')} style={{ aspectRatio: `${W} / ${H}` }}
-          onPointerDown={e => { if (e.target === e.currentTarget) setSel(null) }}
-          onPointerMove={move} onPointerUp={up} onPointerCancel={suelta}>
+        <div className="lienzo-area" hidden={(vista === 'lista' && !edit) || enLlevar}>
+          <div className="lienzo-wrap">
+            <div ref={lienzo} className={'lienzo' + (edit ? ' edit' : '')} style={{ ['--z']: String(zoom) }}
+              onPointerDown={e => { if (e.target === e.currentTarget) setSel(null) }}
+              onPointerMove={move} onPointerUp={up} onPointerCancel={suelta}>
           {mesasZona.length === 0 && (
             <p className="lienzo-vacio">{edit && admin ? t('salon.sinMesas') : t('salon.sinMesasZona')}</p>
           )}
           {mesasZona.map(m => {
-            const cs = cuentasDeMesa(s, m.id), c = cs[0], est = estadoVarias(cs), total = cs.reduce((a, x) => a + totalFinal(x), 0)
-            const abono = round2(cs.reduce((a, x) => a + pagadoCuenta(x), 0))
+            const cs = cuentasDeMesa(s, m.id), c = cs[0], est = estadoVarias(cs)
             const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
             const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
 
             const capT = capacidadCuenta(c, s.mesas) || (m.cap || 0)
             const com = c ? comDe(c) : null
             const p = mueve && mueve.id === m.id ? mueve : m
+            const num = numeroDeMesa(m)
+            const sub = c ? `${money(resto)} · 👥 ${com}/${capT}${c.abiertaPor ? ` · 👤 ${c.abiertaPor}` : ''}` : `${t('salon.' + est)} · 👥 ${m.cap}`
             return (
               <div key={m.id} className={`mesa ${m.forma} ${est}${sel === m.id ? ' sel' : ''}${mueve?.id === m.id ? ' arrastrando' : ''}`}
+                title={sub}
                 onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) setSel(m.id) }} style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%`, width: `${(p.w / W) * 100}%`, height: `${(p.h / H) * 100}%` }}>
-                <b className="nombre">{m.nombre}</b>
-                <span className={'pax' + (com !== null && com > capT ? ' alerta' : '')}
-                  title={c ? (com > capT ? t('salon.comensalesDeMas', { comensales: com, cap: capT }) : t('salon.comensalesTitle', { comensales: com, cap: capT })) : t('salon.capacidadTitle', { cap: m.cap })}>
-                  👥 {c ? `${com}/${capT}` : m.cap}
-                </span>
-                {c && <small className="importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
-                {c && c.abiertaPor && <small className="abrio" title={t('pedido.abrio', { usuario: c.abiertaPor })}>👤 {c.abiertaPor}</small>}
-                {c && c.detalle && <small className="abrio" title={c.detalle}>📝 {c.detalle}</small>}
+                <b className="nombre">{num || m.nombre}</b>
+                {num && <span className="mesa-nom">{m.nombre}</span>}
                 {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
                 {c && heredadas.includes(c.id) && <span className="badge-heredada" title={t('salon.heredadaTitle')}>↩</span>}
                 {!unida && cs.length > 1 && <span className="badge-unida" title={t('pedido.menuDividir')}>✂ ×{cs.length}</span>}
@@ -438,12 +465,19 @@ export default function HallPage({ rol, sesion }) {
               </div>
             )
           })}
+            </div>
+          </div>
+          <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
+            <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
+            <button type="button" className="zoom-pct" onClick={() => setZoom(1)} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
+            <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
+          </div>
         </div>
 
         {enLlevar && (
           <div className="llevar">
             {puede(rol, 'abrir_mesa') && !cli && (
-              <div className="barra"><button className="success" onClick={() => setCli({ id: null, nombre: '', tel: '' })}>＋ {t('salon.llevarNuevo')}</button></div>
+              <div className="barra"><button className="success" onClick={nuevoLlevar}>＋ {tOr('salon.llevarNuevoPedido', 'Nuevo pedido')}</button></div>
             )}
             {cli && (
               <div className="llevar-form">
@@ -451,7 +485,7 @@ export default function HallPage({ rol, sesion }) {
                   onChange={e => setCli({ ...cli, nombre: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') guardarCli(); if (e.key === 'Escape') setCli(null) }} />
                 <input value={cli.tel} maxLength={40} inputMode="tel" placeholder={t('salon.llevarTel')} aria-label={t('salon.llevarTel')}
                   onChange={e => setCli({ ...cli, tel: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') guardarCli(); if (e.key === 'Escape') setCli(null) }} />
-                <button className="primary" disabled={!cli.nombre.trim()} onClick={guardarCli}>{cli.id ? t('comun.guardar') : t('salon.llevarCrear')}</button>
+                <button className="primary" onClick={guardarCli}>{t('comun.guardar')}</button>
                 <button className="ghost" onClick={() => setCli(null)}>{t('comun.cancelar')}</button>
               </div>
             )}
@@ -460,8 +494,9 @@ export default function HallPage({ rol, sesion }) {
               {llevarCuentas.map(c => (
                 <div key={c.id} className={'llevar-card ' + estadoMesa(c)}>
                   <button type="button" className="llevar-main" onClick={() => setLlevarSelId(c.id)}>
-                    <b>{t('salon.llevarCliente', { n: c.numero })}</b>
-                    <span className="llevar-nombre">{c.clienteNombre}</span>
+                    <b>{c.clienteNombre ? t('salon.llevarCliente', { n: c.numero }) : tOr('salon.llevarPedido', 'Pedido {n}', { n: c.numero })}</b>
+                    {c.clienteNombre && <span className="llevar-nombre">{c.clienteNombre}</span>}
+                    {!c.clienteNombre && <small className="llevar-sin-nombre">{tOr('salon.llevarSinNombre', 'Sin nombre · escríbelo en el pedido')}</small>}
                     {c.clienteTel && <small>{c.clienteTel}</small>}
                     <small className="importe">{money(saldoCuenta(c))} · {t('salon.' + estadoMesa(c))}</small>
                   </button>

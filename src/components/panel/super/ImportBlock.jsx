@@ -117,6 +117,10 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
               <span className="super-chip">{r.insumos} {tOr('super.importar.insumos', 'insumos')}</span>
               <span className="super-chip">{r.recetas} {tOr('super.importar.recetas', 'recetas')}</span>
               <span className="super-chip">{r.devoluciones} {tOr('super.importar.devoluciones', 'devoluciones')}</span>
+              {r.proveedores > 0 && <span className="super-chip">{r.proveedores} {tOr('super.importar.proveedores', 'proveedores')}</span>}
+              {r.costos > 0 && <span className="super-chip">{r.costos} {tOr('super.importar.costos', 'costos de plato')}</span>}
+              {r.deudas > 0 && <span className="super-chip">{r.deudas} {tOr('super.importar.deudas', 'cuentas por pagar')}</span>}
+              {r.alertas > 0 && <span className="super-chip">{r.alertas} {tOr('super.importar.alertas', 'alertas')}</span>}
               <span className="super-chip">{zipRef.current ? r.fotos : 0} {tOr('super.importar.fotos', 'fotos')}</span>
             </div>
             <p className="super-ayuda">

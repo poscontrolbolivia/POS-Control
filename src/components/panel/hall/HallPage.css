@@ -65,8 +65,8 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
   font-size: .85rem;
   font-weight: 600;
 }
-.salon .lienzo{ touch-action: pan-y; }
-.salon .lienzo .mesa{ touch-action: pan-y; -webkit-touch-callout: none; }
+.salon .lienzo{ touch-action: pan-x pan-y; }
+.salon .lienzo .mesa{ touch-action: pan-x pan-y; -webkit-touch-callout: none; }
 .salon .lienzo.edit, .salon .lienzo.edit .mesa{ touch-action: none; }
 .salon .lienzo.edit .mesa{ cursor: grab; }
 .salon .lienzo .mesa.arrastrando{ cursor: grabbing; z-index: 3; box-shadow: 0 6px 18px rgba(0, 0, 0, .22); opacity: .95; }
@@ -83,8 +83,13 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
   font-size: .9rem;
   pointer-events: none;
 }
-.salon .mesa{ overflow: hidden; padding: 2px 4px; gap: 1px; -webkit-user-select: none; user-select: none; }
-.salon .mesa .nombre{ font-weight: 700; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.salon .mesa{ overflow: hidden; padding: 1px 3px; gap: 0; -webkit-user-select: none; user-select: none; container-type: size; }
+/* El número manda: tamaño relativo a la mesa (cqw/cqh), así se lee siempre y crece al ampliar/zoom. */
+.salon .mesa .nombre{ font-weight: 800; line-height: 1; letter-spacing: -.02em; font-size: min(52cqw, 46cqh); white-space: nowrap; max-width: 100%; }
+/* Nombre completo y demás datos: muy discretos, y desaparecen si la mesa es chica. */
+.salon .mesa .mesa-nom{ font-size: min(15cqw, 13cqh); line-height: 1.1; opacity: .72; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container (max-width: 52px){ .salon .mesa .mesa-nom{ display: none; } }
+@container (max-height: 42px){ .salon .mesa .mesa-nom{ display: none; } }
 .salon .mesa .pax{ font-size: .9em; line-height: 1.15; color: var(--mut); white-space: nowrap; }
 .salon .mesa .pax.alerta{ color: var(--danger); font-weight: 700; }
 .salon .mesa .importe{ font-size: .9em; line-height: 1.15; }
@@ -168,7 +173,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .mesa-edit .campo input, .mesa-edit .campo select{ width: 100%; min-width: 0; }
 .mesa-edit .grupo{ justify-content: space-between; width: 100%; }
 .mesa-edit > button{ width: 100%; }
-.salon .lienzo{ width: 100%; border-radius: 12px; }
+.salon .lienzo-area{ width: 100%; border-radius: 12px; }
 .salon .mesa{ font-size: clamp(.58rem, 2.6vw, .85rem); border-width: 2px; }
 .salon .mesa .badge-unida{ font-size: .6rem; padding: 1px 5px; top: 2px; right: 3px; }
 .pista{ flex: 1 1 100%; }
@@ -222,22 +227,67 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .mesa-item:hover:not(:disabled){filter:brightness(.97);transform:translateY(-1px)}
 @media(max-width:768px){.vista-sel .txt{display:none}
 .salon .mesa .pax{display:none}}
-.salon .lienzo{
+/* El área es el marco fijo del mapa (encaja en la pantalla igual que antes).
+   .lienzo-wrap da scroll cuando se acerca; .lienzo multiplica su tamaño con --z sin tocar las coordenadas. */
+.salon .lienzo-area{
   --lienzo-descuento:285px;
+  position:relative;
+  width:100%;
   height:auto;
+  aspect-ratio:1000 / 600;
   max-height:max(200px,calc(100vh - var(--lienzo-descuento)));
   max-height:max(200px,calc(100dvh - var(--lienzo-descuento)));
   max-width:calc(max(200px,calc(100vh - var(--lienzo-descuento))) * 1000 / 600);
   max-width:calc(max(200px,calc(100dvh - var(--lienzo-descuento))) * 1000 / 600);
   margin:0 auto;
+  border:2px solid var(--line-fuerte);
+  border-radius:14px;
+  background-color:var(--lienzo);
+  overflow:hidden;
 }
+.salon .lienzo-wrap{
+  position:absolute;
+  inset:0;
+  overflow:auto;
+  touch-action:pan-x pan-y;
+}
+.salon .lienzo{
+  width:calc(100% * var(--z, 1));
+  height:calc(100% * var(--z, 1));
+  border:0;
+  border-radius:0;
+  background-color:transparent;
+}
+/* Zoom: píldora chiquita en la esquina inferior derecha del mapa, lejos de la cabecera. */
+.zoom-ctrl{
+  position:absolute;
+  bottom:8px;
+  right:8px;
+  z-index:4;
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  padding:2px;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:999px;
+  box-shadow:0 2px 8px rgba(0, 0, 0, .14);
+}
+.zoom-ctrl .ico{ background:transparent; color:var(--ink) }
+.zoom-ctrl .ico:hover:not(:disabled){ background:var(--libre); filter:none }
+.zoom-ctrl .zoom-pct{
+  border:0; background:transparent; color:var(--ink); font-weight:700; font-size:.78rem;
+  min-height:30px; min-width:3.4rem; padding:0 8px; border-radius:999px; line-height:1;
+}
+.zoom-ctrl .zoom-pct:hover{ background:var(--libre); }
+.zoom-ctrl .ico:disabled{ opacity:.3; }
 @media (min-width:901px){.salon .mapa-col.editando{position:relative;padding-right:352px}
 .salon .mapa-col.editando .mesa-edit{position:absolute;top:0;right:0;width:344px;margin:0}
-.salon .mapa-col.editando .lienzo{--lienzo-descuento:315px}
+.salon .mapa-col.editando .lienzo-area{--lienzo-descuento:315px}
 .salon .mapa-col.editando .zonas-scroll{flex-wrap:nowrap;overflow-x:auto}
 .salon .mapa-col.editando .zonas-scroll>*{flex:none}}
 @media (max-width:900px){.salon .mapa-col.editando{display:flex;flex-direction:column;gap:8px}
-.salon .mapa-col.editando .lienzo{order:3;align-self:center;width:100%;--lienzo-descuento:340px}
+.salon .mapa-col.editando .lienzo-area{order:3;align-self:center;width:100%;--lienzo-descuento:340px}
 .salon .mapa-col.editando .mesa-edit{
     order:4;position:static;z-index:auto;margin:0;
     border:2px solid var(--ac);border-radius:14px;box-shadow:none;
@@ -262,6 +312,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .llevar-main { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 8px; }
 .llevar-main:focus-visible { outline: 2px solid var(--accent, #2563eb); }
 .llevar-nombre { font-size: 1.05rem; font-weight: 700; }
+.llevar-sin-nombre { font-size: .8rem; font-weight: 600; opacity: .7; }
 .llevar-acc, .llevar-mesa { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .llevar-mesa select { flex: 1 1 140px; min-width: 0; }
 .llevar-mesa input { width: 64px; }

@@ -29,6 +29,55 @@
   .mn-fila-cab .mn-orden-precio{display:none}
 }
 
+/* Selector de tipo (Grupos · Productos · Indicaciones): píldoras .tab del proyecto */
+.mn-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.mn-tabs .tab{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 16px;font-size:.95rem}
+.mn-tab-n{min-width:24px;height:24px;padding:0 6px;border-radius:999px;display:inline-grid;place-items:center;
+  background:var(--libre);color:var(--mut);font-size:.74rem;font-weight:700;font-variant-numeric:tabular-nums}
+.mn-tabs .tab.on .mn-tab-n{background:rgba(255,255,255,.28);color:#fff}
+
+/* Aviso discreto «esto está en otro tipo» con botón para saltar */
+.mn-sugerencia{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 12px;
+  border:1.5px dashed var(--line-fuerte);border-radius:var(--r-pill);background:var(--card);color:var(--mut);font-size:.9rem;font-weight:600}
+.mn-sugerencia .ghost{min-height:38px;padding:5px 14px;font-size:.85rem}
+
+/* Tarjeta de grupo en modo Grupos: solo se administra el grupo, sin la lista de productos */
+.mn-grupo-hint{margin:0;padding:0 12px 12px;color:var(--mut);font-size:.85rem}
+
+/* Tarjeta de una lista de indicaciones */
+.mn-tarjeta-ind{padding:4px 0 10px}
+.mn-ind-nombre{margin:0;font-size:1.05rem}
+.mn-tarjeta-ind > .mn-pills,.mn-tarjeta-ind > .mn-ind-uso{padding:0 12px}
+.mn-ind-uso{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.mn-ind-sin{color:var(--mut);font-size:.85rem;font-weight:600}
+
+/* Píldoras de opciones (＋ agrega, ✕ quita) */
+.mn-pills{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.mn-pill{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:4px 6px 4px 14px;
+  border:1.5px solid var(--line-fuerte);border-radius:999px;background:var(--card-2);font-weight:600;max-width:100%}
+.mn-pill small{color:var(--mut);font-weight:500}
+.mn-pill-soft{padding:6px 14px;background:var(--verde-bg);border-color:var(--verde-bd);color:var(--verde-txt)}
+.mn-pill-x{flex:0 0 auto;width:30px;height:30px;min-width:30px;min-height:30px;padding:0;border:0;border-radius:999px;
+  display:inline-grid;place-items:center;background:var(--rojo-bg);color:var(--rojo-txt);font-size:.82rem;line-height:1}
+.mn-pill-x:hover:not(:disabled){background:var(--rojo-hover);filter:none}
+.mn-pill-add{display:flex;gap:8px;align-items:center}
+.mn-pill-add input{flex:1 1 160px;min-width:0;min-height:44px}
+.mn-circ{flex:0 0 auto;width:46px;height:46px;min-width:46px;min-height:46px;padding:0;border:0;border-radius:999px;
+  display:inline-grid;place-items:center;font-size:1.1rem;line-height:1;font-weight:700;color:var(--on-btn);
+  background:var(--gloss),var(--verde);box-shadow:0 4px 12px color-mix(in srgb,var(--verde) 35%,transparent)}
+.mn-circ:hover:not(:disabled){filter:brightness(.94);transform:translateY(-1px)}
+
+/* Bloque «Indicaciones» dentro de la ventana de producto: un solo lugar */
+.mn-bloque{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.mn-bloque-tit{margin:0;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);font-weight:700}
+.mn-nota{color:var(--mut);font-size:.8rem;font-weight:500}
+
+/* Reglas de la lista (obligatoria + mín/máx) */
+.mn-reglas{display:flex;flex-direction:column;gap:10px}
+.mn-check{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:6px 14px;
+  border:1.5px solid var(--line-fuerte);border-radius:999px;background:var(--card);font-weight:600;cursor:pointer;align-self:flex-start}
+.mn-check input{width:20px;height:20px;min-height:0;accent-color:var(--ac)}
+
 /* Ventana en primer plano */
 .mn-overlay{position:fixed;inset:0;z-index:1000;background:rgba(10,18,30,.62);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
 .mn-ventana{width:100%;max-width:560px;max-height:calc(100dvh - 32px);overflow-y:auto;background:var(--card);color:var(--ink);border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.45);border:1.5px solid var(--line-fuerte,var(--line))}
@@ -44,14 +93,60 @@
 .mn-pie{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:6px}
 .mn-itemnum{margin:0;color:var(--mut);font-weight:700}
 .mn-avanzado summary{cursor:pointer;color:var(--mut);font-weight:600;min-height:36px;display:flex;align-items:center}
-.mn-avanzado .menu-areas{display:flex;gap:12px;flex-wrap:wrap;padding:6px 0}
+.mn-avanzado .menu-areas,.mn-bloque .menu-areas{display:flex;gap:12px;flex-wrap:wrap;padding:6px 0}
 .mn-extra{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px}
 .mn-estado{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .mn-estado .adm-motivo{flex:1 1 160px;min-width:0}
 
-.mn-fila-ind{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px}
+.mn-ind-uso .adm-chip{background:var(--libre)}
+
+/* ---------- costo / margen ---------- */
+/* Columna extra (Costo o Margen %) junto al precio: el precio se ve igual que siempre */
+.mn-fila.con-dato{grid-template-columns:34px 64px minmax(0,1fr) 108px 92px auto}
+.mn-dato{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mn-dato.sin{color:var(--mut);font-weight:600}
+.mn-mg.mg-bjo,.mn-dato.mg-bjo{color:var(--danger)}
+.mn-mg.mg-med,.mn-dato.mg-med{color:var(--warn)}
+.mn-mg.mg-alto,.mn-dato.mg-alto{color:var(--ok)}
+.mn-mg.mg-sin,.mn-dato.mg-sin{color:var(--mut);font-weight:600}
+.mn-dato-toggle{text-align:right;white-space:nowrap}
+.mn-dato-toggle.on{color:var(--ink) !important;text-decoration:underline;text-underline-offset:3px}
+@media (max-width:620px){
+  .mn-fila.con-dato{grid-template-columns:30px 52px minmax(0,1fr) auto auto}
+  .mn-fila.con-dato .mn-precio{grid-column:3;grid-row:2;text-align:left}
+  .mn-fila.con-dato .mn-dato{grid-column:4;grid-row:2;text-align:left}
+  .mn-fila.con-dato button.info{grid-column:5;grid-row:1 / span 2}
+  .mn-fila-cab .mn-cab-esp{display:none}
+}
+
+/* Aviso en pantalla (sustituto de alert/confirm nativos) */
+.mn-mensaje{display:flex;align-items:center;gap:10px;justify-content:space-between;margin:8px 0;padding:10px 14px;border-radius:var(--r-pill);font-weight:600;line-height:1.35}
+.mn-mensaje.ok{background:var(--ok-bg);border:1px solid var(--ok-bd);color:var(--ok-ink)}
+.mn-mensaje.warn{background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-ink)}
+.mn-mensaje.danger{background:var(--danger-bg);border:1px solid var(--danger-bd);color:var(--danger-ink)}
+.mn-mensaje-x{flex:0 0 auto;width:40px;height:40px;min-width:40px;min-height:40px;padding:0;border-radius:999px;display:inline-grid;place-items:center}
+
+/* Utilidad y margen en vivo del modal de producto */
+.mn-margen-vivo{margin:2px 0 0;font-size:.9rem;color:var(--mut)}
+.mn-margen-vivo b{font-variant-numeric:tabular-nums}
+.mn-margen-vivo.sin{font-style:italic}
+
+/* Barra de costo masiva sin selección */
+.mn-costos-bar{border-style:dashed}
+
+/* Tabla de simulación */
+.mn-tabla-wrap{max-height:44dvh;overflow:auto;border:1px solid var(--line);border-radius:var(--r-sm)}
+.mn-tabla{width:100%;border-collapse:collapse;font-size:.9rem}
+.mn-tabla th{position:sticky;top:0;background:var(--card-2,var(--card));color:var(--mut);text-transform:uppercase;font-size:.74rem;font-weight:700;text-align:left;padding:8px 10px;border-bottom:2px solid var(--line)}
+.mn-tabla td{padding:7px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mn-tabla td:first-child{white-space:normal;min-width:120px}
+.mn-tabla tr:last-child td{border-bottom:0}
+.mn-masiva-res{margin:0;color:var(--mut);font-weight:600}
+.mn-tabla-mas{margin:6px 0 0;color:var(--mut);font-size:.82rem}
 .mn-ind-grupo{margin-top:8px}
-.mn-indics .mn-nombre small{opacity:.75}
 
 .mn-det{align-items:center;margin-top:6px}
 .mn-det input,.mn-det select{min-height:40px}
+
+.mn-costo-reemp{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;color:var(--mut);cursor:pointer}
+.mn-costo-reemp input{width:auto;min-height:0}

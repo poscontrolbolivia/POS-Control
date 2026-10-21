@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useIdioma } from '../../i18n/index.jsx'
 import { soporteSerial, conectarImpresora, estadoImpresora } from '../../services/printer.js'
-import { salidaDe, fijarSalida, impresoraDe, fijarImpresora, modoAgenteDe, fijarModoAgente, grupoListo, imprimirTrabajo, dispararCiclo } from '../../services/station.js'
+import { salidaDe, fijarSalida, impresorasDe, fijarImpresoras, modoAgenteDe, fijarModoAgente, grupoListo, imprimirTrabajo, dispararCiclo } from '../../services/station.js'
 import { listarImpresorasAgente, urlAgente, fijarUrlAgente } from '../../services/printAgent.js'
 
 export default function PrinterOutput({ g, cfg, onCambio }) {
-  const { t } = useIdioma()
+  const { t, tOr } = useIdioma()
   const salida = salidaDe(g.id)
   const est = estadoImpresora(g.id)
   const listo = grupoListo(g.id)
@@ -56,8 +56,9 @@ export default function PrinterOutput({ g, cfg, onCambio }) {
     finally { setOcupado(false); onCambio?.() }
   }
 
-  const elegida = impresoraDe(g.id)
-  const lista = ag.impresoras.includes(elegida) || !elegida ? ag.impresoras : [elegida, ...ag.impresoras]
+  const elegidas = impresorasDe(g.id)
+  const lista = [...elegidas.filter(n => !ag.impresoras.includes(n)), ...ag.impresoras]
+  const alternar = nombre => { fijarImpresoras(g.id, elegidas.includes(nombre) ? elegidas.filter(x => x !== nombre) : [...elegidas, nombre]); cambio() }
 
   return (
     <div className="imp-salida">
@@ -70,12 +71,22 @@ export default function PrinterOutput({ g, cfg, onCambio }) {
           </select>
         </label>
         {salida === 'agente' && (
-          <label className="adm-campo"><span>{t('agente.impresoraLabel')}</span>
-            <select value={elegida} onChange={e => { fijarImpresora(g.id, e.target.value); cambio() }}>
-              <option value="">{t('agente.elige')}</option>
-              {lista.map(n => <option key={n} value={n}>{n}{n === ag.pred ? t('agente.predeterminada') : ''}</option>)}
-            </select>
-          </label>
+          <div className="imp-multi">
+            <span>{tOr('agente.impresorasLabel', 'Impresoras del agente')}</span>
+            <div className="imp-multi-chips">
+              {lista.map(n => (
+                <button type="button" key={n} className={'imp-op ' + (elegidas.includes(n) ? 'primary' : 'ghost')} onClick={() => alternar(n)}>
+                  {n}{n === ag.pred ? ` ${t('agente.predeterminada')}` : ''}
+                </button>
+              ))}
+              {lista.length > 1 && (
+                <button type="button" className={'imp-op ' + (elegidas.length === lista.length ? 'primary' : 'ghost')}
+                  onClick={() => fijarImpresoras(g.id, elegidas.length === lista.length ? [] : lista)}>{tOr('impresoras.todas', 'Todas')}</button>
+              )}
+              {!lista.length && <span className="imp-dato">{ag.cargando ? t('agente.cargando') : t('agente.sinImpresoras')}</span>}
+            </div>
+            <p className="imp-dato" style={{ margin: 0 }}>{tOr('agente.variasAyuda', 'Marca varias a la vez y la misma comanda sale por todas. Por puerto serie solo cabe una: para duplicar en serie crea otro grupo.')}</p>
+          </div>
         )}
         {salida === 'agente' && (
           <label className="adm-campo"><span>{t('agente.textoLabel')}</span>

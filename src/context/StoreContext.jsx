@@ -5,6 +5,16 @@ import { cargarEstadoInicial, despacharSupabase } from '../services/db.js'
 import { round2 } from '../services/format.js'
 import { repartirPorGrupo } from '../services/printing.js'
 const uid = () => crypto.randomUUID()
+
+// La base puede avisar con «codigo: texto legible» (raise exception); al mesero le sirve la frase sola.
+const textoError = e => {
+  const crudo = (e && (e.message || e.error_description || String(e))) || 'Error inesperado'
+  const m = /^([a-z_]+):\s/.exec(crudo)
+  return m ? crudo.slice(m[0].length) : crudo
+}
+
+const num = x => { const n = Number(x); return Number.isFinite(n) ? n : 0 }
+const fechaLocal = (d = new Date()) => { const x = d instanceof Date ? d : new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}` }
 const KEY = 'pos-control-demo-v2'
 const KEY_SESION = 'pos-sesion'
 
@@ -25,9 +35,26 @@ const GRUPOS_DEMO = [
   { id: 'caja', nombre: 'Caja (tickets)', ancho: 32, baud: 9600, tickets: true },
 ]
 
+// Para que el Menú (costo/margen) y Proveedores tengan algo que mostrar en demo.
+const PROVEEDORES_DEMO = [
+  { id: 'pv1', nombre: 'Depósito La Rápida', telefono: '700 11 223', email: '', direccion: 'Av. Blanco s/n', nota: '', activo: true },
+  { id: 'pv2', nombre: 'Lácteos y Quesos SRL', telefono: '', email: 'ventas@lacteos.demo', direccion: '', nota: 'Fía 8 días', activo: true },
+]
+const costoDeDemo = () => productos.map(p => ({
+  productoId: p.id, costo: round2(p.precio * (p.seccionId === 's1' ? 0.45 : 0.35)), proveedorId: p.seccionId === 's1' ? 'pv2' : 'pv1',
+}))
+const deudasDeDemo = () => {
+  const ayer = fechaLocal(Date.now() - 86400000), hace5 = fechaLocal(Date.now() - 5 * 86400000)
+  return [
+    { id: uid(), proveedorId: 'pv1', fecha: hace5, vencimiento: ayer, concepto: 'Túley, arroz y aceite', monto: 850, pagado: 300, saldo: 550, nota: '', creadaEn: Date.now() - 5 * 86400000, pagadaEn: null },
+    { id: uid(), proveedorId: 'pv2', fecha: ayer, vencimiento: null, concepto: 'Leche y queso para los desayunos', monto: 420, pagado: 0, saldo: 420, nota: '', creadaEn: Date.now() - 86400000, pagadaEn: null },
+    { id: uid(), proveedorId: 'pv1', fecha: ayer, vencimiento: null, concepto: 'Cerveza y refrescos', monto: 600, pagado: 600, saldo: 0, nota: '', creadaEn: Date.now() - 86400000, pagadaEn: Date.now() - 3600000 },
+  ]
+}
+
 const inicial = {
   config: {
-    nombre: 'Mi negocio', moneda: 'Bs', ivaPct: 0, propinaPct: 10,
+    nombre: 'Mi negocio', moneda: 'Bs', ivaPct: 0, propinaPct: 10, propinaMostrar: true,
 
     gruposImpresion: GRUPOS_DEMO, impresoraPorSeccion: { s1: 'cocina', s2: 'cocina', s3: 'barra' },
   },
@@ -38,6 +65,11 @@ const inicial = {
   cuentas: [],
   caja: { turno: null, siguienteTurno: 1, historial: [] },
   devoluciones: [],
+  costos: costoDeDemo(),
+  proveedores: PROVEEDORES_DEMO.map(p => ({ ...p, creadaEn: Date.now() })),
+  deudas: deudasDeDemo(),
+  alertas: [],
+  insumos: [],
   usuariosDemo: [
     { usuario: 'admin', clave: '1234', rol: 'admin', nombre: 'Administrador' },
     { usuario: 'cajero', clave: '1234', rol: 'cajero', nombre: 'Cajero' },
@@ -50,7 +82,14 @@ const migrar = e => {
   const config = { ...inicial.config, ...(e.config || {}) }
   if (!Array.isArray(config.gruposImpresion) || !config.gruposImpresion.length) config.gruposImpresion = GRUPOS_DEMO
   if (!config.impresoraPorSeccion) config.impresoraPorSeccion = inicial.config.impresoraPorSeccion
-  return sembrar({ ...e, config })
+  const base = { ...e, config }
+  // Arrays que llegaron con esta versión: un respaldo viejo del navegador no los trae.
+  if (!Array.isArray(base.costos)) base.costos = costoDeDemo()
+  if (!Array.isArray(base.proveedores)) base.proveedores = PROVEEDORES_DEMO.map(p => ({ ...p, creadaEn: Date.now() }))
+  if (!Array.isArray(base.deudas)) base.deudas = deudasDeDemo()
+  if (!Array.isArray(base.alertas)) base.alertas = []
+  if (!Array.isArray(base.insumos)) base.insumos = []
+  return sembrar(base)
 }
 
 const nuevaCuenta = (a) => ({ id: uid(), tipo: 'mesa', canal: 'mesa', estado: 'abierta', items: [], pagos: [], propina: 0, descuento: 0, detalle: '', comensales: 1, abiertaEn: Date.now(), ...a })
@@ -68,8 +107,8 @@ function sembrar(s) {
   const devuelto = it('Sopa del día', 1, 'anulado', min(14), ['cocina'], { motivo: 'No salió' })
   const cuentas = [
     nuevaCuenta({ mesaIds: ['m1'], comensales: 4, abiertaPor: 'mesero', abiertaEn: min(22), items: [
-      it('Milanesa', 1, 'enviado', min(11), ['cocina'], { nota: 'sin picante' }),
-      it('Pique macho', 2, 'enviado', min(11), ['cocina']),
+      it('Milanesa', 1, 'enviado', min(19), ['cocina'], { nota: 'sin picante' }),
+      it('Pique macho', 2, 'enviado', min(19), ['cocina']),
       it('Sopa del día', 1, 'listo', min(6), ['cocina'], { areasListas: ['cocina'], areasEn: { cocina: min(6) }, listoEn: min(6) }),
       it('Api con pastel', 1, 'enviado', min(3), ['cocina', 'barra'], { areasListas: ['cocina'], areasEn: { cocina: min(3) } }),
       it('Café', 2, 'anulacion', min(4), ['cocina'], { motivo: 'Cambio del cliente', anulacionEstadoPrevio: 'enviado', anulacionPedidaEn: min(1), anulacionPor: 'mesero' }),
@@ -163,7 +202,7 @@ function reducer(s, a) {
     case 'abrir-llevar': {
       const dia = x => new Date(x || 0).toDateString()
       const n = s.cuentas.filter(c => c.canal === 'llevar' && dia(c.abiertaEn) === dia(Date.now())).reduce((m, c) => Math.max(m, c.numero || 0), 0) + 1
-      return { ...s, cuentas: [...s.cuentas, nuevaCuenta({ tipo: 'directa', canal: 'llevar', numero: n, mesaIds: [], clienteNombre: a.nombre, clienteTel: a.tel || '', abiertaPor: a.usuario })] }
+      return { ...s, cuentas: [...s.cuentas, nuevaCuenta({ ...(a.id ? { id: a.id } : {}), tipo: 'directa', canal: 'llevar', numero: n, mesaIds: [], clienteNombre: a.nombre, clienteTel: a.tel || '', abiertaPor: a.usuario })] }
     }
     case 'llevar~': return upd(a.cuentaId, c => ({ ...c, clienteNombre: a.nombre, clienteTel: a.tel || '' }))
     case 'llevar-mesa': return upd(a.cuentaId, c => (c.canal !== 'llevar' ? c : { ...c, tipo: 'mesa', canal: 'mesa', numero: undefined, mesaIds: [a.mesaId], comensales: a.comensales || c.comensales || 1 }))
@@ -294,7 +333,95 @@ function reducer(s, a) {
       return (p.areas || []).includes(a.id) ? { ...p, areas: rest.length ? rest : [a.reemplazo || 'cocina'] } : p
     }) }
     case 'producto~': return { ...s, productos: s.productos.map(p => (p.id === a.id ? { ...p, ...a.cambios } : p)) }
-    case 'producto-': return { ...s, productos: s.productos.filter(p => p.id !== a.id) }
+    case 'producto-': return { ...s, productos: s.productos.filter(p => p.id !== a.id), costos: (s.costos || []).filter(c => c.productoId !== a.id) }
+
+    // LISTO DEL PEDIDO: mismo criterio que el servidor (los platos enviados pasan a listo con todas sus áreas).
+    case 'listo': return upd(a.cuentaId, c => {
+      if (a.lista === false) {
+        return { ...c, items: c.items.map(i => (i.estado === 'listo' ? { ...i, estado: 'enviado', listoEn: null, areasListas: [] } : i)) }
+      }
+      const en = Date.now()
+      return { ...c, items: c.items.map(i => {
+        if (i.estado !== 'enviado') return i
+        const areas = Array.isArray(i.areas) && i.areas.length ? i.areas : areasDel(i, s)
+        return { ...i, estado: 'listo', listoEn: en, areasListas: [...areas], areasEn: { ...(i.areasEn || {}), ...Object.fromEntries(areas.map(x => [x, en])) } }
+      }) }
+    })
+
+    // COSTO Y MARGEN (en demo el admin también los ve, para poder probar la pantalla).
+    case 'costo~': {
+      const resto = (s.costos || []).filter(c => c.productoId !== a.productoId)
+      return { ...s, costos: [...resto, { productoId: a.productoId, costo: round2(Number(a.costo) || 0), proveedorId: a.proveedorId || null }] }
+    }
+    case 'costo-pct': {
+      const pct = Number(a.pct) || 0
+      if (pct <= 0 || pct > 100) return s
+      const elegidos = new Set(a.productoIds || [])
+      const previos = new Map((s.costos || []).map(x => [x.productoId, x]))
+      const nuevos = s.productos
+        .filter(p => p.precio > 0 && (!elegidos.size || elegidos.has(p.id)))
+        .filter(p => a.reemplazar || !(previos.get(p.id)?.costo > 0))
+        .map(p => ({ productoId: p.id, costo: round2(p.precio * pct / 100), proveedorId: previos.get(p.id)?.proveedorId ?? null }))
+      const ids = new Set(nuevos.map(x => x.productoId))
+      return { ...s, costos: [...(s.costos || []).filter(x => !ids.has(x.productoId)), ...nuevos] }
+    }
+    case 'margen-aplicar': {
+      const mapa = new Map((s.costos || []).map(c => [c.productoId, c]))
+      const elegidos = new Set(a.productoIds || [])
+      const factor = 1 - (Number(a.margenPct) || 0) / 100
+      if (factor <= 0) return s
+      return { ...s, productos: s.productos.map(p => {
+        const c = mapa.get(p.id)
+        if (!c || !(c.costo > 0) || !p.precio) return p
+        if (elegidos.size && !elegidos.has(p.id)) return p
+        return { ...p, precio: round2(c.costo / factor) }
+      }) }
+    }
+
+    case 'prov+': return { ...s, proveedores: [...(s.proveedores || []), { id: uid(), creadaEn: Date.now(), nombre: '', telefono: '', email: '', direccion: '', nota: '', activo: true, ...a.proveedor }] }
+    case 'prov~': return { ...s, proveedores: (s.proveedores || []).map(p => (p.id === a.id ? { ...p, ...a.cambios } : p)) }
+    case 'prov-': {
+      // Con saldo pendiente no se borra: queda desactivado, igual que en la base.
+      const conSaldo = (s.deudas || []).some(x => x.proveedorId === a.id && num(x.saldo) > 0)
+      return conSaldo
+        ? { ...s, proveedores: (s.proveedores || []).map(p => (p.id === a.id ? { ...p, activo: false } : p)) }
+        : { ...s, proveedores: (s.proveedores || []).filter(p => p.id !== a.id), deudas: (s.deudas || []).filter(x => x.proveedorId !== a.id) }
+    }
+
+    case 'deuda+': {
+      const monto = round2(Number(a.deuda?.monto) || 0)
+      return { ...s, deudas: [...(s.deudas || []), {
+        id: uid(), proveedorId: a.deuda?.proveedorId || null, fecha: a.deuda?.fecha || fechaLocal(),
+        vencimiento: a.deuda?.vencimiento || null, concepto: a.deuda?.concepto || '',
+        monto, pagado: 0, saldo: monto, nota: a.deuda?.nota || '', creadaEn: Date.now(), pagadaEn: null,
+      }] }
+    }
+    case 'deuda~': return { ...s, deudas: (s.deudas || []).map(x => {
+      if (x.id !== a.id) return x
+      const mez = { ...x, ...a.cambios }
+      const monto = round2(Number(mez.monto) || 0)
+      const pagado = round2(Math.min(monto, Number(x.pagado) || 0))
+      const saldo = round2(Math.max(0, monto - pagado))
+      return { ...mez, monto, pagado, saldo, pagadaEn: saldo === 0 ? (x.pagadaEn || Date.now()) : null }
+    }) }
+    case 'deuda-abono': return { ...s, deudas: (s.deudas || []).map(x => {
+      if (x.id !== a.id) return x
+      const monto = round2(Math.max(0, Math.min(Number(a.monto) || 0, num(x.saldo))))
+      const pagado = round2(num(x.pagado) + monto)
+      const saldo = round2(Math.max(0, num(x.monto) - pagado))
+      const nota = (a.nota || '').trim()
+      return { ...x, pagado, saldo, nota: nota ? `${x.nota ? x.nota + ' · ' : ''}${nota}` : x.nota, ...(saldo === 0 ? { pagadaEn: Date.now() } : {}) }
+    }) }
+    case 'deuda-': return { ...s, deudas: (s.deudas || []).filter(x => x.id !== a.id) }
+
+    case 'alerta+': return { ...s, alertas: [{
+      id: uid(), tipo: a.alerta?.tipo || 'general', titulo: a.alerta?.titulo || '', mensaje: a.alerta?.mensaje || '',
+      cuentaId: a.alerta?.cuentaId ?? null, mesaId: a.alerta?.mesaId ?? null, prioridad: Number(a.alerta?.prioridad) || 5,
+      creadaPor: a.usuario || '', creadaEn: Date.now(), resueltaPor: undefined, resueltaEn: null,
+    }, ...(s.alertas || [])] }
+    case 'alerta-resolver': return { ...s, alertas: (s.alertas || []).map(x => (x.id === a.id
+      ? { ...x, resueltaEn: a.resuelta ? Date.now() : null, resueltaPor: a.resuelta ? (a.usuario || 'demo') : undefined }
+      : x)) }
 
     case 'reset': return inicial
     default: return s
@@ -304,7 +431,7 @@ function reducer(s, a) {
 export const leerSesionSup = () => { try { const r = localStorage.getItem(KEY_SESION); return r ? JSON.parse(r) : null } catch { return null } }
 export const guardarSesionSup = ses => { try { if (ses) localStorage.setItem(KEY_SESION, JSON.stringify(ses)); else localStorage.removeItem(KEY_SESION) } catch {  } window.dispatchEvent(new Event('pos-sesion')) }
 
-const SUP_VACIO = { ...inicial, cuentas: [], caja: { turno: null, siguienteTurno: 1, historial: [] }, usuariosDemo: [], _supCargando: true }
+const SUP_VACIO = { ...inicial, cuentas: [], caja: { turno: null, siguienteTurno: 1, historial: [] }, usuariosDemo: [], costos: [], proveedores: [], deudas: [], alertas: [], insumos: [], _supCargando: true }
 
 function useSupabaseStore(empresaId) {
   const [s, setS] = useState(null)
@@ -312,6 +439,7 @@ function useSupabaseStore(empresaId) {
   const estadoRef = useRef(null)
   const colaRef = useRef(Promise.resolve())
   const mapaRef = useRef(new Map())
+  const avisa = useCallback(m => setError(textoError(typeof m === 'string' ? { message: m } : m)), [])
 
   useEffect(() => {
     let vivo = true
@@ -324,7 +452,7 @@ function useSupabaseStore(empresaId) {
     fijarEmpresa(empresaId)
     cargarEstadoInicial(empresaId)
       .then(e => { if (!vivo) return; estadoRef.current = { ...e, _empresaId: empresaId }; setS(estadoRef.current) })
-      .catch(err => { if (vivo) setError('No se pudo cargar la empresa: ' + (err?.message || err)) })
+      .catch(err => { if (vivo) setError('No se pudo cargar la empresa: ' + textoError(err)) })
     return () => { vivo = false }
   }, [empresaId])
 
@@ -353,13 +481,16 @@ function useSupabaseStore(empresaId) {
     const prev = estadoRef.current
     const nuevo = reducer(prev, a)
 
-    const dif = (arrA, arrB) => { const S = new Set(arrA.map(x => x.id)); return arrB.filter(x => !S.has(x.id)).map(x => x.id) }
+    const dif = (arrA, arrB) => { const S = new Set((arrA || []).map(x => x.id)); return (arrB || []).filter(x => !S.has(x.id)).map(x => x.id) }
     const accion = {
       ...a,
       _nuevos: {
         cuentas: dif(prev.cuentas, nuevo.cuentas),
         secciones: dif(prev.secciones, nuevo.secciones),
         productos: dif(prev.productos, nuevo.productos),
+        proveedores: dif(prev.proveedores, nuevo.proveedores),
+        deudas: dif(prev.deudas, nuevo.deudas),
+        alertas: dif(prev.alertas, nuevo.alertas),
       },
     }
     estadoRef.current = { ...nuevo, _empresaId: empresaId, _supCargando: false }
@@ -367,12 +498,12 @@ function useSupabaseStore(empresaId) {
     colaRef.current = colaRef.current.then(async () => {
       if (!estadoRef.current) return
       try {
-        const res = await despacharSupabase(estadoRef.current, accion, { mapa: mapaRef.current, setError })
+        const res = await despacharSupabase(estadoRef.current, accion, { mapa: mapaRef.current, setError: avisa })
         estadoRef.current = { ...res, _empresaId: empresaId }
         setS(estadoRef.current)
         setError('')
       } catch (err) {
-        setError(err?.message || String(err))
+        avisa(err)
         try {
           const fresco = await cargarEstadoInicial(empresaId)
           estadoRef.current = { ...fresco, _empresaId: empresaId }
@@ -423,4 +554,17 @@ export const ordenDelDia = (cuentas, cuenta) => {
   const dia = ts => { const d = new Date(ts || 0); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` }
   const delDia = (cuentas || []).filter(x => dia(x.abiertaEn) === dia(cuenta?.abiertaEn)).sort((a, b) => (a.abiertaEn || 0) - (b.abiertaEn || 0))
   return delDia.findIndex(x => x.id === cuenta?.id) + 1
+}
+
+// Prep · Parcial · Listo · Cuenta · Pagada: el paso por el que va la mesa, para verlo de lejos.
+// Es solo un indicador: cobrar nunca depende de estar listo.
+export const pasoPedido = c => {
+  if (!c) return ''
+  if (c.estado === 'cerrada') return 'pagada'
+  if (c.estado === 'precuenta') return 'cuenta'
+  const vivos = (c.items || []).filter(i => i.estado !== 'anulado')
+  const listos = vivos.filter(i => i.estado === 'listo').length
+  if (!vivos.length) return 'prep'
+  if (listos === vivos.length) return 'listo'
+  return listos ? 'parcial' : 'prep'
 }

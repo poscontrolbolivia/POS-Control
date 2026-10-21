@@ -8,11 +8,15 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
 
   const [abierto, setAbierto] = useState(() => typeof window === 'undefined' || window.innerWidth > 850)
   const elegir = id => { onModulo?.(id); if (typeof window !== 'undefined' && window.innerWidth <= 850) setAbierto(false) }
-  const items = modulos.map(m => (typeof m === 'string' ? { id: m, nombre: m } : m))
+  // El módulo «Menú» se muestra como «Ítems» para no chocar con la impresión (única en Configuración).
+  const items = modulos
+    .map(m => (typeof m === 'string' ? { id: m, nombre: m } : m))
+    .map(m => ({ ...m, nombre: m.id === 'menu' ? tOr('nav.items', 'Ítems') : m.nombre }))
   const rol = (sesion?.rol || '').toLowerCase()
   const conectado = Boolean(sesion?.supabase)
 
   const actual = items.find(m => m.id === modulo)?.nombre
+  const nAlertas = items.find(m => m.id === 'alertas')?.contador || 0
   const rolVisto = rol ? tOr('rol.' + rol, rol) : t('topbar.invitado')
 
   return (
@@ -33,7 +37,10 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
       </div>
       <div className="topbar-acc">
         <button type="button" className="topbar-menu" onClick={() => setAbierto(v => !v)} aria-expanded={abierto}
-          aria-label={abierto ? t('topbar.cerrarMenu') : t('topbar.abrirMenu')} title={abierto ? t('topbar.cerrarMenu') : t('topbar.abrirMenu')}>☰</button>
+          aria-label={(abierto ? t('topbar.cerrarMenu') : t('topbar.abrirMenu')) + (nAlertas ? ` (${nAlertas})` : '')}
+          title={abierto ? t('topbar.cerrarMenu') : t('topbar.abrirMenu')}>
+          ☰{!abierto && nAlertas > 0 && <em className="topbar-n topbar-n-menu">{nAlertas > 99 ? '99+' : nAlertas}</em>}
+        </button>
         <button type="button" className="topbar-salir" onClick={onSalir} title={t('topbar.salir')}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg>
           <span className="topbar-salir-txt">{t('topbar.salir')}</span>
@@ -44,10 +51,12 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
           <button
             key={m.id}
             type="button"
+            data-mod={m.id}
             className={'topbar-tab' + (m.id === modulo ? ' on' : '')}
             onClick={() => elegir(m.id)}
           >
             {m.nombre}
+            {m.contador > 0 && <em className="topbar-n">{m.contador > 99 ? '99+' : m.contador}</em>}
           </button>
         ))}
       </nav>

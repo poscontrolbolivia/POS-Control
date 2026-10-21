@@ -1,7 +1,7 @@
 {
   "name": "pos-control",
   "private": true,
-  "version": "0.30.0",
+  "version": "0.33.0",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-agent.mjs",
@@ -12,8 +12,10 @@
     "agent": "node scripts/copy-agent.mjs",
     "icons": "node scripts/gen-icons.mjs",
     "i18n": "node scripts/check-i18n.mjs",
-    "test": "node scripts/check-i18n.mjs && node tests/indicaciones.mjs && node tests/cierre.mjs && node tests/soldOut.mjs && node tests/montos.mjs && node tests/respaldoZip.mjs && node tests/ticket.mjs",
+    "test": "node scripts/check-i18n.mjs && node tests/indicaciones.mjs && node tests/cierre.mjs && node tests/soldOut.mjs && node tests/montos.mjs && node tests/respaldoZip.mjs && node tests/ticket.mjs && node tests/pedidoListo.mjs && node tests/impresionGrupos.mjs",
+    "test:impresion": "node tests/impresionGrupos.mjs",
     "test:ticket": "node tests/ticket.mjs",
+    "test:pedido": "node tests/pedidoListo.mjs",
     "test:soldout": "node tests/soldOut.mjs",
     "test:montos": "node tests/montos.mjs",
     "test:isolation": "node tests/isolation.mjs",

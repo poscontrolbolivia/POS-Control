@@ -4,6 +4,8 @@ import { useIdioma } from '../../../i18n/index.jsx'
 import { useMoneda } from '../../../services/money.js'
 import { rpc, mensajeError } from '../../../services/supabaseClient.js'
 import { limpiarMonto, numMonto } from '../../../services/format.js'
+import ProveedoresTab from './ProveedoresTab.jsx'
+import CuentasTab from './CuentasTab.jsx'
 import './InventoryPage.css'
 
 const DIAS = [7, 30, 90]
@@ -58,6 +60,7 @@ export default function InventoryPage({ rol }) {
   const timerAviso = useRef(null)
 
   const [buscador, setBuscador] = useState('')
+  const [provFiltro, setProvFiltro] = useState('')
   const [prodSel, setProdSel] = useState(null)
   const [lineas, setLineas] = useState([])
   const [recErr, setRecErr] = useState('')
@@ -330,13 +333,9 @@ export default function InventoryPage({ rol }) {
       </div>
     )
   }
-  if (!enBase) {
-    return (
-      <div className="inv-page">
-        <div className="auth-aviso">{tOr('inventario.demoNo', 'El inventario necesita la base de datos (Supabase): en modo demo no hay insumos que mostrar.')}</div>
-      </div>
-    )
-  }
+  // Insumos/recetas/movimientos viven en Supabase; Proveedores y Cuentas por pagar usan el store,
+  // así que en modo demo solo se bloquean las pestañas que dependen de la base.
+  const pestanaBase = pestana === 'insumos' || pestana === 'recetas' || pestana === 'movimientos'
 
   const bloqueForm = form && (
     <form className="inv-form" onSubmit={guardarInsumo}>
@@ -394,14 +393,18 @@ export default function InventoryPage({ rol }) {
     <div className="inv-page">
       <div className="inv-cab">
         <h2>{tOr('inventario.titulo', 'Inventario')}</h2>
-        <span className="adm-chip">
-          {insumos.length} {tOr('inventario.chipInsumos', 'insumos')}
-          {nBajos > 0 && <> · {nBajos} {tOr('inventario.chipBajos', 'con stock bajo')}</>}
-        </span>
+        {enBase && (
+          <span className="adm-chip">
+            {insumos.length} {tOr('inventario.chipInsumos', 'insumos')}
+            {nBajos > 0 && <> · {nBajos} {tOr('inventario.chipBajos', 'con stock bajo')}</>}
+          </span>
+        )}
         <span className="sp" />
-        <button type="button" className="ghost" disabled={cargando || ocupado} onClick={() => cargar()}>
-          {cargando ? tOr('inventario.cargando', 'Cargando…') : tOr('inventario.actualizar', 'Actualizar')}
-        </button>
+        {enBase && (
+          <button type="button" className="ghost" disabled={cargando || ocupado} onClick={() => cargar()}>
+            {cargando ? tOr('inventario.cargando', 'Cargando…') : tOr('inventario.actualizar', 'Actualizar')}
+          </button>
+        )}
       </div>
 
       <div className="inv-tabs" role="tablist">
@@ -414,6 +417,12 @@ export default function InventoryPage({ rol }) {
         <button type="button" role="tab" aria-selected={pestana === 'movimientos'} className={'tab' + (pestana === 'movimientos' ? ' on' : '')} onClick={() => setPestana('movimientos')}>
           {tOr('inventario.tabMovimientos', 'Movimientos')}
         </button>
+        <button type="button" role="tab" aria-selected={pestana === 'proveedores'} className={'tab' + (pestana === 'proveedores' ? ' on' : '')} onClick={() => setPestana('proveedores')}>
+          {tOr('inventario.tabProveedores', 'Proveedores')}
+        </button>
+        <button type="button" role="tab" aria-selected={pestana === 'cuentas'} className={'tab' + (pestana === 'cuentas' ? ' on' : '')} onClick={() => setPestana('cuentas')}>
+          {tOr('inventario.tabCuentas', 'Cuentas por pagar')}
+        </button>
       </div>
 
       {error && (
@@ -424,7 +433,7 @@ export default function InventoryPage({ rol }) {
       )}
       {aviso && <div className="inv-ok">✅ {aviso}</div>}
 
-      {pestana === 'insumos' && (
+      {pestana === 'insumos' && enBase && (
         <section className="adm-card inv-bloque">
           <div className="adm-card-cab">
             <h3>{tOr('inventario.insumosTitulo', 'Insumos')}</h3>
@@ -511,7 +520,7 @@ export default function InventoryPage({ rol }) {
         </section>
       )}
 
-      {pestana === 'recetas' && (
+      {pestana === 'recetas' && enBase && (
         <section className="adm-card inv-bloque">
           <div className="adm-card-cab">
             <h3>{tOr('inventario.recTitulo', 'Recetas del menú')}</h3>
@@ -606,7 +615,7 @@ export default function InventoryPage({ rol }) {
         </section>
       )}
 
-      {pestana === 'movimientos' && (
+      {pestana === 'movimientos' && enBase && (
         <section className="adm-card inv-bloque">
           <div className="adm-card-cab">
             <h3>{tOr('inventario.movsTitulo', 'Historial de movimientos')}</h3>
@@ -660,6 +669,20 @@ export default function InventoryPage({ rol }) {
               )}
           <p className="adm-sub">{tOr('inventario.movsNota', '«Venta» lo genera el sistema al cobrar (descuenta stock por la receta); Entrada/Salida/Ajuste los registras aquí.')}</p>
         </section>
+      )}
+
+      {!enBase && pestanaBase && (
+        <section className="adm-card inv-bloque">
+          <div className="auth-aviso">{tOr('inventario.demoNo', 'El inventario necesita la base de datos (Supabase): en modo demo no hay insumos que mostrar. Proveedores y Cuentas por pagar sí funcionan en demo.')}</div>
+        </section>
+      )}
+
+      {pestana === 'proveedores' && (
+        <ProveedoresTab onPagar={id => { setProvFiltro(id); setPestana('cuentas') }} />
+      )}
+
+      {pestana === 'cuentas' && (
+        <CuentasTab filtroProveedor={provFiltro} onFiltro={setProvFiltro} />
       )}
     </div>
   )

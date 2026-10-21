@@ -190,6 +190,10 @@ function resumir(datos) {
     insumos: n('insumos'),
     recetas: n('recetas'),
     devoluciones: n('devoluciones'),
+    proveedores: n('proveedores'),
+    costos: n('costos_producto'),
+    deudas: n('cuentas_por_pagar'),
+    alertas: n('alertas'),
     fotos: fotosDe(datos).length,
     version: Number(datos.version || 1),
   }

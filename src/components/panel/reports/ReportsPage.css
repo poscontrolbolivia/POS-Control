@@ -1,0 +1,47 @@
+.rp{gap:14px}
+.rp-cab{align-items:flex-start}
+.rp-rango{margin:4px 0 0}
+.rp-spin{margin-left:10px;font-size:.8rem}
+
+.rp-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+.rp-periodo{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:12px}
+/* Selección de periodo = información/estado: azul del tema, nunca el verde de acción. */
+.rp-preset.on{
+  border-color:transparent;color:var(--on-btn);font-weight:650;text-shadow:0 1px 1px rgba(0,0,0,.25);
+  background:var(--gloss),var(--ac);box-shadow:0 4px 14px color-mix(in srgb,var(--ac) 38%,transparent)}
+.rp-preset.on:hover:not(:disabled){background:var(--gloss),var(--ac);filter:brightness(1.06)}
+.rp-fecha{display:flex;flex-direction:column;gap:4px}
+.rp-fecha span{font-size:.8rem;color:var(--mut);font-weight:600}
+.rp-fecha input{min-width:min(170px,100%)}
+
+.rp-aviso{
+  background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-ink);
+  border-radius:12px;padding:10px 12px;font-size:.9rem;font-weight:600}
+.rp-nota{margin:10px 0 0;color:var(--mut);font-size:.85rem}
+
+.rp-tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.rp-tarjeta{
+  background:var(--card-2);border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;
+  display:flex;flex-direction:column;gap:3px;min-width:0}
+.rp-tarjeta span{font-size:.74rem;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.02em}
+.rp-tarjeta b{font-size:1.05rem;color:var(--ink);overflow-wrap:anywhere}
+.rp-destacada{border-color:var(--ac)}
+.rp-destacada b{color:var(--ac)}
+
+.rp-sec{gap:10px}
+.rp-n{
+  padding:2px 10px;border-radius:999px;background:var(--libre);color:var(--mut);
+  font-size:.78rem;font-weight:650;border:1px solid var(--line)}
+.rp-btn{min-height:34px;padding:5px 12px;font-size:.82rem}
+.rp-saldo{color:var(--danger-ink)}
+
+@media (max-width:640px){
+  .rp-cab{flex-direction:column}
+  .rp-head{width:100%}
+  .rp-head button{flex:1}
+  .rp-periodo{flex-direction:column;align-items:stretch}
+  .rp-preset{width:100%}
+  .rp-fecha input{width:100%}
+  .rp-tarjetas{grid-template-columns:repeat(2,1fr)}
+}

@@ -171,3 +171,118 @@ export async function quitarImagenGuardada({ sb, modo, empresaId, productoId, im
   registrarCacheImagen(productoId, null)
   return { imagen_path: null, imagen_dataurl: null }
 }
+
+// ---------- imágenes del negocio (logo y QR de pago) ----------
+// El QR nunca se recorta: se encuadra conservando la proporción original,
+// porque un QR recortado deja de escanearse. El logo sí se recorta cuadrado.
+const LADO_MAX_NEGOCIO_PX = 1000
+const LIMITE_NEGOCIO_SUPABASE = 800 * 1024 // un QR necesita nitidez: tope alto en storage
+const LIMITE_NEGOCIO_DEMO = 160 * 1024     // en demo vive como data URL en localStorage
+
+// La política del bucket solo acepta logos|qr/<uuid>/<uuid>.webp|jpg: el archivo se llama como la empresa.
+const rutaImagenNegocio = (carpeta, empresaId, ext = 'webp') => `${carpeta}/${empresaId}/${empresaId}.${ext}`
+
+// URL de la imagen del negocio desde cualquier pantalla: tipo 'logo' | 'qr'.
+// Lee siempre path (modo Supabase) o dataUrl (modo demo), como urlImagenProducto con los productos.
+export function urlImagenNegocio(config, tipo) {
+  if (!config) return null
+  const [rutaKey, dataKey] = tipo === 'qr' ? ['qrPath', 'qrDataUrl'] : ['logoPath', 'logoDataUrl']
+  if (config[rutaKey]) return imagenPublica(config[rutaKey])
+  return config[dataKey] || null
+}
+
+// Pinta el file en el canvas: logo recortado al cuadrado central, QR encuadrado sin recortar.
+function lienzoImagenNegocio(img, ancho, alto, cuadrado) {
+  const escala = Math.min(1, LADO_MAX_NEGOCIO_PX / Math.max(ancho, alto))
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  if (cuadrado) {
+    const lado = Math.max(1, Math.round(Math.min(ancho, alto) * escala))
+    const rec = recubrirCuadrado(ancho, alto, lado)
+    canvas.width = lado
+    canvas.height = lado
+    ctx.drawImage(img, rec.sx, rec.sy, rec.sSize, rec.sSize, 0, 0, lado, lado)
+  } else {
+    canvas.width = Math.max(1, Math.round(ancho * escala))
+    canvas.height = Math.max(1, Math.round(alto * escala))
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+  }
+  return canvas
+}
+
+// Reduce el lienzo un 15% manteniendo proporción (se usa si tras bajar la calidad sigue pesando mucho).
+function reducirLienzo(canvas) {
+  const tmp = document.createElement('canvas')
+  tmp.width = canvas.width
+  tmp.height = canvas.height
+  tmp.getContext('2d').drawImage(canvas, 0, 0)
+  const w = Math.max(360, Math.round(canvas.width * 0.85))
+  const h = Math.max(1, Math.round(canvas.height * (w / tmp.width)))
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(tmp, 0, 0, w, h)
+}
+
+async function comprimirImagenNegocio(file, { cuadrado = false, maxBytes = LIMITE_NEGOCIO_SUPABASE } = {}) {
+  if (!file) throw new Error('Selecciona un archivo de imagen.')
+  const tipo = (file.type || '').toLowerCase()
+  if (!tipo.startsWith('image/')) throw new Error('Ese archivo no es una imagen.')
+  if (file.size > MAX_BYTES_ENTRADA) throw new Error('La imagen pesa demasiado (máximo 8 MB).')
+
+  const { img, ancho, alto } = await decodificar(file)
+  const canvas = lienzoImagenNegocio(img, ancho, alto, cuadrado)
+  try { img.close?.() } catch {  }
+
+  let blob = await blobDeCanvas(canvas, 'image/webp', CALIDAD_INICIAL)
+  let mime = blob?.type || ''
+  if (mime !== 'image/webp') {
+    blob = await blobDeCanvas(canvas, 'image/jpeg', CALIDAD_INICIAL)
+    mime = blob?.type || 'image/jpeg'
+  }
+  if (!blob) throw new Error('El navegador no pudo comprimir la imagen.')
+
+  // Baja la calidad en pasos hasta caber; si aun así no entra, achica el lienzo conservando la proporción.
+  let calidad = CALIDAD_INICIAL
+  while (blob.size > maxBytes && calidad > 0.4) {
+    calidad -= 0.1
+    blob = await blobDeCanvas(canvas, mime, calidad) || blob
+  }
+  while (blob.size > maxBytes && Math.max(canvas.width, canvas.height) > 360) {
+    reducirLienzo(canvas)
+    calidad = CALIDAD_INICIAL
+    blob = await blobDeCanvas(canvas, mime, calidad) || blob
+    while (blob.size > maxBytes && calidad > 0.4) {
+      calidad -= 0.1
+      blob = await blobDeCanvas(canvas, mime, calidad) || blob
+    }
+  }
+  if (blob.size > maxBytes) {
+    throw new Error('La imagen sigue muy pesada tras comprimirla. Prueba con otra de menor resolución.')
+  }
+  return { blob, mime: blob.type || mime }
+}
+
+// Procesa y sube la imagen del negocio. carpeta: 'logos' | 'qr'. Devuelve { path, dataUrl }.
+export async function procesarImagenNegocio({ sb, modo, empresaId, carpeta, file }) {
+  if (carpeta !== 'logos' && carpeta !== 'qr') throw new Error('Tipo de imagen del negocio desconocido.')
+  const cuadrado = carpeta === 'logos' // el QR jamás se recorta
+  const maxBytes = modo === 'supabase' ? LIMITE_NEGOCIO_SUPABASE : LIMITE_NEGOCIO_DEMO
+  const { blob, mime } = await comprimirImagenNegocio(file, { cuadrado, maxBytes })
+
+  if (modo === 'supabase') {
+    if (!sb || !empresaId) throw new Error('No hay empresa activa para subir la imagen.')
+    const ext = extParaMime(mime)
+    const path = rutaImagenNegocio(carpeta, empresaId, ext)
+    const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: mime || 'image/webp', upsert: true })
+    if (error) throw new Error('No se pudo subir la imagen: ' + (error.message || String(error)))
+    return { path, dataUrl: null }
+  }
+
+  const dataUrl = await blobADataUrl(blob)
+  return { path: null, dataUrl }
+}

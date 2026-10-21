@@ -33,10 +33,13 @@ export function fijarSalida(grupoId, salida) {
   guardarPref(pref); notificar()
 }
 
-export const impresoraDe = grupoId => pref.impresoras?.[grupoId] || ''
-export function fijarImpresora(grupoId, nombre) {
+// Un grupo puede tirar en varias impresoras del agente a la vez; el valor viejo (texto suelto) sigue sirviendo.
+const comoLista = v => (Array.isArray(v) ? v.filter(Boolean) : (v ? [v] : []))
+export const impresorasDe = grupoId => comoLista(pref.impresoras?.[grupoId])
+export function fijarImpresoras(grupoId, nombres) {
   const impresoras = { ...pref.impresoras }
-  if (nombre) impresoras[grupoId] = nombre; else delete impresoras[grupoId]
+  const lista = [...new Set(comoLista(nombres))]
+  if (lista.length) impresoras[grupoId] = lista; else delete impresoras[grupoId]
   pref = { ...pref, impresoras }
   guardarPref(pref); notificar()
 }
@@ -50,7 +53,7 @@ export async function autoConfigurarAgente(grupos = []) {
     if (!predeterminada) return false
     const salidas = { ...pref.salidas }
     const impresoras = { ...pref.impresoras }
-    nuevos.forEach(g => { salidas[g.id] = 'agente'; impresoras[g.id] = predeterminada })
+    nuevos.forEach(g => { salidas[g.id] = 'agente'; impresoras[g.id] = [predeterminada] })
     pref = { ...pref, salidas, impresoras }
     guardarPref(pref); notificar()
     return true
@@ -67,7 +70,7 @@ export const estadoEstacion = () => ({ ...estado, activa: pref.activa, corriendo
 
 export const grupoListo = grupoId => {
   const s = salidaDe(grupoId)
-  return s === 'windows' || (s === 'agente' ? Boolean(impresoraDe(grupoId)) : estadoImpresora(grupoId).conectada)
+  return s === 'windows' || (s === 'agente' ? impresorasDe(grupoId).length > 0 : estadoImpresora(grupoId).conectada)
 }
 
 export async function imprimirTrabajo(grupoId, payload) {
@@ -79,12 +82,11 @@ export async function imprimirTrabajo(grupoId, payload) {
   for (let i = 0; i < copias; i++) {
     if (salida === 'windows') await imprimirEnWindows({ lineas: p.lineas || [], ancho })
     else if (salida === 'agente') {
-
       const modo = modoAgenteDe(grupoId)
       const datos = modo === 'texto'
         ? new TextEncoder().encode(generarTexto({ lineas: p.lineas || [], ancho, corte }))
         : generarBytes({ lineas: p.lineas || [], ancho, corte, beep: Boolean(p.beep) })
-      await imprimirPorAgente(impresoraDe(grupoId), datos, modo)
+      for (const nombre of impresorasDe(grupoId)) await imprimirPorAgente(nombre, datos, modo)
     }
     else await imprimirSilencioso({ grupo: grupoId, lineas: p.lineas || [], ancho, corte, beep: Boolean(p.beep) })
   }

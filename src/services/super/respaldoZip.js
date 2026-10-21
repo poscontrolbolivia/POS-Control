@@ -9,7 +9,7 @@ const PARALELO = 4
 
 const rutaValida = p => typeof p === 'string' && p && !/^(https?:|data:)/i.test(p) && !p.includes('..')
 
-// Fotos que referencia un respaldo: la ruta del producto y la del comprobante de cada pago.
+// Fotos que referencia un respaldo: la ruta del producto, la del logo y QR del negocio, y la del comprobante de cada pago.
 export function fotosDe(datos) {
   const lista = []
   const vistos = new Set()
@@ -18,6 +18,9 @@ export function fotosDe(datos) {
     const k = bucket + '/' + path
     if (!vistos.has(k)) { vistos.add(k); lista.push({ bucket, path }) }
   }
+  const cfg = datos?.empresa?.config || {}
+  meter(BUCKET_PRODUCTOS, cfg.logoPath)
+  meter(BUCKET_PRODUCTOS, cfg.qrPath)
   for (const p of datos?.productos || []) meter(BUCKET_PRODUCTOS, p?.imagen_path)
   for (const pg of datos?.pagos || []) meter(BUCKET_COMPROBANTES, pg?.detalle?.comprobante)
   return lista
@@ -51,8 +54,8 @@ export async function crearZipRespaldo(datos, onProgreso) {
   const fallidas = res.filter(r => r?.error).map(r => r.error)
   zip.file('LEEME.txt', [
     'Respaldo completo de POS Control.',
-    'datos.json  → toda la empresa (menú, mesas, cuentas, pagos, turnos, inventario, devoluciones, equipo).',
-    'fotos/      → las fotos de productos y los comprobantes QR (el archivo real, no solo la ruta).',
+    'datos.json  → toda la empresa (menú, mesas, cuentas, pagos, turnos, inventario, devoluciones, proveedores, costos, cuentas por pagar, alertas, equipo).',
+    'fotos/      → las fotos de productos, el logo y el QR de pago del negocio y los comprobantes (el archivo real, no solo la ruta).',
     'Para restaurarlo: panel Super admin → Importar → elige este .zip.',
     'Las contraseñas no se pueden exportar: el equipo recibe una clave temporal al importar.',
     fallidas.length ? `\nNo se pudieron bajar ${fallidas.length} foto(s):\n` + fallidas.join('\n') : '',

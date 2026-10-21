@@ -4,12 +4,12 @@ import { useIdioma } from '../../../i18n/index.jsx'
 import { soporteSerial, reutilizarImpresoras, suscribirImpresora, fijarBaud } from '../../../services/printer.js'
 import PrinterOutput from '../../printing/PrinterOutput.jsx'
 import AgentStatus from '../../printing/AgentStatus.jsx'
-import { gruposDe, gruposDeComanda, grupoDeSeccion, slugGrupo } from '../../../services/printing.js'
+import { gruposDe, gruposDeComanda, gruposDeSeccion, slugGrupo } from '../../../services/printing.js'
 import '../../../styles/admin.css'
 
 export default function PrintersCard({ rol, sesion }) {
   const { s, d } = useStore()
-  const { t } = useIdioma()
+  const { t, tOr } = useIdioma()
   const cfg = s.config || {}
   const grupos = gruposDe(cfg)
   const [, refrescar] = useReducer(x => x + 1, 0)
@@ -35,7 +35,14 @@ export default function PrintersCard({ rol, sesion }) {
   const guardarGrupos = lista => guardar({ gruposImpresion: lista })
   const cambiarGrupo = (id, cambios) => guardarGrupos(grupos.map(g => (g.id === id ? { ...g, ...cambios } : g)))
   const seccionesOrden = [...(s.secciones || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0))
-  const usos = id => seccionesOrden.filter(sec => grupoDeSeccion(cfg, sec.id)?.id === id).length
+  const gruposComanda = gruposDeComanda(cfg)
+  // Sección → grupos: admite el valor viejo (un texto) y la lista nueva (varios a la vez).
+  const idsDe = secId => {
+    const guardado = cfg.impresoraPorSeccion?.[secId]
+    return (Array.isArray(guardado) ? guardado : [guardado]).filter(Boolean).map(String)
+  }
+  const elegidosDe = secId => (idsDe(secId).length ? idsDe(secId) : gruposDeSeccion(cfg, secId).map(g => g.id))
+  const usos = id => seccionesOrden.filter(sec => elegidosDe(sec.id).includes(id)).length
 
   const crearGrupo = () => {
     const nombre = (nuevo || '').trim().slice(0, 40)
@@ -49,25 +56,39 @@ export default function PrintersCard({ rol, sesion }) {
   const borrarGrupo = g => {
     const restantes = grupos.filter(x => x.id !== g.id)
 
-    const mapa = { ...(cfg.impresoraPorSeccion || {}) }
-    Object.keys(mapa).forEach(k => { if (mapa[k] === g.id) delete mapa[k] })
+    const mapa = {}
+    Object.entries(cfg.impresoraPorSeccion || {}).forEach(([k, v]) => {
+      const lista = (Array.isArray(v) ? v : [v]).filter(Boolean).map(String).filter(id => id !== g.id)
+      if (lista.length) mapa[k] = lista
+    })
     guardar({ gruposImpresion: restantes, impresoraPorSeccion: mapa })
 
     d({ t: 'area-', id: g.id, reemplazo: gruposDeComanda({ gruposImpresion: restantes })[0]?.id || 'cocina' })
     setConf(null)
   }
 
-  const asignarSeccion = (seccionId, grupoId) => guardar({ impresoraPorSeccion: { ...(cfg.impresoraPorSeccion || {}), [seccionId]: grupoId } })
+  const asignarSeccion = (seccionId, grupoId) => {
+    const base = elegidosDe(seccionId)
+    const siguiente = base.includes(grupoId) ? base.filter(x => x !== grupoId) : [...base, grupoId]
+    if (!siguiente.length) return
+    guardar({ impresoraPorSeccion: { ...(cfg.impresoraPorSeccion || {}), [seccionId]: siguiente } })
+  }
+  const todasLaSeccion = seccionId => {
+    if (!gruposComanda.length) return
+    guardar({ impresoraPorSeccion: { ...(cfg.impresoraPorSeccion || {}), [seccionId]: gruposComanda.map(g => g.id) } })
+  }
 
-  const nComanda = gruposDeComanda(cfg).length
+  const nComanda = gruposComanda.length
 
   return (
     <div className="adm-card adm-imp">
       <div className="adm-card-cab">
-        <h3>{t('impresoras.titulo')}</h3>
+        <h3>{tOr('impresoras.tituloNuevo', 'Grupos de impresión y comandas')}</h3>
         <span className="sp" />
+        <button type="button" className="ghost" onClick={() => { window.location.hash = '#menu' }}>{tOr('impresoras.irItems', 'Ir a Ítems')}</button>
         <button type="button" className="teal" onClick={() => setNuevo(nuevo === null ? '' : null)}>＋ {t('impresoras.nuevoGrupo')}</button>
       </div>
+      <p className="adm-sub" style={{ margin: 0 }}>{tOr('impresoras.ayudaUnica', 'Todo lo impreso se arma acá: los grupos de comanda, dónde imprime cada uno (esta PC o la estación), copias, pie de página y corte. No hay otra pantalla de impresión.')}</p>
       <p className="adm-sub" style={{ margin: 0 }}>{t('impresoras.intro')}</p>
 
       {!soportado && (
@@ -78,6 +99,7 @@ export default function PrintersCard({ rol, sesion }) {
         </div>
       )}
 
+      <p className="imp-subtitulo">{tOr('impresoras.gruposTitulo', 'Grupos de comanda')}</p>
       {nuevo !== null && (
         <form className="adm-fila adm-nuevo" onSubmit={e => { e.preventDefault(); crearGrupo() }}>
           <input autoFocus value={nuevo} maxLength={40} placeholder={t('impresoras.nombreGrupoPlace')} onChange={e => setNuevo(e.target.value)} />
@@ -148,18 +170,29 @@ export default function PrintersCard({ rol, sesion }) {
         })}
       </div>
 
+      <p className="imp-subtitulo">{tOr('impresoras.opcionesTitulo', 'Opciones de impresión')}</p>
       <div className="imp-bloque">
         <span className="imp-label">{t('impresoras.seccionesTitulo')}</span>
-        <p className="adm-sub" style={{ margin: 0 }}>{t('impresoras.seccionesAyuda')}</p>
+        <p className="adm-sub" style={{ margin: 0 }}>{tOr('impresoras.seccionesMulti', 'Cada sección puede mandar a varios grupos a la vez, o a todos. Un plato que llega a dos grupos se imprime en las dos cocinas.')}</p>
         <div className="imp-secciones">
-          {seccionesOrden.map(sec => (
-            <label key={sec.id} className="imp-seccion">
-              <span>{sec.nombre}</span>
-              <select value={grupoDeSeccion(cfg, sec.id)?.id || ''} onChange={e => asignarSeccion(sec.id, e.target.value)}>
-                {gruposDeComanda(cfg).map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-              </select>
-            </label>
-          ))}
+          {seccionesOrden.map(sec => {
+            const sel = elegidosDe(sec.id)
+            return (
+              <div key={sec.id} className="imp-seccion imp-seccion-multi">
+                <span className="imp-seccion-nombre">{sec.nombre}</span>
+                <div className="imp-multi-chips">
+                  {gruposComanda.map(g => (
+                    <button type="button" key={g.id} className={'imp-op ' + (sel.includes(g.id) ? 'primary' : 'ghost')}
+                      onClick={() => asignarSeccion(sec.id, g.id)}>{g.nombre}</button>
+                  ))}
+                  {gruposComanda.length > 1 && (
+                    <button type="button" className={'imp-op ' + (sel.length === gruposComanda.length ? 'primary' : 'ghost')}
+                      onClick={() => todasLaSeccion(sec.id)}>{tOr('impresoras.todas', 'Todas')}</button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
           {!seccionesOrden.length && <span className="imp-dato">{t('menu.sinProductos')}</span>}
         </div>
       </div>
