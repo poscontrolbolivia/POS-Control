@@ -310,11 +310,20 @@ export async function despacharSupabase(estado, a, ctx = {}) {
   switch (a.t) {
 
     case 'abrir': {
-      const dbId = await rpc('abrir_cuenta', { p_mesa_id: a.mesaId, p_comensales: a.comensales || 1 })
+      let dbId
+      try { dbId = await rpc('abrir_cuenta', { p_mesa_id: a.mesaId, p_comensales: a.comensales || 1 }) }
+      catch (e) {
+        // Otro aparato abrió esa mesa justo antes: no es un error, solo se sincroniza y se ve su cuenta.
+        if (/ya tiene una cuenta abierta/i.test(e?.message || '')) return refrescarNegocio(E)
+        throw e
+      }
       const locId = (a._nuevos?.cuentas || [])[0]
       if (locId && locId !== dbId) mapa.set(locId, dbId)
       return refrescarNegocio(E)
     }
+    case 'abrir-descartar':
+      await rpc('descartar_cuenta_vacia', { p_cuenta_id: rid(mapa, a.cuentaId) })
+      return refrescarNegocio(E)
     case 'abrir-directa': {
       const dbId = await rpc('abrir_venta_directa', {})
       const locId = (a._nuevos?.cuentas || [])[0]

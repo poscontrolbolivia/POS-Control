@@ -6684,4 +6684,33 @@ end $fn$;
 revoke all on function public.super_importar_empresa(jsonb, text, text, boolean) from public, anon;
 grant execute on function public.super_importar_empresa(jsonb, text, text, boolean) to authenticated;
 
+-- ############################################################################
+-- ## v0.34 · Abrir mesa con un toque: descartar la cuenta si se tocó por error
+-- ############################################################################
+create or replace function public.descartar_cuenta_vacia(
+  p_cuenta_id  uuid,
+  p_empresa_id uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  c     public.cuentas;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
+  select * into c from public.cuentas where id = p_cuenta_id and empresa_id = v_emp for update;
+  if not found then return; end if;
+  if c.tipo <> 'mesa' or c.estado <> 'abierta' then return; end if;
+  -- Solo se descarta si de verdad está vacía: sin ítems y sin pagos (otro aparato pudo haberle agregado algo).
+  if exists (select 1 from public.cuenta_items i where i.cuenta_id = c.id) then return; end if;
+  if exists (select 1 from public.pagos p where p.cuenta_id = c.id) then return; end if;
+  delete from public.cuentas where id = c.id and empresa_id = v_emp;
+end $fn$;
+revoke all on function public.descartar_cuenta_vacia(uuid, uuid) from public, anon;
+grant execute on function public.descartar_cuenta_vacia(uuid, uuid) to authenticated;
+
 commit;

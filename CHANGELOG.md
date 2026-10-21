@@ -1,3 +1,11 @@
+# v0.34.0 · Caja abre la mesa tocada + abrir mesa con un solo toque
+- **Caja → tocar una mesa para cobrar no abría nada**: solo te cambiaba al Salón sin decir qué mesa. Ahora te lleva al Salón **con esa mesa ya abierta** (cuenta, ítems y cobro).
+- **Abrir mesa en Salón era tedioso** (tocar mesa → «Abrir cuenta» → comensales → «Confirmar»). Ahora **tocas una mesa libre y se abre directo** con 1 comensal; los comensales se cambian **dentro** con − / + (arriba del pedido), como ya existía.
+- **Si tocaste una mesa por error**, al cerrar la ventana sin pedir nada la cuenta vacía **se descarta sola** y la mesa vuelve a verse libre. Nunca se descarta si ya tiene ítems o pagos (aunque otro aparato se los haya agregado un segundo antes).
+- **Fallo encontrado en la auditoría**: abrir la misma mesa dos veces (doble toque, o dos aparatos a la vez) mostraba **dos cuentas** en pantalla aunque la base rechazaba la segunda. Ahora no se duplica y, si otro aparato la abrió primero, simplemente se ve su cuenta sin cartel de error.
+- SQL: una función nueva, `descartar_cuenta_vacia`, **dentro de `install/supabase-setup-final.sql`** (siguen siendo solo 2 SQL). Pégalo ANTES de publicar la web; si no, el descarte automático dará error al cerrar una mesa abierta por error.
+- Verificado: `npm test` completo, `npm run build`, sintaxis SQL, y un test nuevo `tests/estadoMesas.mjs` (11 ✓) que prueba el estado real: abrir, comensales, descartar, doble apertura, para llevar → mesa. NO probado en navegador ni contra tu base real.
+
 # v0.33.7 · Arreglo: las comandas de Barra se veían más pequeñas que las de Cocina
 - **Causa**: la fila de cada área en la pantalla de Cocina usaba el nombre del área como clase (`barra`, `cocina`). `barra` coincide con la clase global `.barra` de `base.css` (la que alinea barras de botones: centrado, envoltura y margen), que se aplicaba por error a la fila entera y hacía que sus tarjetas se encogieran al ancho de su contenido. Cocina no tenía esa regla, por eso solo Barra se veía distinta.
 - **Arreglo**: la fila usa ahora la clase `ck-fila area-<id>` (prefijo propio). Así tampoco chocará una impresora nueva (p. ej. «barra-2», «parrilla») con ninguna clase global. Cocina y Barra usan exactamente las mismas reglas.

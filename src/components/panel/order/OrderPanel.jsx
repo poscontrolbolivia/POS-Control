@@ -81,6 +81,10 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const [destino, setDestino] = useState('')
   const [canje, setCanje] = useState('')
   const [apertura, setApertura] = useState(null)
+  // Apertura directa: al tocar una mesa libre se abre la cuenta (1 comensal) y los comensales se cambian dentro.
+  const autoMesa = useRef(null)
+  const autoPend = useRef(false)
+  const autoCuenta = useRef(null)
   const [uniendo, setUniendo] = useState(false)
   const [aUnir, setAUnir] = useState([])
   const [desc, setDesc] = useState(null)
@@ -121,7 +125,21 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const sufijo = c?.tipo === 'mesa' && hermanas.length > 1 && c.etiqueta ? c.etiqueta : ''
   const titulo = c?.canal === 'llevar' ? tOr('pedido.llevarCabecera', `Pedido ${c.numero ?? ''}`, { n: c.numero }) + (c.clienteNombre ? ' · ' + c.clienteNombre : '') : c?.tipo === 'directa' ? t('pedido.turnoNumero', { n: c.numero }) : ((mesa?.nombre ?? t('pedido.cuenta')) + sufijo)
   const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null); focoPendiente.current = null }
-  const cerrar = () => { reset(); onClose() }
+  const cerrar = () => {
+    // Si la cuenta se abrió con el toque y no se pidió nada, se descarta: así tocar una mesa por error no la deja ocupada.
+    if (c && autoCuenta.current === c.id && c.tipo === 'mesa' && c.estado === 'abierta' && !(c.items || []).length && !(c.pagos || []).length) d({ t: 'abrir-descartar', cuentaId: c.id })
+    autoCuenta.current = null
+    reset(); onClose()
+  }
+  useEffect(() => {
+    if (!mesa) { autoMesa.current = null; autoCuenta.current = null; autoPend.current = false; return }
+    if (bloqueado || !puede(rol, 'abrir_mesa') || autoMesa.current === mesa.id) return
+    autoMesa.current = mesa.id
+    if (cuentasDeMesa(s, mesa.id).length) return
+    autoPend.current = true
+    d({ t: 'abrir', mesaId: mesa.id, comensales: 1, usuario })
+  }, [mesa?.id, bloqueado])
+  useEffect(() => { if (autoPend.current && c?.id) { autoCuenta.current = c.id; autoPend.current = false } }, [c?.id])
   const toggle = id => { setMarcados(m => (m.includes(id) ? m.filter(x => x !== id) : [...m, id])); setCanje('') }
   const nombreMesa = id => s.mesas.find(m => m.id === id)?.nombre ?? t('pedido.mesaCorta')
 

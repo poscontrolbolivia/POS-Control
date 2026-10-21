@@ -14,7 +14,7 @@ import './CashPage.css'
 import { round2, hora, limpiarMonto, numMonto } from '../../../services/format.js'
 import { formatearMonto } from '../../../services/money.js'
 
-export default function CashPage({ rol, sesion }) {
+export default function CashPage({ rol, sesion, onAbrirMesa }) {
   const { s, d, modo } = useStore()
   const { t, tOr } = useIdioma()
   const usuario = sesion?.usuario || sesion?.nombre || rol || '—'
@@ -54,7 +54,8 @@ export default function CashPage({ rol, sesion }) {
   const [aviso, setAviso] = useState('')
   const avisoTimer = useRef(null)
 
-  const irSalon = () => { window.location.hash = '#salon' }
+  // Tocar una mesa en Caja lleva al Salón con ESA mesa ya abierta (antes solo cambiaba de pantalla).
+  const irSalon = m => { if (m?.id && onAbrirMesa) onAbrirMesa({ mesaId: m.id }); else window.location.hash = '#salon' }
 
   const avisar = msg => { setAviso(msg); clearTimeout(avisoTimer.current); avisoTimer.current = setTimeout(() => setAviso(''), 6000) }
   useEffect(() => () => clearTimeout(avisoTimer.current), [])
