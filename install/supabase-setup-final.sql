@@ -2311,9 +2311,6 @@ grant execute on function public.super_registrar_exporte(uuid) to authenticated;
 
 -- ## 6) EXPORTAR / IMPORTAR SIN PÉRDIDAS
 
-revoke all on function public.super_exportar_empresa(uuid) from public, anon;
-grant execute on function public.super_exportar_empresa(uuid) to authenticated;
-
 create or replace function public.super_importar_empresa(
   p_datos         jsonb,
   p_codigo        text,
@@ -3285,9 +3282,6 @@ exception when others then
   raise notice 'pg_cron no disponible (%): la purga automática NO está programada.', sqlerrm;
 end $do$;
 
-
-revoke all on function public.exportar_mi_empresa(uuid) from public, anon;
-grant execute on function public.exportar_mi_empresa(uuid) to authenticated;
 
 begin;
 
@@ -5050,8 +5044,6 @@ revoke all on function public.pasar_llevar_a_mesa(uuid, uuid, integer, uuid) fro
 grant execute on function public.pasar_llevar_a_mesa(uuid, uuid, integer, uuid) to authenticated;
 
 -- ## B) EXPORTACIÓN COMPLETA (versión 3): se añaden inventario, recetas, movimientos, devoluciones y áreas listas
-revoke all on function private.snapshot_empresa(uuid) from public, anon, authenticated;
-
 create or replace function public.super_exportar_empresa(p_empresa uuid)
 returns jsonb
 language plpgsql
@@ -6262,7 +6254,11 @@ using (
   bucket_id = 'pos-imagenes'
   and exists (select 1 from public.empresas e
                where e.id::text = (storage.foldername(name))[2]
-                 and (public.es_admin() or public.es_super()))
+                 and (public.es_super()
+                      or exists (select 1 from public.membresias m
+                                  where m.empresa_id = e.id
+                                    and m.user_id = auth.uid()
+                                    and m.rol = 'admin')))
 );
 
 -- ## v0.31 · I) RESPALDO POR EMPRESA VERSIÓN 4: añade proveedores, costos, cuentas por pagar y alertas

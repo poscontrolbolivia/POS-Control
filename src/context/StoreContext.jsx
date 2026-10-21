@@ -431,7 +431,15 @@ function reducer(s, a) {
 export const leerSesionSup = () => { try { const r = localStorage.getItem(KEY_SESION); return r ? JSON.parse(r) : null } catch { return null } }
 export const guardarSesionSup = ses => { try { if (ses) localStorage.setItem(KEY_SESION, JSON.stringify(ses)); else localStorage.removeItem(KEY_SESION) } catch {  } window.dispatchEvent(new Event('pos-sesion')) }
 
-const SUP_VACIO = { ...inicial, cuentas: [], caja: { turno: null, siguienteTurno: 1, historial: [] }, usuariosDemo: [], costos: [], proveedores: [], deudas: [], alertas: [], insumos: [], _supCargando: true }
+// Estado mientras se carga la empresa real (o si falla la carga): TOTALMENTE vacío.
+// Antes copiaba el estado de demo (mesas 1-5, Salón/Terraza, productos de ejemplo) y por eso, al entrar a
+// una empresa, se veían unos segundos mesas que no eran suyas hasta que llegaban las de verdad.
+const SUP_VACIO = {
+  config: { nombre: '', moneda: 'Bs', ivaPct: 0, propinaPct: 10, propinaMostrar: true, gruposImpresion: [], impresoraPorSeccion: {} },
+  zonas: [], mesas: [], secciones: [], productos: [], cuentas: [], devoluciones: [],
+  caja: { turno: null, siguienteTurno: 1, historial: [] },
+  usuariosDemo: [], costos: [], proveedores: [], deudas: [], alertas: [], insumos: [], _supCargando: true,
+}
 
 function useSupabaseStore(empresaId) {
   const [s, setS] = useState(null)

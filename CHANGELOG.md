@@ -1,3 +1,11 @@
+# v0.33.2 · Mesas de ejemplo al entrar a una empresa
+- **Arreglado**: al entrar a una empresa se veían unos segundos las mesas de la demo (Mesa 1–5, Salón/Terraza) y luego se cambiaban por las reales. No era caché: el estado «cargando» copiaba por error los datos de ejemplo del modo demo. Ahora arranca **vacío** (con el aviso «Conectando…») y, si la carga falla, tampoco muestra mesas falsas.
+
+# v0.33.1 · Arreglo del SQL de instalación
+- **ERROR**: `function public.es_admin() does not exist`. La política de borrado de `pos-imagenes` llamaba a `public.es_admin()`, que no existe (la función es `private.es_admin()`). Además esa política ahora comprueba el rol de admin **en la empresa de la carpeta** (`membresias`), no en la empresa activa.
+- **ERROR**: tres `revoke/grant` huérfanos sobre `super_exportar_empresa`, `exportar_mi_empresa` y `private.snapshot_empresa` que quedaron antes de la definición de la función (al quitar duplicados). Quitados; los permisos válidos ya estaban después de cada definición.
+- Verificado ejecutando `install/supabase-setup-final.sql` completo en un Postgres 16 real con los esquemas de Supabase simulados: **sin errores, en base nueva y re-ejecutado** (idempotente). `npm run build` ✓, `npm run i18n` ✓.
+
 # v0.33.0 · Pulido sobre la v0.32 (revisión)
 - **Pestaña superior «Menú» → «Ítems»** (es/en/pt): el título de la pantalla ya decía Ítems pero la pestaña seguía diciendo Menú.
 - **Cobro — Enter**: al cubrirse el saldo, Enter ya **no cobra de golpe**: salta al botón **Confirmar cobro** (otro Enter confirma). Enter en una línea vacía y última ya no crea líneas vacías en serie.
