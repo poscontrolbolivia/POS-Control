@@ -2311,45 +2311,6 @@ grant execute on function public.super_registrar_exporte(uuid) to authenticated;
 
 -- ## 6) EXPORTAR / IMPORTAR SIN PÉRDIDAS
 
-create or replace function public.super_exportar_empresa(p_empresa uuid)
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path = ''
-as $fn$
-declare v jsonb;
-begin
-  if not public.es_super() then raise exception 'requiere super'; end if;
-  select jsonb_build_object(
-    'version', 2,
-    'exportado_en', now(),
-    'empresa', (select to_jsonb(e) from public.empresas e where e.id = p_empresa),
-    'zonas',       coalesce((select jsonb_agg(to_jsonb(z) order by z.orden) from public.zonas z where z.empresa_id = p_empresa), '[]'),
-    'mesas',       coalesce((select jsonb_agg(to_jsonb(m) || jsonb_build_object('zona_nombre',
-                                      (select z.nombre from public.zonas z where z.id = m.zona_id)))
-                                 from public.mesas m where m.empresa_id = p_empresa), '[]'),
-    'secciones',   coalesce((select jsonb_agg(to_jsonb(s) order by s.orden) from public.secciones_menu s where s.empresa_id = p_empresa), '[]'),
-    'productos',   coalesce((select jsonb_agg(to_jsonb(p) || jsonb_build_object('seccion_nombre', s.nombre)) from public.productos p
-                             left join public.secciones_menu s on s.id = p.seccion_id where p.empresa_id = p_empresa), '[]'),
-    'cuentas',     coalesce((select jsonb_agg(to_jsonb(c)) from public.cuentas c where c.empresa_id = p_empresa), '[]'),
-    'cuenta_mesas',coalesce((select jsonb_agg(to_jsonb(cm)) from public.cuenta_mesas cm
-                             join public.cuentas c on c.id = cm.cuenta_id where c.empresa_id = p_empresa), '[]'),
-    'cuenta_items',coalesce((select jsonb_agg(to_jsonb(ci)) from public.cuenta_items ci
-                             join public.cuentas c on c.id = ci.cuenta_id where c.empresa_id = p_empresa), '[]'),
-    'pagos',       coalesce((select jsonb_agg(to_jsonb(pg)) from public.pagos pg
-                             join public.cuentas c on c.id = pg.cuenta_id where c.empresa_id = p_empresa), '[]'),
-    'turnos',      coalesce((select jsonb_agg(to_jsonb(t)) from public.turnos_caja t where t.empresa_id = p_empresa), '[]'),
-    'equipo',      coalesce((select jsonb_agg(jsonb_build_object('user_id', m.user_id, 'correo', u.email,
-                                                                 'rol', m.rol, 'nombre', coalesce(p.display_name,'')))
-                             from public.membresias m
-                             join auth.users u on u.id = m.user_id
-                             left join public.perfiles p on p.user_id = m.user_id
-                             where m.empresa_id = p_empresa), '[]')
-  ) into v;
-  if v->'empresa' is null then raise exception 'empresa inexistente'; end if;
-  return v;
-end $fn$;
 revoke all on function public.super_exportar_empresa(uuid) from public, anon;
 grant execute on function public.super_exportar_empresa(uuid) to authenticated;
 
@@ -3325,45 +3286,6 @@ exception when others then
 end $do$;
 
 
-create or replace function public.exportar_mi_empresa(p_empresa_id uuid default null)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $fn$
-declare v_emp uuid; v jsonb;
-begin
-  v_emp := private.fijar_empresa(p_empresa_id);
-  perform private.exigir_rol(array['admin']::text[]);
-  select jsonb_build_object(
-    'version', 2,
-    'exportado_en', now(),
-    'empresa', (select to_jsonb(e) from public.empresas e where e.id = v_emp),
-    'zonas',       coalesce((select jsonb_agg(to_jsonb(z) order by z.orden) from public.zonas z where z.empresa_id = v_emp), '[]'),
-    'mesas',       coalesce((select jsonb_agg(to_jsonb(m) || jsonb_build_object('zona_nombre',
-                                      (select z.nombre from public.zonas z where z.id = m.zona_id)))
-                                 from public.mesas m where m.empresa_id = v_emp), '[]'),
-    'secciones',   coalesce((select jsonb_agg(to_jsonb(s) order by s.orden) from public.secciones_menu s where s.empresa_id = v_emp), '[]'),
-    'productos',   coalesce((select jsonb_agg(to_jsonb(p) || jsonb_build_object('seccion_nombre', s.nombre)) from public.productos p
-                             left join public.secciones_menu s on s.id = p.seccion_id where p.empresa_id = v_emp), '[]'),
-    'cuentas',     coalesce((select jsonb_agg(to_jsonb(c)) from public.cuentas c where c.empresa_id = v_emp), '[]'),
-    'cuenta_mesas',coalesce((select jsonb_agg(to_jsonb(cm)) from public.cuenta_mesas cm
-                             join public.cuentas c on c.id = cm.cuenta_id where c.empresa_id = v_emp), '[]'),
-    'cuenta_items',coalesce((select jsonb_agg(to_jsonb(ci)) from public.cuenta_items ci
-                             join public.cuentas c on c.id = ci.cuenta_id where c.empresa_id = v_emp), '[]'),
-    'pagos',       coalesce((select jsonb_agg(to_jsonb(pg)) from public.pagos pg
-                             join public.cuentas c on c.id = pg.cuenta_id where c.empresa_id = v_emp), '[]'),
-    'turnos',      coalesce((select jsonb_agg(to_jsonb(t)) from public.turnos_caja t where t.empresa_id = v_emp), '[]'),
-    'equipo',      coalesce((select jsonb_agg(jsonb_build_object('user_id', m.user_id, 'correo', u.email,
-                                                                 'rol', m.rol, 'nombre', coalesce(p.display_name,'')))
-                             from public.membresias m
-                             join auth.users u on u.id = m.user_id
-                             left join public.perfiles p on p.user_id = m.user_id
-                             where m.empresa_id = v_emp), '[]')
-  ) into v;
-  perform private.auditar(v_emp, 'exportar_datos', '{}'::jsonb);
-  return v;
-end $fn$;
 revoke all on function public.exportar_mi_empresa(uuid) from public, anon;
 grant execute on function public.exportar_mi_empresa(uuid) to authenticated;
 
@@ -5128,46 +5050,6 @@ revoke all on function public.pasar_llevar_a_mesa(uuid, uuid, integer, uuid) fro
 grant execute on function public.pasar_llevar_a_mesa(uuid, uuid, integer, uuid) to authenticated;
 
 -- ## B) EXPORTACIÓN COMPLETA (versión 3): se añaden inventario, recetas, movimientos, devoluciones y áreas listas
-create or replace function private.snapshot_empresa(p_emp uuid)
-returns jsonb
-language sql
-stable
-security definer
-set search_path = ''
-as $fn$
-  select jsonb_build_object(
-    'version', 3,
-    'exportado_en', now(),
-    'empresa', (select to_jsonb(e) from public.empresas e where e.id = p_emp),
-    'zonas',       coalesce((select jsonb_agg(to_jsonb(z) order by z.orden) from public.zonas z where z.empresa_id = p_emp), '[]'),
-    'mesas',       coalesce((select jsonb_agg(to_jsonb(m) || jsonb_build_object('zona_nombre',
-                                      (select z.nombre from public.zonas z where z.id = m.zona_id)))
-                                 from public.mesas m where m.empresa_id = p_emp), '[]'),
-    'secciones',   coalesce((select jsonb_agg(to_jsonb(s) order by s.orden) from public.secciones_menu s where s.empresa_id = p_emp), '[]'),
-    'productos',   coalesce((select jsonb_agg(to_jsonb(p) || jsonb_build_object('seccion_nombre', s.nombre)) from public.productos p
-                             left join public.secciones_menu s on s.id = p.seccion_id where p.empresa_id = p_emp), '[]'),
-    'cuentas',     coalesce((select jsonb_agg(to_jsonb(c)) from public.cuentas c where c.empresa_id = p_emp), '[]'),
-    'cuenta_mesas',coalesce((select jsonb_agg(to_jsonb(cm)) from public.cuenta_mesas cm
-                             join public.cuentas c on c.id = cm.cuenta_id where c.empresa_id = p_emp), '[]'),
-    'cuenta_items',coalesce((select jsonb_agg(to_jsonb(ci)) from public.cuenta_items ci
-                             join public.cuentas c on c.id = ci.cuenta_id where c.empresa_id = p_emp), '[]'),
-    'cuenta_item_areas', coalesce((select jsonb_agg(to_jsonb(a)) from public.cuenta_item_areas a where a.empresa_id = p_emp), '[]'),
-    'pagos',       coalesce((select jsonb_agg(to_jsonb(pg)) from public.pagos pg
-                             join public.cuentas c on c.id = pg.cuenta_id where c.empresa_id = p_emp), '[]'),
-    'turnos',      coalesce((select jsonb_agg(to_jsonb(t)) from public.turnos_caja t where t.empresa_id = p_emp), '[]'),
-    'devoluciones',coalesce((select jsonb_agg(to_jsonb(d)) from public.devoluciones_item d where d.empresa_id = p_emp), '[]'),
-    'insumos',     coalesce((select jsonb_agg(to_jsonb(i)) from public.insumos i where i.empresa_id = p_emp), '[]'),
-    'recetas',     coalesce((select jsonb_agg(to_jsonb(r)) from public.recetas r where r.empresa_id = p_emp), '[]'),
-    'insumos_movimientos', coalesce((select jsonb_agg(to_jsonb(mv) order by mv.en) from public.insumos_movimientos mv where mv.empresa_id = p_emp), '[]'),
-    'equipo',      coalesce((select jsonb_agg(jsonb_build_object('user_id', m.user_id, 'correo', u.email,
-                                                                 'rol', m.rol, 'areas', to_jsonb(m.areas),
-                                                                 'nombre', coalesce(p.display_name,'')))
-                             from public.membresias m
-                             join auth.users u on u.id = m.user_id
-                             left join public.perfiles p on p.user_id = m.user_id
-                             where m.empresa_id = p_emp), '[]')
-  );
-$fn$;
 revoke all on function private.snapshot_empresa(uuid) from public, anon, authenticated;
 
 create or replace function public.super_exportar_empresa(p_empresa uuid)
@@ -5705,7 +5587,7 @@ begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin']::text[]);
   if p_margen_pct is null or p_margen_pct <= 0 or p_margen_pct >= 100 then
-    raise exception 'El margen debe estar entre 1 y 99 %';
+    raise exception 'El margen debe estar entre 1 y 99 %%';
   end if;
 
   select coalesce(array_agg(p.id), '{}'::uuid[]) into v_lista
