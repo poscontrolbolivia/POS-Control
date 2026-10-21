@@ -3,7 +3,7 @@ import { useStore, saldoCuenta } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { useMoneda } from '../../../services/money.js'
 import { cargarAlertas, contarAbiertas, conNombres } from '../../../services/alertasApi.js'
-import { alertasAutomaticas } from './alertasAutomaticas.js'
+import { alertasAutomaticas, claveSugerencia } from './alertasAutomaticas.js'
 import './AlertasPage.css'
 
 const TIPOS = ['cocina', 'cobro', 'inventario', 'mesa', 'general']
@@ -137,7 +137,6 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
 
   // Sugerencias derivadas: se oculta la que ya fue convertida (mismo origen y mismo título), así no
   // se repite el aviso que PwaBridge ya notifica ni la que el equipo levantó a mano.
-  const claveSugerencia = a => `${a.tipo}|${a.cuentaId || a.mesaId || 'sin'}|${a.titulo}`
   const sugerencias = useMemo(() => {
     const yaCubiertas = new Set(pendientes.map(claveSugerencia))
     return alertasAutomaticas({ cuentas: s.cuentas, mesas: s.mesas, insumos: s.insumos, ahora })
@@ -278,6 +277,7 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
       {aviso && <div className="ala-ok" role="status">✓ {aviso}</div>}
 
       <section className="ala-filtros" role="group" aria-label={tOr('alertas.filtros', 'Filtros')}>
+        <p className="ala-pista">{tOr('alertas.filtrosAyuda', 'El tipo dice a quién apunta la alerta (cocina, cobro, stock, mesas); es solo un filtro.')}</p>
         <div className="ala-grupo" role="group" aria-label={tOr('alertas.filtroTipo', 'Tipo de alerta')}>
           <span className="ala-grupo-label">{tOr('alertas.filtroTipo', 'Tipo')}</span>
           {CHIPS_TIPO.map(k => (

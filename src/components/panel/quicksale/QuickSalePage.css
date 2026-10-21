@@ -64,3 +64,6 @@
 .vd-prod.agotado{opacity:.6;border-style:dashed;border-color:var(--porcobrar-bd)}
 .vd-prod.agotado:active{background:var(--card);border-color:var(--porcobrar-bd)}
 .vd-prod small.vd-agotado-tag{color:var(--porcobrar-bd);font-weight:750}
+
+/* Qué es esta pantalla, en una línea: mostrador vs Caja. */
+.vd-ayuda{margin:0 0 6px;color:var(--mut);font-size:.84rem;font-weight:600;line-height:1.35}

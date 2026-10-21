@@ -265,6 +265,7 @@ export default function ReportsPage({ rol, sesion }) {
           </label>
           <button type="button" className="ghost" onClick={aplicar}>{tOr('reportes.aplicar', 'Aplicar')}</button>
         </div>
+        <p className="rp-nota">{tOr('reportes.periodoAyuda', 'Todo el reporte usa el rango elegido; con fechas manuales toca «Aplicar».')}</p>
 
         {(aviso || error) && <div className="rp-aviso" role="alert">⚠️ {aviso || error}</div>}
         {modo === 'supabase' && resumenRpc?.origen === 'memoria' && !cargando && (
@@ -285,6 +286,7 @@ export default function ReportsPage({ rol, sesion }) {
         </div>
       </section>
 
+      <p className="rp-nota">{tOr('reportes.tablasAyuda', 'Toca un encabezado para ordenar la columna (▲ y luego ▼); arrastra el borde para cambiar el ancho.')}</p>
       {secciones.map(sec => (
         <section key={sec.id} className="adm-card rp-sec">
           <div className="adm-card-cab">

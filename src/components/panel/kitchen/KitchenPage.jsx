@@ -412,6 +412,8 @@ export default function KitchenPage({ rol, sesion }) {
         </button>
       </div>
 
+      {tabs.length > 1 && <p className="ck-ayuda">{tOr('cocina.areasAyuda', 'Cada pestaña es un área con su impresora (se crean en Configuración → Impresión).')}</p>}
+
       {aviso && (
         <div className="auth-aviso cocina-aviso" role="alert">
           <span>⚠️ {aviso}</span>
@@ -423,6 +425,7 @@ export default function KitchenPage({ rol, sesion }) {
         <section className="ck-panel-sacadas" aria-label={tOr('cocina.sacadasTitulo', 'Comandas que ya salieron completas')}>
           <header><b>✓ {tOr('cocina.sacadasTitulo', 'Comandas que ya salieron completas')}</b>
             <button type="button" className="ico" onClick={() => setSacadasAbierto(false)} aria-label={tOr('comun.cerrar', 'Cerrar')}>✕</button></header>
+          <p className="ck-ayuda">{tOr('cocina.sacadasAyuda', 'Comandas que ya salieron completas; con ↩ un plato vuelve a preparación.')}</p>
           {totalSacadas === 0 && <p className="ck-vacio-mini">{tOr('cocina.sinSacadas', 'Todavía no hay comandas sacadas.')}</p>}
           {areasMostradas.map(a => (filas[a]?.sacadas.length ? (
             <div key={a} className="ck-sac-grupo">
@@ -447,6 +450,7 @@ export default function KitchenPage({ rol, sesion }) {
 
       {vista !== SIN_AREA && devs.length > 0 && (
         <div className="ck-devs" role="region" aria-label={tOr('cocina.devueltos', 'Platos devueltos')}>
+          <p className="ck-ayuda">{tOr('cocina.devueltoAyuda', 'Platos devueltos después de servidos: confírmalos aquí para que descuenten en Caja.')}</p>
           {devs.map(dv => (
             <div key={dv.id} className="ck-dev">
               <b>↩ {tOr('cocina.devuelto', 'Devuelto')}: {dv.qty}× {dv.nombre}</b>

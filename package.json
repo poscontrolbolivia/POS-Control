@@ -1,7 +1,7 @@
 {
   "name": "pos-control",
   "private": true,
-  "version": "0.34.0",
+  "version": "0.37.0",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-agent.mjs",
@@ -12,7 +12,7 @@
     "agent": "node scripts/copy-agent.mjs",
     "icons": "node scripts/gen-icons.mjs",
     "i18n": "node scripts/check-i18n.mjs",
-    "test": "node scripts/check-i18n.mjs && node tests/indicaciones.mjs && node tests/cierre.mjs && node tests/soldOut.mjs && node tests/montos.mjs && node tests/respaldoZip.mjs && node tests/ticket.mjs && node tests/agenteLocal.mjs && node tests/kitchenClases.mjs && node tests/pedidoListo.mjs && node tests/impresionGrupos.mjs && node tests/estadoMesas.mjs",
+    "test": "node scripts/check-i18n.mjs && node tests/indicaciones.mjs && node tests/cierre.mjs && node tests/soldOut.mjs && node tests/montos.mjs && node tests/respaldoZip.mjs && node tests/ticket.mjs && node tests/agenteLocal.mjs && node tests/kitchenClases.mjs && node tests/pedidoListo.mjs && node tests/impresionGrupos.mjs && node tests/estadoMesas.mjs && node tests/cocinaAlertas.mjs",
     "test:impresion": "node tests/impresionGrupos.mjs",
     "test:ticket": "node tests/ticket.mjs",
     "test:pedido": "node tests/pedidoListo.mjs",

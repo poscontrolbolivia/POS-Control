@@ -3,10 +3,11 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { fileURLToPath, pathToFileURL } from 'url'
 import { build } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const RAIZ = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const AUD = path.join(RAIZ, 'src/context/_audit.jsx')
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'pos-audit-'))
 fs.writeFileSync(AUD, fs.readFileSync(path.join(RAIZ, 'src/context/StoreContext.jsx'), 'utf8') + '\nexport { reducer }\n')
@@ -14,7 +15,7 @@ try {
   await build({ root: RAIZ, logLevel: 'silent', configFile: false, plugins: [react()], ssr: { noExternal: true },
     build: { ssr: AUD, outDir: OUT, emptyOutDir: true, minify: false, rollupOptions: { output: { entryFileNames: 'b.mjs', format: 'es' } } } })
 } finally { fs.rmSync(AUD, { force: true }) }
-const { reducer } = await import(path.join(OUT, 'b.mjs'))
+const { reducer } = await import(pathToFileURL(path.join(OUT, 'b.mjs')).href)
 fs.rmSync(OUT, { recursive: true, force: true })
 
 let ok = 0, mal = 0

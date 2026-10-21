@@ -49,7 +49,7 @@ const NOTAS_RAPIDAS = ['Para llevar', 'Sin cebolla', 'Poco sal', 'Bien cocido', 
 
 export default function QuickSalePage({ rol, sesion }) {
   const { s, d } = useStore()
-  const { t } = useIdioma()
+  const { t, tOr } = useIdioma()
   const usuario = sesion?.usuario || sesion?.nombre || rol || '—'
   const moneda = s.config?.moneda || MONEDA
   const m = n => formatearMonto(n, moneda)
@@ -157,6 +157,7 @@ export default function QuickSalePage({ rol, sesion }) {
     <div className="vd">
       <section className="vd-menu">
         <h2 className="vd-titulo">{t('venta.titulo', { nombre: s.config?.nombre || t('venta.mostrador') })}</h2>
+        <p className="vd-ayuda">{tOr('venta.ayuda', 'Mostrador: el cliente pide, paga y se va, sin mesa ni cuenta abierta. Las mesas se cobran en Caja.')}</p>
         <div className="vd-tabs" role="tablist">
           {secciones.map(x => (
             <button key={x.id} role="tab" aria-selected={x.id === secActiva}

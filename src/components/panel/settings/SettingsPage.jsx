@@ -56,6 +56,7 @@ export default function SettingsPage({ rol, sesion }) {
     return (
       <div className="adm-panel">
         <div className="adm-cab"><h2>{t('config.titulo')}</h2></div>
+      <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, cierres y plan. Cada bloque se pliega con ▾.')}</p>
         <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')}>{cuerpoPreferencias}</Bloque>
         {rol === 'cajero' && sesion?.supabase && (
           <Bloque id="impresoras" icono="🖨️" titulo={t('config.impresoras')}>
@@ -100,6 +101,7 @@ export default function SettingsPage({ rol, sesion }) {
   return (
     <div className="adm-panel">
       <div className="adm-cab"><h2>{t('config.titulo')}</h2></div>
+      <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, cierres y plan. Cada bloque se pliega con ▾.')}</p>
 
       <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')}>{cuerpoPreferencias}</Bloque>
 

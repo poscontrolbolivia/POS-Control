@@ -1,18 +1,26 @@
 /* Menú: grupos minimizados, lista compacta (Nº · nombre · precio · Editar) y ventanas en primer plano */
-.mn-acciones{gap:10px;flex-wrap:wrap}
 .mn-vacio{font-size:1.05rem;text-align:center;padding:28px 16px}
-.mn-barra{gap:10px;flex-wrap:wrap;align-items:center}
-.mn-buscar{flex:1 1 260px;min-width:0;max-width:100%;min-height:44px}
+.mn-barra{gap:8px;flex-wrap:wrap;align-items:center}
+/* .adm-fila input fija min-width:140px y con eso el buscador nunca cabe en un teléfono: manda esta regla. */
+.mn-barra input.mn-buscar{flex:1 1 200px;min-width:0;max-width:100%;min-height:44px}
 .mn-grupo{padding:0;overflow:hidden}
 .mn-grupo-cab{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 8px}
 .mn-grupo-btn{flex:1 1 220px;min-width:0;display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;text-align:left;background:transparent !important;color:var(--ink) !important;border:0 !important;min-height:48px}
 .mn-grupo-btn h3{margin:0;font-size:1.1rem}
 .mn-lista{list-style:none;margin:0;padding:0 10px 10px}
-.mn-fila{display:grid;grid-template-columns:34px 64px minmax(0,1fr) 108px auto;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line)}
+.mn-fila{display:grid;grid-template-columns:64px minmax(0,1fr) 108px auto;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line)}
+.mn-fila.con-dato{grid-template-columns:64px minmax(0,1fr) 108px 92px auto}
+/* La casilla extra solo existe en el modo selección; sin ella la columna sobraba y descuadraba la fila. */
+.mn-lista.con-sel .mn-fila{grid-template-columns:34px 64px minmax(0,1fr) 108px auto}
+.mn-lista.con-sel .mn-fila.con-dato{grid-template-columns:34px 64px minmax(0,1fr) 108px 92px auto}
 .mn-fila:last-child{border-bottom:0}
 .mn-fila-cab{font-size:.78rem;color:var(--mut);text-transform:uppercase;font-weight:700;border-bottom:2px solid var(--line)}
-.mn-orden{background:transparent !important;border:0 !important;color:var(--mut) !important;text-align:left;min-height:36px;padding:2px 4px;text-transform:uppercase;font-size:.78rem;font-weight:700;cursor:pointer}
-.mn-orden:hover:not(:disabled){color:var(--ink) !important;filter:none !important}
+/* Encabezados de columna que ordenan: sin contorno ni fondo se leían como texto fijo, no como botón. */
+.mn-orden{background:transparent !important;border:1px solid transparent !important;color:var(--mut) !important;text-align:left;min-height:36px;padding:2px 8px;border-radius:var(--r-pill);text-transform:uppercase;font-size:.78rem;font-weight:700;cursor:pointer}
+.mn-orden:hover:not(:disabled){background:var(--card-2) !important;border-color:var(--line) !important;color:var(--ink) !important;filter:none !important}
+.mn-orden:focus-visible{outline:3px solid var(--sel);outline-offset:2px}
+.mn-ord-fl{margin-left:5px;opacity:.45}
+.mn-ord-fl.on{opacity:1;color:var(--ink)}
 .mn-orden-precio{text-align:right}
 .mn-num{font-variant-numeric:tabular-nums;font-weight:700;color:var(--mut)}
 .mn-nombre{min-width:0;overflow-wrap:anywhere;font-weight:600}
@@ -22,11 +30,18 @@
 .mn-fila.agotado .mn-nombre{color:var(--porcobrar-bd)}
 .mn-fila.sel{background:color-mix(in srgb,var(--ac) 9%,var(--card));border-radius:10px}
 .mn-fila button.info{min-height:40px;padding:6px 14px}
+/* Crear va al final de la pantalla, debajo de la lista. */
+.mn-crear{gap:10px;padding:10px 0;position:sticky;bottom:0;z-index:5;background:linear-gradient(to top,var(--bg,var(--card)) 70%,transparent)}
+.mn-crear .mn-nota{flex:1 1 200px;min-width:0}
 @media (max-width:620px){
-  .mn-fila{grid-template-columns:30px 52px minmax(0,1fr) auto;row-gap:2px}
-  .mn-fila .mn-precio{grid-column:3;grid-row:2;text-align:left}
-  .mn-fila button.info{grid-column:4;grid-row:1 / span 2}
-  .mn-fila-cab .mn-orden-precio{display:none}
+  /* En el teléfono la fila pasa a flex envuelto: nunca fuerza un ancho mayor que la pantalla. */
+  .mn-fila{display:flex;flex-wrap:wrap;gap:6px 8px}
+  .mn-fila .adm-sel,.mn-fila .mn-num{flex:0 0 auto}
+  .mn-fila .mn-nombre{flex:1 1 110px}
+  .mn-fila .mn-precio,.mn-fila .mn-dato{flex:0 0 auto;text-align:left}
+  .mn-fila > button.info{margin-left:auto}
+  .mn-fila-cab .mn-orden-precio,.mn-fila-cab .mn-cab-esp{display:none}
+  .mn-barra input.mn-buscar{flex:1 1 100%}
 }
 
 /* Selector de tipo (Grupos · Productos · Indicaciones): píldoras .tab del proyecto */
@@ -41,8 +56,8 @@
   border:1.5px dashed var(--line-fuerte);border-radius:var(--r-pill);background:var(--card);color:var(--mut);font-size:.9rem;font-weight:600}
 .mn-sugerencia .ghost{min-height:38px;padding:5px 14px;font-size:.85rem}
 
-/* Tarjeta de grupo en modo Grupos: solo se administra el grupo, sin la lista de productos */
-.mn-grupo-hint{margin:0;padding:0 12px 12px;color:var(--mut);font-size:.85rem}
+/* Una línea que explica qué es la pestaña activa; sin ella no se distingue un grupo de un producto. */
+.mn-ayuda{margin:2px 0 0;color:var(--mut);font-size:.86rem;font-weight:600;line-height:1.35}
 
 /* Tarjeta de una lista de indicaciones */
 .mn-tarjeta-ind{padding:4px 0 10px}
@@ -78,10 +93,15 @@
   border:1.5px solid var(--line-fuerte);border-radius:999px;background:var(--card);font-weight:600;cursor:pointer;align-self:flex-start}
 .mn-check input{width:20px;height:20px;min-height:0;accent-color:var(--ac)}
 
-/* Ventana en primer plano */
-.mn-overlay{position:fixed;inset:0;z-index:1000;background:rgba(10,18,30,.62);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}
-.mn-ventana{width:100%;max-width:560px;max-height:calc(100dvh - 32px);overflow-y:auto;background:var(--card);color:var(--ink);border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.45);border:1.5px solid var(--line-fuerte,var(--line))}
+/* Ventana en primer plano. align-items:flex-start + margin:auto: se centra cuando cabe y, cuando no,
+   deja ver la parte de arriba (con align-items:center el título quedaba cortado fuera de la pantalla). */
+.mn-overlay{position:fixed;inset:0;z-index:1000;background:rgba(10,18,30,.62);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;overscroll-behavior:contain}
+.mn-ventana{width:100%;max-width:560px;max-height:calc(100dvh - 32px);margin:auto;overflow-y:auto;background:var(--card);color:var(--ink);border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.45);border:1.5px solid var(--line-fuerte,var(--line))}
 .mn-ventana-tit{margin:0 0 12px;font-size:1.2rem}
+@media (max-width:640px){
+  .mn-overlay{padding:0;align-items:flex-end}
+  .mn-ventana{margin:0;max-width:none;max-height:92dvh;border-radius:20px 20px 0 0;padding:16px 14px}
+}
 .mn-form{display:flex;flex-direction:column;gap:12px;min-width:0}
 .mn-form .adm-campo{min-width:0}
 .mn-form input:not([type=checkbox]):not([type=file]),.mn-form select{width:100%;max-width:100%;min-width:0;min-height:46px}
@@ -92,7 +112,18 @@
 .mn-chip.on{background:var(--logo-orange,#f16f1b) !important;color:#fff !important;border-color:var(--logo-orange,#f16f1b) !important}
 .mn-pie{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:6px}
 .mn-itemnum{margin:0;color:var(--mut);font-weight:700}
-.mn-avanzado summary{cursor:pointer;color:var(--mut);font-weight:600;min-height:36px;display:flex;align-items:center}
+/* Desplegable: con display:flex el navegador suelta el triángulo nativo del <summary>, así que la flecha
+   y el contorno hay que pintarlos aquí; si no, el texto se lee como un título y nadie lo toca. */
+.mn-avanzado > summary{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer;
+  min-height:46px;padding:8px 16px;border:1.5px solid var(--line-fuerte);border-radius:var(--r-pill);
+  background:var(--card-2);color:var(--ink);font-weight:700;font-size:.92rem}
+.mn-avanzado > summary::-webkit-details-marker{display:none}
+.mn-avanzado > summary::before{content:'▸';flex:none;width:22px;height:22px;display:inline-grid;place-items:center;
+  border-radius:999px;background:var(--line-fuerte);color:var(--card);font-size:.76rem;line-height:1}
+.mn-avanzado[open] > summary::before{content:'▾'}
+.mn-avanzado > summary:hover{background:var(--libre);border-color:var(--mut)}
+.mn-avanzado > summary:focus-visible{outline:3px solid var(--sel);outline-offset:2px}
+.mn-avanzado > :not(summary){margin-top:12px}
 .mn-avanzado .menu-areas,.mn-bloque .menu-areas{display:flex;gap:12px;flex-wrap:wrap;padding:6px 0}
 .mn-extra{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px}
 .mn-estado{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -102,7 +133,6 @@
 
 /* ---------- costo / margen ---------- */
 /* Columna extra (Costo o Margen %) junto al precio: el precio se ve igual que siempre */
-.mn-fila.con-dato{grid-template-columns:34px 64px minmax(0,1fr) 108px 92px auto}
 .mn-dato{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mn-dato.sin{color:var(--mut);font-weight:600}
 .mn-mg.mg-bjo,.mn-dato.mg-bjo{color:var(--danger)}
@@ -110,14 +140,15 @@
 .mn-mg.mg-alto,.mn-dato.mg-alto{color:var(--ok)}
 .mn-mg.mg-sin,.mn-dato.mg-sin{color:var(--mut);font-weight:600}
 .mn-dato-toggle{text-align:right;white-space:nowrap}
+.mn-dato-toggle::after{content:'⇄';margin-left:5px;opacity:.5}
 .mn-dato-toggle.on{color:var(--ink) !important;text-decoration:underline;text-underline-offset:3px}
-@media (max-width:620px){
-  .mn-fila.con-dato{grid-template-columns:30px 52px minmax(0,1fr) auto auto}
-  .mn-fila.con-dato .mn-precio{grid-column:3;grid-row:2;text-align:left}
-  .mn-fila.con-dato .mn-dato{grid-column:4;grid-row:2;text-align:left}
-  .mn-fila.con-dato button.info{grid-column:5;grid-row:1 / span 2}
-  .mn-fila-cab .mn-cab-esp{display:none}
-}
+
+/* Herramientas masivas dentro de la ventana a primer plano */
+.mn-herr{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.mn-herr .adm-masivo-grupo{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mn-herr .adm-masivo-grupo input:not([type=checkbox]),.mn-herr .adm-masivo-grupo select{min-width:0;max-width:100%}
+.mn-herr input[name=motivo]{flex:1 1 160px}
+.mn-herr .adm-masivo-grupo > label{flex:1 1 100%}
 
 /* Aviso en pantalla (sustituto de alert/confirm nativos) */
 .mn-mensaje{display:flex;align-items:center;gap:10px;justify-content:space-between;margin:8px 0;padding:10px 14px;border-radius:var(--r-pill);font-weight:600;line-height:1.35}
@@ -130,9 +161,6 @@
 .mn-margen-vivo{margin:2px 0 0;font-size:.9rem;color:var(--mut)}
 .mn-margen-vivo b{font-variant-numeric:tabular-nums}
 .mn-margen-vivo.sin{font-style:italic}
-
-/* Barra de costo masiva sin selección */
-.mn-costos-bar{border-style:dashed}
 
 /* Tabla de simulación */
 .mn-tabla-wrap{max-height:44dvh;overflow:auto;border:1px solid var(--line);border-radius:var(--r-sm)}
@@ -150,3 +178,10 @@
 
 .mn-costo-reemp{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;color:var(--mut);cursor:pointer}
 .mn-costo-reemp input{width:auto;min-height:0}
+
+/* Pie de las ventanas: en el teléfono Guardar ocupa su propia fila completa arriba y Eliminar / Cancelar quedan debajo, sin saltos raros. */
+@media (max-width:640px){
+  .mn-pie .sp{display:none}
+  .mn-pie>button[type=submit]{order:-1;flex:1 1 100%;min-height:48px}
+  .mn-pie>button:not([type=submit]){flex:1 1 40%}
+}

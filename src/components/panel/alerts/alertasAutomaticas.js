@@ -118,4 +118,11 @@ export function alertasAutomaticas({ cuentas, mesas, insumos, ahora } = {}) {
     .sort((a, b) => (a.prioridad - b.prioridad) || (b.creadaEn - a.creadaEn))
 }
 
+// Clave para no repetir una sugerencia que ya es alerta. Cada insumo con stock bajo lleva su propia clave
+// (antes todos compartían «inventario|sin|Stock bajo»: convertir uno ocultaba las sugerencias de los demás).
+export const claveSugerencia = a => {
+  const ref = a.cuentaId || a.mesaId || (a.tipo === 'inventario' ? String(a.mensaje || '').split(':')[0] : 'sin')
+  return `${a.tipo}|${ref}|${a.titulo}`
+}
+
 export default alertasAutomaticas

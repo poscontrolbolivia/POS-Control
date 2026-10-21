@@ -316,3 +316,6 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .llevar-acc, .llevar-mesa { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .llevar-mesa select { flex: 1 1 140px; min-width: 0; }
 .llevar-mesa input { width: 64px; }
+
+/* Una línea: qué es la pestaña Para llevar y dónde se cobra. */
+.llevar-ayuda { margin: 0; color: var(--mut); font-size: .84rem; font-weight: 600; line-height: 1.35; }

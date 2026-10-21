@@ -105,3 +105,6 @@
 .ck-dev-sub{flex:1 1 100%;color:var(--mut);font-size:.88rem}
 .ck-dev input{flex:1 1 200px;min-height:44px;border-radius:999px;padding:6px 16px}
 .ck-dev button{min-height:44px;border-radius:999px}
+
+/* Una línea que explica cada bloque de la cola (áreas, sacadas, devueltos). */
+.ck-ayuda{margin:0 0 8px;padding:7px 10px;background:var(--card-2);border:1px solid var(--line);border-radius:10px;color:var(--mut);font-size:.83rem;font-weight:600;line-height:1.35}

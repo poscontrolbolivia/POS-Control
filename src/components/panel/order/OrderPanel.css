@@ -115,3 +115,7 @@
 .pm-paso.on[data-paso="pagada"]{border-color:var(--libre-bd);background:var(--libre-bg);color:var(--libre-ink)}
 .pm-desglose{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.88rem;color:var(--mut);margin:2px 0 6px}
 .pm-desglose b{color:var(--ink)}
+
+/* Modo cobro (se llegó desde Caja): botón «Editar mesa» y la línea que aclara qué muestra la vista. */
+.pm-cobro-editar{flex:none;min-height:38px;padding:6px 14px;font-size:.85rem;font-weight:700}
+.pm-ayuda{margin:-2px 0 10px;padding:7px 10px;background:var(--card-2);border:1px solid var(--line);border-radius:10px;color:var(--mut);font-size:.84rem;font-weight:600;line-height:1.35}

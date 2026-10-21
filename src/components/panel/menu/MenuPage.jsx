@@ -107,6 +107,8 @@ export default function MenuPage({ rol }) {
   const [subiendoId, setSubiendoId] = useState(null)
   const [avisoImg, setAvisoImg] = useState(null)
   const [sel, setSel] = useState(() => new Set())
+  const [modoSel, setModoSel] = useState(false)   // muestra las casillas de selección múltiple
+  const [vHerr, setVHerr] = useState(false)       // ventana de herramientas masivas (primer plano)
   const [pctTmp, setPctTmp] = useState('')
   const [fijoTmp, setFijoTmp] = useState('')
   const [seccionTmp, setSeccionTmp] = useState('')
@@ -173,7 +175,10 @@ export default function MenuPage({ rol }) {
   }
   const prodsBuscados = () => s.productos.filter(coincide)
   const ordenarPor = k => setOrden(o => (o.k === k ? { k, dir: -o.dir } : { k, dir: 1 }))
-  const flecha = k => (orden.k === k ? (orden.dir === 1 ? ' ▲' : ' ▼') : '')
+  // La columna quieta también muestra su flecha (⇅ apagada): sin ella el encabezado parece texto normal y no un botón.
+  const flecha = k => (orden.k === k
+    ? <span className="mn-ord-fl on" aria-hidden="true">{orden.dir === 1 ? '▲' : '▼'}</span>
+    : <span className="mn-ord-fl" aria-hidden="true">⇅</span>)
 
   // ---------- grupos ----------
   // El grupo de impresión de cada sección vive en Configuración → Impresión; acá solo se edita la carta.
@@ -356,6 +361,9 @@ export default function MenuPage({ rol }) {
   const idsSel = () => s.productos.filter(p => sel.has(p.id)).map(p => p.id)
   const alternarSel = id => setSel(a => { const n = new Set(a); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const selSeccion = (lista, on) => setSel(a => { const n = new Set(a); lista.forEach(p => { if (on) n.add(p.id); else n.delete(p.id) }); return n })
+  // Las casillas solo se ven en el modo selección de la pestaña Productos; al salir se limpia la selección.
+  const selActiva = modoSel && tipo === 'productos'
+  const salirSeleccion = () => { setModoSel(false); setVHerr(false); setSel(new Set()) }
   const aplicarASeleccion = cambios => idsSel().forEach(id => d({ t: 'producto~', id, cambios }))
   const aplicarPorcentaje = () => {
     const pct = Number(pctTmp)
@@ -544,6 +552,12 @@ export default function MenuPage({ rol }) {
   // En modo Grupos el buscador filtra grupos: por su nombre o porque algo de dentro coincide.
   const gruposLista = tipo === 'grupos' ? secciones.filter(sec => !hayBusqueda || coincideGrupo(sec)) : gruposVisibles
   const nombreTipo = k => (k === 'grupos' ? tOr('items.tabGrupos', 'Grupos') : k === 'indicaciones' ? tOr('items.tabIndicaciones', 'Indicaciones') : tOr('items.tabProductos', 'Productos'))
+  // Cada pestaña se explica sola en una línea: sin esto no se distingue un grupo de un producto ni para qué sirve una indicación.
+  const ayudaTipo = {
+    grupos: tOr('items.ayudaGrupos', 'Grupo = una sección de la carta (Bebidas, Comida). Ordénalos con ▲▼ y renombra con Editar; el grupo decide en qué impresora se imprime cada artículo.'),
+    productos: tOr('items.ayudaProductos', 'Cada artículo con precio. El Nº es el atajo que usa el mesero para pedirlo. Editar abre precio, grupo, impresora y costo.'),
+    indicaciones: tOr('items.ayudaIndicaciones', 'Listas de opciones que el mesero marca al pedir (Término: poco/medio/bien). Aquí se crea la lista y se elige a qué grupos o productos aplica.'),
+  }
   const etiquetaNuevo = { grupos: t('menu.grupoMas'), productos: t('menu.productoMas'), indicaciones: tOr('items.nuevaInd', 'Indicación') }
   const conteoTipo = { grupos: secciones.length, productos: s.productos.length, indicaciones: listas.length }
   const crearSegunTipo = () => (tipo === 'grupos' ? abrirNuevoGrupo() : tipo === 'indicaciones' ? abrirNuevaInd() : abrirNuevoProd())
@@ -560,11 +574,6 @@ export default function MenuPage({ rol }) {
     <div className="adm-panel">
       <div className="adm-cab">
         <h2>{tOr('items.titulo', 'Ítems')}</h2>
-        <div className="adm-fila mn-acciones">
-          {vacio
-            ? <button type="button" className="success" onClick={abrirNuevoGrupo}>+ {t('menu.grupoMas')}</button>
-            : <button type="button" className="success" onClick={crearSegunTipo}>+ {etiquetaNuevo[tipo]}</button>}
-        </div>
       </div>
 
       {vacio && <div className="adm-aviso mn-vacio">{t('menu.menuVacio')}</div>}
@@ -579,6 +588,8 @@ export default function MenuPage({ rol }) {
         </div>
       )}
 
+      {!vacio && <p className="mn-ayuda">{ayudaTipo[tipo]}</p>}
+
       {!vacio && (
         <div className="adm-fila menu-barra mn-barra">
           <input name="buscar" className="mn-buscar" type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)}
@@ -588,6 +599,17 @@ export default function MenuPage({ rol }) {
             <>
               <button type="button" className="ghost" onClick={() => setAbiertas(new Set(secciones.map(x => x.id)))}>▾ {t('menu.mostrarTodo')}</button>
               <button type="button" className="ghost" onClick={() => setAbiertas(new Set())}>▸ {t('menu.ocultarTodo')}</button>
+              {/* El modo selección vive en la misma fila que mostrar/ocultar: arriba a la derecha quedaba lejos de la lista. */}
+              {selActiva ? (
+                <>
+                  <button type="button" className="info" onClick={() => setVHerr(true)}>
+                    ✎ {t('comun.editar')}{sel.size > 0 && ` (${sel.size})`}
+                  </button>
+                  <button type="button" className="ghost" onClick={salirSeleccion}>✕ {tOr('items.dejarSeleccionar', 'Dejar de seleccionar')}</button>
+                </>
+              ) : (
+                <button type="button" className="ghost" onClick={() => setModoSel(true)}>☑ {tOr('items.seleccionarVarios', 'Seleccionar')}</button>
+              )}
             </>
           )}
           {Object.keys(agotados).length > 0 && <span className="adm-chip adm-chip-agotado" title={t('agotado.contadorTitle')}>🚫 {t('agotado.contador', { n: Object.keys(agotados).length })}</span>}
@@ -607,50 +629,6 @@ export default function MenuPage({ rol }) {
         <div className={'mn-mensaje ' + (aviso.tono || 'warn')} role="status">
           <span>{aviso.msg}</span>
           <button type="button" className="ghost mn-mensaje-x" aria-label={tOr('menu.cerrarAviso', 'Cerrar aviso')} onClick={() => setAviso(null)}>✕</button>
-        </div>
-      )}
-
-      {veCostos && !sel.size && !vacio && tipo === 'productos' && (
-        <div className="adm-masivo mn-costos-bar">
-          <span className="adm-chip">{tOr('menu.costosAlcance', 'Sin selección: las herramientas de costo aplican a toda la carta (solo productos con costo).')}</span>
-          {controlesCosto}
-        </div>
-      )}
-
-      {sel.size > 0 && tipo === 'productos' && (
-        <div className="adm-masivo">
-          <span className="adm-chip">{t('menu.masivoSel', { n: sel.size })}</span>
-          <span className="adm-masivo-grupo">
-            <input name="masivo-porcentaje" className="adm-num" type="text" inputMode="decimal" autoComplete="off" value={pctTmp}
-              onChange={e => setPctTmp(limpiarPct(e.target.value))} onBlur={() => setPctTmp(normalizarPct(pctTmp))}
-              onFocus={e => e.target.select()} placeholder={t('menu.masivoPorcentaje')} aria-label={t('menu.masivoPorcentaje')} />
-            <button type="button" className="ghost" onClick={aplicarPorcentaje}>{t('menu.masivoAplicar')}</button>
-            <input name="masivo-fijo" className="adm-num" type="text" inputMode="decimal" autoComplete="off" value={fijoTmp}
-              onChange={e => setFijoTmp(limpiarMonto(e.target.value))} onBlur={() => setFijoTmp(normalizarMonto(fijoTmp))}
-              onFocus={e => e.target.select()} placeholder={t('menu.masivoFijo')} aria-label={t('menu.masivoFijo')} />
-            <button type="button" className="ghost" onClick={aplicarPrecioFijo}>{t('menu.masivoAplicar')}</button>
-          </span>
-          <span className="adm-masivo-grupo">
-            <select name="masivo-seccion" value={seccionTmp} onChange={e => setSeccionTmp(e.target.value)} aria-label={t('menu.masivoSeccion')}>
-              <option value="">{t('menu.masivoSeccion')}</option>
-              {secciones.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-            </select>
-            <button type="button" className="ghost" onClick={aplicarSeccion}>{t('menu.masivoAplicar')}</button>
-          </span>
-          <span className="adm-masivo-grupo">
-            {checkboxesAreas(areasTmp, setAreasTmp)}
-            <button type="button" className="ghost" onClick={aplicarAreas} disabled={!areasTmp.length}>{t('menu.masivoAplicar')}</button>
-          </span>
-          <button type="button" className="success" onClick={() => aplicarASeleccion({ activo: true })}>{t('menu.activar')}</button>
-          <button type="button" className="warning" onClick={() => aplicarASeleccion({ activo: false })}>{t('menu.desactivar')}</button>
-          <span className="adm-masivo-grupo">
-            <input name="motivo" value={motivoTmp} maxLength={60} onChange={e => setMotivoTmp(e.target.value)} placeholder={t('agotado.motivoPlace')} aria-label={t('agotado.motivoPlace')} />
-            <button type="button" className="danger" onClick={() => { marcarAgotado(idsSel(), { motivo: motivoTmp }); setMotivoTmp('') }}>{t('agotado.hoy')}</button>
-            <button type="button" className="ghost" onClick={() => marcarAgotado(idsSel(), null)}>{t('agotado.disponible')}</button>
-          </span>
-          {controlesCosto}
-          <span className="sp" />
-          <button type="button" className="danger" onClick={() => setSel(new Set())}>✕ {t('menu.masivoLimpiar')}</button>
         </div>
       )}
 
@@ -710,15 +688,15 @@ export default function MenuPage({ rol }) {
               )}
             </header>
 
-            {abierta && (enGrupos ? (
-              <p className="mn-grupo-hint">{tOr('items.grupoHint', 'Renombra con Editar, ordena con ▲▼ y agrega productos con ＋ Producto.')}</p>
-            ) : (
+            {abierta && !enGrupos && (
               <>
                 {prods.length === 0 ? <div className="adm-vacio">{hayBusqueda ? t('menu.sinResultados') : t('menu.sinProductos')}</div> : (
-                  <ul className="mn-lista">
+                  <ul className={'mn-lista' + (selActiva ? ' con-sel' : '')}>
                     <li className={'mn-fila mn-fila-cab' + (conDato ? ' con-dato' : '')}>
-                      <input name="todo-seccion" type="checkbox" className="adm-sel" aria-label={t('menu.todoSeccion')}
-                        checked={prods.length > 0 && prods.every(p => sel.has(p.id))} onChange={e => selSeccion(prods, e.target.checked)} />
+                      {selActiva && (
+                        <input name="todo-seccion" type="checkbox" className="adm-sel" aria-label={t('menu.todoSeccion')}
+                          checked={prods.length > 0 && prods.every(p => sel.has(p.id))} onChange={e => selSeccion(prods, e.target.checked)} />
+                      )}
                       <button type="button" className="mn-orden" onClick={() => ordenarPor('numero')}>{t('menu.colNum')}{flecha('numero')}</button>
                       <button type="button" className="mn-orden mn-orden-nombre" onClick={() => ordenarPor('nombre')}>{t('menu.colNombre')}{flecha('nombre')}</button>
                       <button type="button" className="mn-orden mn-orden-precio" onClick={() => ordenarPor('precio')}>{t('menu.colPrecio')}{flecha('precio')}</button>
@@ -732,7 +710,7 @@ export default function MenuPage({ rol }) {
                     </li>
                     {prods.map(p => (
                       <li key={p.id} className={'mn-fila' + (p.activo ? '' : ' inactivo') + (agotados[p.id] ? ' agotado' : '') + (sel.has(p.id) ? ' sel' : '') + (conDato ? ' con-dato' : '')}>
-                        <input name="seleccionar" type="checkbox" className="adm-sel" checked={sel.has(p.id)} onChange={() => alternarSel(p.id)} aria-label={t('menu.seleccionar')} />
+                        {selActiva && <input name="seleccionar" type="checkbox" className="adm-sel" checked={sel.has(p.id)} onChange={() => alternarSel(p.id)} aria-label={t('menu.seleccionar')} />}
                         <span className="mn-num">#{numeroDe(p)}</span>
                         <span className="mn-nombre">{p.nombre}
                           {!p.activo && <small> {t('menu.oculto')}</small>}
@@ -747,10 +725,20 @@ export default function MenuPage({ rol }) {
                   </ul>
                 )}
               </>
-            ))}
+            )}
           </section>
         )
       })}
+
+      {/* Crear va debajo de la lista: primero se ve la carta y al final lo que se agrega. */}
+      <div className="adm-fila mn-crear">
+        <button type="button" className="success" onClick={vacio ? abrirNuevoGrupo : crearSegunTipo}>
+          + {vacio ? t('menu.grupoMas') : etiquetaNuevo[tipo]}
+        </button>
+        {selActiva && sel.size === 0 && (
+          <span className="mn-nota">{tOr('items.selHint', 'Marca artículos en la lista y usa «✎ Editar» de la barra del buscador para cambiar varios a la vez.')}</span>
+        )}
+      </div>
 
       {vInd && (
         <Ventana titulo={vInd.id ? t('indic.editar') : t('indic.nueva')} onCerrar={() => setVInd(null)}>
@@ -765,6 +753,7 @@ export default function MenuPage({ rol }) {
                 place={t('indic.opcionesPlace')}
                 ariaAgregar={tOr('items.agregarOpcion', 'Agregar opción')}
                 ariaQuitar={tOr('items.quitarOpcion', 'Quitar opción')} />
+              <small className="mn-nota">{tOr('items.indOpcionesNota', 'Cada opción sale como botón al pedir y se imprime en la comanda.')}</small>
             </div>
             <div className="mn-reglas">
               <label className="mn-check" title={tOr('items.indObligarAyuda', 'Si es obligatoria, el mesero debe elegir al menos una opción al pedir.')}>
@@ -781,6 +770,7 @@ export default function MenuPage({ rol }) {
                     onChange={e => setVInd({ ...vInd, max: e.target.value.replace(/\D/g, '').slice(0, 2) })} onFocus={e => e.target.select()} />
                 </label>
               </div>
+              <small className="mn-nota">{tOr('items.indReglasNota', 'Obligatoria: el mesero no puede aceptar la orden sin marcar al menos una. Mín./Máx. limitan cuántas opciones se marcan por cada artículo.')}</small>
             </div>
             {opcInd.length > 0 && (
               <details className="mn-avanzado">
@@ -1006,6 +996,82 @@ export default function MenuPage({ rol }) {
               <button type="submit" className="primary" disabled={!vProd.nombre.trim() || vProd.precio === ''}>{t('comun.guardar')}</button>
             </div>
           </form>
+        </Ventana>
+      )}
+
+      {vHerr && tipo === 'productos' && (
+        <Ventana
+          titulo={sel.size ? t('menu.masivoSel', { n: sel.size }) : tOr('items.herrTitulos', 'Herramientas de la carta')}
+          onCerrar={() => setVHerr(false)}
+        >
+          <p className="mn-nota">{sel.size
+            ? tOr('items.herrAlcanceSel', 'Los cambios se aplican solo a los artículos marcados.')
+            : tOr('items.herrAlcanceTodo', 'No marcaste ningún artículo: las herramientas de costo aplican a toda la carta.')}</p>
+
+          {sel.size > 0 && (
+            <div className="mn-herr">
+              <h4 className="mn-bloque-tit">{tOr('items.herrPrecios', 'Precios')}</h4>
+              <small className="mn-nota">{tOr('items.herrPreciosNota', 'Sube o baja los precios marcados un porcentaje, o ponles un mismo monto a todos.')}</small>
+              <div className="adm-masivo-grupo">
+                <input name="masivo-porcentaje" className="adm-num" type="text" inputMode="decimal" autoComplete="off" value={pctTmp}
+                  onChange={e => setPctTmp(limpiarPct(e.target.value))} onBlur={() => setPctTmp(normalizarPct(pctTmp))}
+                  onFocus={e => e.target.select()} placeholder={t('menu.masivoPorcentaje')} aria-label={t('menu.masivoPorcentaje')} />
+                <button type="button" className="ghost" onClick={aplicarPorcentaje}>{t('menu.masivoAplicar')}</button>
+                <input name="masivo-fijo" className="adm-num" type="text" inputMode="decimal" autoComplete="off" value={fijoTmp}
+                  onChange={e => setFijoTmp(limpiarMonto(e.target.value))} onBlur={() => setFijoTmp(normalizarMonto(fijoTmp))}
+                  onFocus={e => e.target.select()} placeholder={t('menu.masivoFijo')} aria-label={t('menu.masivoFijo')} />
+                <button type="button" className="ghost" onClick={aplicarPrecioFijo}>{t('menu.masivoAplicar')}</button>
+              </div>
+            </div>
+          )}
+
+          {sel.size > 0 && (
+            <div className="mn-herr">
+              <h4 className="mn-bloque-tit">{tOr('items.herrGrupo', 'Grupo y dónde se imprime')}</h4>
+              <small className="mn-nota">{tOr('items.herrGrupoNota', 'Mueve los marcados a otro grupo y decide si se imprimen en cocina, en barra o en ambos.')}</small>
+              <div className="adm-masivo-grupo">
+                <select name="masivo-seccion" value={seccionTmp} onChange={e => setSeccionTmp(e.target.value)} aria-label={t('menu.masivoSeccion')}>
+                  <option value="">{t('menu.masivoSeccion')}</option>
+                  {secciones.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                </select>
+                <button type="button" className="ghost" onClick={aplicarSeccion}>{t('menu.masivoAplicar')}</button>
+              </div>
+              <div className="adm-masivo-grupo">
+                {checkboxesAreas(areasTmp, setAreasTmp)}
+                <button type="button" className="ghost" onClick={aplicarAreas} disabled={!areasTmp.length}>{t('menu.masivoAplicar')}</button>
+              </div>
+            </div>
+          )}
+
+          {sel.size > 0 && (
+            <div className="mn-herr">
+              <h4 className="mn-bloque-tit">{tOr('items.herrEstado', 'Estado del artículo')}</h4>
+              <small className="mn-nota">{tOr('items.herrEstadoNota', 'Activo = se puede pedir. Inactivo = queda oculto pero sigue en el historial. Agotado = se agota hoy y muestra el motivo.')}</small>
+              <div className="adm-masivo-grupo">
+                <button type="button" className="success" onClick={() => aplicarASeleccion({ activo: true })}>{t('menu.activar')}</button>
+                <button type="button" className="warning" onClick={() => aplicarASeleccion({ activo: false })}>{t('menu.desactivar')}</button>
+              </div>
+              <div className="adm-masivo-grupo">
+                <input name="motivo" value={motivoTmp} maxLength={60} onChange={e => setMotivoTmp(e.target.value)} placeholder={t('agotado.motivoPlace')} aria-label={t('agotado.motivoPlace')} />
+                <button type="button" className="danger" onClick={() => { marcarAgotado(idsSel(), { motivo: motivoTmp }); setMotivoTmp('') }}>{t('agotado.hoy')}</button>
+                <button type="button" className="ghost" onClick={() => marcarAgotado(idsSel(), null)}>{t('agotado.disponible')}</button>
+              </div>
+            </div>
+          )}
+
+          {veCostos && (
+            <div className="mn-herr">
+              <h4 className="mn-bloque-tit">{tOr('items.herrCosto', 'Costo, margen y CSV')}</h4>
+              <small className="mn-nota">{tOr('items.herrCostoNota', 'El costo no se cobra ni se imprime: solo alimenta la utilidad y el margen % de esta pantalla y de Reportes.')}</small>
+              {controlesCosto}
+            </div>
+          )}
+
+          <div className="mn-pie">
+            <button type="button" className="danger" onClick={salirSeleccion}>✕ {tOr('items.dejarSeleccionar', 'Dejar de seleccionar')}</button>
+            <span className="sp" />
+            <button type="button" className="primary" onClick={() => setVHerr(false)}>{t('comun.cerrar')}</button>
+          </div>
         </Ventana>
       )}
 

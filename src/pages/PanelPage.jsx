@@ -50,8 +50,9 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   if (sesion.es_super) modulos.push({ id: 'super', nombre: tOr('app.mod.super', 'Super') })
 
   const [foco, setFoco] = useState(null)
-  const abrirDeAlerta = ({ mesaId, cuentaId }) => {
-    setFoco({ mesaId: mesaId || null, cuentaId: cuentaId || null, seq: Date.now() })
+  // `desde` le dice al Salón de dónde vino el toque: desde Caja abre la cuenta en modo cobro.
+  const abrirDeAlerta = ({ mesaId, cuentaId, desde }) => {
+    setFoco({ mesaId: mesaId || null, cuentaId: cuentaId || null, desde: desde || null, seq: Date.now() })
     setModulo('salon')
   }
 
@@ -94,9 +95,9 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   return (
     <div className="app">
       <Topbar sesion={{ ...sesion, empresa: sesion.empresa || s.config.nombre }} modulo={modulo} modulos={modulos}
-        onModulo={setModulo} onSalir={onSalir} aviso={aviso || undefined} />
+        onModulo={id => { setFoco(null); setModulo(id) }} onSalir={onSalir} aviso={aviso || undefined} />
       {sesion.operando && (
-        <div className="topbar-rol" style={{ background: 'var(--warn-line)', color: 'var(--on-btn)', padding: '6px 14px', borderRadius: 0, display: 'block', width: '100%', textAlign: 'center' }}>
+        <div className="topbar-rol" style={{ background: 'var(--warn-line)', color: 'var(--on-btn)', padding: '6px 14px', borderRadius: 0, display: 'block', width: '100%', textAlign: 'center', whiteSpace: 'normal' }}>
           {tOr('super.banner.viendo', 'Estás viendo la empresa')} <b>{sesion.empresa}</b> —{' '}
           <button className="auth-enlace" type="button" onClick={onVolver}>{tOr('super.banner.volver', 'volver a mi empresa')}</button>
         </div>

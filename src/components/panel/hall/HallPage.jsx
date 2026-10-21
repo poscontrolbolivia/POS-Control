@@ -97,13 +97,20 @@ export default function HallPage({ rol, sesion, foco }) {
   const zoomAcercar = () => aplicarZoom(zoom + ZOOM_PASO)
   const zoomAlejar = () => aplicarZoom(zoom - ZOOM_PASO)
 
-  // Una alerta puede traer el foco de vuelta: se abre el salón completo y se selecciona su mesa.
+  // Una alerta o la Caja pueden traer el foco de vuelta: se abre el salón completo y se selecciona su cuenta.
+  // `desde: 'caja'` abre además el modo cobro: solo lo necesario para cobrar, sin la carta del mesero.
+  const [cobro, setCobro] = useState(false)
   useEffect(() => {
-    if (!foco?.seq || !foco.mesaId) return
-    setZona(TODAS)
-    setSel(foco.mesaId)
+    if (!foco?.seq) return
+    setCobro(foco.desde === 'caja')
     setEdit(false)
+    if (foco.mesaId) { setZona(TODAS); setSel(foco.mesaId); setLlevarSelId(null) }
+    else if (foco.cuentaId) { setZona(LLEVAR); setSel(null); setLlevarSelId(foco.cuentaId) }
   }, [foco?.seq])
+
+  // Tocar una mesa o un pedido uno mismo vuelve a la vista normal: el modo cobro solo viene de Caja.
+  const abrirMesa = id => { setCobro(false); setSel(id) }
+  const abrirLlevar = id => { setCobro(false); setLlevarSelId(id) }
 
   const [mueve, setMueve] = useState(null)
   const of = useRef(null)
@@ -149,7 +156,7 @@ export default function HallPage({ rol, sesion, foco }) {
     if (!m || !c) return
     d({ t: 'llevar-mesa', cuentaId: c.id, mesaId: m.id, comensales: Math.max(1, Number(aMesa.com) || 1) })
     avisar(t('salon.llevarMovida', { nombre: c.clienteNombre, mesa: m.nombre }))
-    setAMesa(null); setLlevarSelId(null); setZona(m.zona ?? TODAS); setSel(m.id)
+    setAMesa(null); setLlevarSelId(null); setZona(m.zona ?? TODAS); abrirMesa(m.id)
   }
   const zonaNombre = id => zonas.find(z => z.id === id)?.nombre ?? t('salon.sinZona')
   const nMesasZona = id => mesasPorZona(s.mesas, id)
@@ -160,7 +167,7 @@ export default function HallPage({ rol, sesion, foco }) {
     const id = nuevoId()
     d({ t: 'abrir-llevar', id, nombre: '', tel: '', usuario: sesion?.usuario || sesion?.nombre || rol })
     setZona(LLEVAR)
-    setLlevarSelId(id)
+    abrirLlevar(id)
   }
 
   const aCoord = e => {
@@ -316,7 +323,7 @@ export default function HallPage({ rol, sesion, foco }) {
           </div>
           {admin && (
             <button className={edit ? 'primary' : 'ghost'} disabled={enLlevar} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
-              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { setEdit(!edit); setSel(null); setNueva(null); setRen(null); setConf(null) }}>
+              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { if (edit) setZoom(1); setEdit(!edit); setSel(null); setNueva(null); setRen(null); setConf(null) }}>
               <span aria-hidden="true">{edit ? '✓' : '✎'}</span><span className="txt">{edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}</span>
             </button>
           )}
@@ -418,7 +425,7 @@ export default function HallPage({ rol, sesion, foco }) {
               const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
               const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
               return (
-                <button type="button" key={m.id} className={`mesa-item ${est}`} onClick={() => setSel(m.id)}>
+                <button type="button" key={m.id} className={`mesa-item ${est}`} onClick={() => abrirMesa(m.id)}>
                   <b className="nombre">{m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : cs.length > 1 ? ` ✂×${cs.length}` : ''}</b>
                   <span className="mi-est">{t('salon.' + est)}</span>
                   {c && <small className="importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
@@ -451,7 +458,7 @@ export default function HallPage({ rol, sesion, foco }) {
             return (
               <div key={m.id} className={`mesa ${m.forma} ${est}${sel === m.id ? ' sel' : ''}${mueve?.id === m.id ? ' arrastrando' : ''}`}
                 title={sub}
-                onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) setSel(m.id) }} style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%`, width: `${(p.w / W) * 100}%`, height: `${(p.h / H) * 100}%` }}>
+                onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) abrirMesa(m.id) }} style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%`, width: `${(p.w / W) * 100}%`, height: `${(p.h / H) * 100}%` }}>
                 <b className="nombre">{num || m.nombre}</b>
                 {num && <span className="mesa-nom">{m.nombre}</span>}
                 {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
@@ -467,15 +474,19 @@ export default function HallPage({ rol, sesion, foco }) {
           })}
             </div>
           </div>
-          <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
-            <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
-            <button type="button" className="zoom-pct" onClick={() => setZoom(1)} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
-            <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
-          </div>
+          {/* El zoom es una herramienta de edición del mapa: fuera de «Editar salón» estorbaba la vista de las mesas. */}
+          {edit && admin && (
+            <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
+              <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
+              <button type="button" className="zoom-pct" onClick={() => setZoom(1)} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
+              <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
+            </div>
+          )}
         </div>
 
         {enLlevar && (
           <div className="llevar">
+            <p className="llevar-ayuda">{tOr('salon.llevarAyuda', 'Pedidos que se retiran, sin mesa: se cobran acá mismo o desde Caja.')}</p>
             {puede(rol, 'abrir_mesa') && !cli && (
               <div className="barra"><button className="success" onClick={nuevoLlevar}>＋ {tOr('salon.llevarNuevoPedido', 'Nuevo pedido')}</button></div>
             )}
@@ -493,7 +504,7 @@ export default function HallPage({ rol, sesion, foco }) {
             <div className="llevar-lista">
               {llevarCuentas.map(c => (
                 <div key={c.id} className={'llevar-card ' + estadoMesa(c)}>
-                  <button type="button" className="llevar-main" onClick={() => setLlevarSelId(c.id)}>
+                  <button type="button" className="llevar-main" onClick={() => abrirLlevar(c.id)}>
                     <b>{c.clienteNombre ? t('salon.llevarCliente', { n: c.numero }) : tOr('salon.llevarPedido', 'Pedido {n}', { n: c.numero })}</b>
                     {c.clienteNombre && <span className="llevar-nombre">{c.clienteNombre}</span>}
                     {!c.clienteNombre && <small className="llevar-sin-nombre">{tOr('salon.llevarSinNombre', 'Sin nombre · escríbelo en el pedido')}</small>}
@@ -534,7 +545,9 @@ export default function HallPage({ rol, sesion, foco }) {
           <span><i className="pt unida" />{t('salon.leyendaUnidas')}</span>
         </div>}
       </section>
-      <OrderPanel rol={rol} sesion={sesion} mesa={enLlevar ? undefined : mesaSel} cuenta={enLlevar ? llevarSel : undefined} onClose={() => { setSel(null); setLlevarSelId(null) }} bloqueado={edit} />
+      <OrderPanel rol={rol} sesion={sesion} mesa={enLlevar ? undefined : mesaSel} cuenta={enLlevar ? llevarSel : undefined}
+        cobro={cobro} onEdicion={() => setCobro(false)}
+        onClose={() => { setCobro(false); setSel(null); setLlevarSelId(null) }} bloqueado={edit} />
     </div>
   )
 }
