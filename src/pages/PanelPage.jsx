@@ -107,7 +107,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
       <Suspense fallback={<div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}>
         {modulo === 'salon' && <HallPage rol={sesion.rol} sesion={sesion} foco={foco} onVolverCaja={volverCaja} />}
         {modulo === 'caja' && <CashPage rol={sesion.rol} sesion={sesion} onAbrirMesa={abrirDeAlerta} />}
-        {modulo === 'venta' && <QuickSalePage rol={sesion.rol} sesion={sesion} />}
+        {modulo === 'venta' && <QuickSalePage rol={sesion.rol} sesion={sesion} onAbrirMesa={abrirDeAlerta} />}
         {modulo === 'cocina' && <KitchenPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'menu' && <MenuPage rol={sesion.rol} />}
         {modulo === 'inventario' && <InventoryPage rol={sesion.rol} sesion={sesion} />}

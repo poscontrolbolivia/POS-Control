@@ -27,8 +27,8 @@ const normalizarCosto = v => (v !== '' ? numMonto(v).toFixed(2) : '')
 const CADUCA_PREGUNTA = 4000
 const CADUCA_AVISO = 5000
 
-export default function InventoryPage({ rol }) {
-  const { s, modo } = useStore()
+export default function InventoryPage({ rol, sesion }) {
+  const { s, d, modo } = useStore()
   const { tOr, idiom } = useIdioma()
   const { moneda: MONEDA } = useMoneda()
   const locale = LOCALE[idiom] || 'es'
@@ -40,8 +40,8 @@ export default function InventoryPage({ rol }) {
   }
 
   const [pestana, setPestana] = useState('insumos')
-  const [insumos, setInsumos] = useState([])
-  const [productosRec, setProductosRec] = useState([])
+  const [insumosSup, setInsumosSup] = useState([])
+  const [productosSup, setProductosSup] = useState([])
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
@@ -61,19 +61,28 @@ export default function InventoryPage({ rol }) {
 
   const [buscador, setBuscador] = useState('')
   const [provFiltro, setProvFiltro] = useState('')
+  // Señales para abrir el alta desde la barra de pestañas, sin dejar el botón escondido.
+  const [provAlta, setProvAlta] = useState(false)
+  const [cuentaAlta, setCuentaAlta] = useState(false)
   const [prodSel, setProdSel] = useState(null)
   const [lineas, setLineas] = useState([])
   const [recErr, setRecErr] = useState('')
   const [guardandoRec, setGuardandoRec] = useState(false)
 
   const [dias, setDias] = useState(7)
-  const [movs, setMovs] = useState([])
+  const [movsSup, setMovsSup] = useState([])
   const [cargandoMovs, setCargandoMovs] = useState(false)
   const [errorMovs, setErrorMovs] = useState('')
 
   const esAdmin = rol === 'admin'
   const enBase = modo === 'supabase'
+  const quien = sesion?.nombre || sesion?.usuario || ''
   const ocupado = guardando || movEnVio || guardandoRec || Boolean(borrandoId)
+
+  // En demo el inventario vive en el store con las MISMAS formas que devuelve la base
+  // (insumo con id/nombre/unidad/stock/stock_min/costo/activo, receta con insumo_id,
+  //  movimiento con en/insumo_nombre/tipo/cantidad/stock_after), así la pantalla no tiene dos códigos.
+  const insumos = enBase ? insumosSup : (s.insumos || [])
 
   useEffect(() => () => { clearTimeout(timerPregunta.current); clearTimeout(timerAviso.current) }, [])
 
@@ -88,8 +97,8 @@ export default function InventoryPage({ rol }) {
     setError('')
     try {
       const datos = await rpc('inventario_listar')
-      setInsumos(Array.isArray(datos?.insumos) ? datos.insumos : [])
-      setProductosRec(Array.isArray(datos?.productos) ? datos.productos : [])
+      setInsumosSup(Array.isArray(datos?.insumos) ? datos.insumos : [])
+      setProductosSup(Array.isArray(datos?.productos) ? datos.productos : [])
     } catch (err) {
       setError(mensajeError(err))
     } finally {
@@ -107,7 +116,7 @@ export default function InventoryPage({ rol }) {
     setErrorMovs('')
     try {
       const filas = await rpc('movimientos_listar', { p_dias: dias, p_limite: 200 })
-      setMovs(Array.isArray(filas) ? filas : [])
+      setMovsSup(Array.isArray(filas) ? filas : [])
     } catch (err) {
       setErrorMovs(mensajeError(err))
     } finally {
@@ -119,10 +128,35 @@ export default function InventoryPage({ rol }) {
 
   }, [pestana, dias, esAdmin, enBase])
 
+  // En demo los movimientos ya salen del store (los escriben el cobro y las pestañas de Insumos).
+  const movs = useMemo(() => {
+    if (enBase) return movsSup
+    const desde = Date.now() - dias * 86400000
+    return (s.movimientos || []).filter(m => {
+      const t = new Date(m?.en).getTime()
+      return Number.isFinite(t) && t >= desde
+    }).slice(0, 200)
+  }, [enBase, movsSup, s.movimientos, dias])
+
   const stockBajo = i => num(i.stock) <= num(i.stock_min)
   const stockMedio = i => !stockBajo(i) && num(i.stock) < num(i.stock_min) * 1.5
   const nBajos = insumos.filter(stockBajo).length
   const insumoPorId = useMemo(() => new Map(insumos.map(i => [i.id, i])), [insumos])
+
+  // Recetas agrupadas por producto: del rpc en la base, de s.recetas (líneas sueltas) en demo.
+  const recetasPorProducto = useMemo(() => {
+    const m = new Map()
+    if (enBase) {
+      for (const p of productosSup) if (p?.id && Array.isArray(p.recetas)) m.set(p.id, p.recetas)
+      return m
+    }
+    for (const r of s.recetas || []) {
+      if (!r?.productoId || !r?.insumo_id) continue
+      if (!m.has(r.productoId)) m.set(r.productoId, [])
+      m.get(r.productoId).push({ insumo_id: r.insumo_id, cantidad: num(r.cantidad) })
+    }
+    return m
+  }, [enBase, productosSup, s.recetas])
 
   const productosMenu = useMemo(() => {
     const mapa = new Map()
@@ -130,12 +164,12 @@ export default function InventoryPage({ rol }) {
       if (!p?.id) continue
       mapa.set(p.id, { id: p.id, nombre: p.nombre, precio: p.precio, seccionId: p.seccionId, activo: p.activo !== false, recetas: [] })
     }
-    for (const p of productosRec) {
-      if (!p?.id) continue
-      mapa.set(p.id, { ...(mapa.get(p.id) || {}), ...p, recetas: Array.isArray(p.recetas) ? p.recetas : [] })
+    for (const [id, lineas] of recetasPorProducto) {
+      const p = mapa.get(id)
+      if (p) p.recetas = lineas
     }
     return [...mapa.values()].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), locale))
-  }, [s.productos, productosRec, locale])
+  }, [s.productos, recetasPorProducto, locale])
 
   const filtro = buscador.trim().toLowerCase()
   const productosFiltrados = filtro
@@ -190,21 +224,21 @@ export default function InventoryPage({ rol }) {
       }
     }
     setFormErr(''); setError(''); setGuardando(true)
+    const nuevo = {
+      ...(form.id ? { id: form.id } : {}),
+      nombre: form.nombre.trim(),
+      unidad: form.unidad.trim(),
+      stock: numMonto(form.stock),
+      stock_min: numMonto(form.stock_min),
+      costo: numMonto(form.costo),
+      activo: Boolean(form.activo),
+    }
     try {
-      await rpc('insumo_guardar', {
-        p_insumo: {
-          ...(form.id ? { id: form.id } : {}),
-          nombre: form.nombre.trim(),
-          unidad: form.unidad.trim(),
-          stock: numMonto(form.stock),
-          stock_min: numMonto(form.stock_min),
-          costo: numMonto(form.costo),
-          activo: Boolean(form.activo),
-        },
-      })
+      if (enBase) await rpc('insumo_guardar', { p_insumo: nuevo })
+      else d({ t: 'insumo+', insumo: nuevo })
       setForm(null)
       avisar(tOr('inventario.guardadoOk', 'Insumo guardado.'))
-      await cargar(true)
+      if (enBase) await cargar(true)
     } catch (err) {
       setError(mensajeError(err))
     } finally {
@@ -223,11 +257,13 @@ export default function InventoryPage({ rol }) {
     if (ocupado) return
     setError(''); setAviso(''); setBorrandoId(i.id)
     try {
-      await rpc('insumo_borrar', { p_insumo_id: i.id })
+      if (enBase) await rpc('insumo_borrar', { p_insumo_id: i.id })
+      else d({ t: 'insumo-', id: i.id })
       if (form?.id === i.id) setForm(null)
       if (mov?.insumoId === i.id) setMov(null)
+      if (prodSel && !enBase) { setProdSel(null); setLineas([]) }
       avisar(tOr('inventario.borradoOk', 'Insumo borrado.'))
-      await cargar(true)
+      if (enBase) await cargar(true)
     } catch (err) {
       setError(mensajeError(err))
     } finally {
@@ -247,16 +283,19 @@ export default function InventoryPage({ rol }) {
     const cantidad = numMonto(mov.cantidad)
     if (!(cantidad > 0)) { setMovErr(tOr('inventario.cantidadInvalida', 'La cantidad debe ser un número mayor que 0.')); return }
     setMovErr(''); setError(''); setMovEnVio(true)
+    const nota = mov.nota.trim() || null
     try {
-      const nuevo = await rpc('insumo_movimiento', {
-        p_insumo_id: mov.insumoId,
-        p_tipo: mov.tipo,
-        p_cantidad: cantidad,
-        p_nota: mov.nota.trim() || null,
-      })
+      let nuevo = cantidad
+      if (enBase) {
+        nuevo = await rpc('insumo_movimiento', { p_insumo_id: mov.insumoId, p_tipo: mov.tipo, p_cantidad: cantidad, p_nota: nota })
+      } else {
+        const actual = num(i?.stock)
+        nuevo = mov.tipo === 'entrada' ? actual + cantidad : mov.tipo === 'salida' ? actual - cantidad : cantidad
+        d({ t: 'insumo-mov', id: mov.insumoId, tipo: mov.tipo, cantidad, nota, usuario: quien })
+      }
       setMov(null)
       avisar(`${i?.nombre ?? ''} — ${tOr('inventario.nuevoStock', 'Nuevo stock')}: ${fmt(nuevo)} ${i?.unidad ?? ''}`.trim())
-      await cargar(true)
+      if (enBase) await cargar(true)
     } catch (err) {
       setError(mensajeError(err))
     } finally {
@@ -271,6 +310,17 @@ export default function InventoryPage({ rol }) {
     setLineas((p.recetas || []).map(l => ({ insumo_id: l.insumo_id, cantidad: String(l.cantidad ?? '') })))
   }
   const anadirLinea = () => setLineas(l => [...l, { insumo_id: '', cantidad: '' }])
+  // Alta de línea siempre a la vista: si no hay producto elegido, se elige el primero de la
+  // lista filtrada y se le añade la línea; así el botón nunca queda muerto.
+  const anadirLineaDesdeBarra = () => {
+    if (!insumos.length) return
+    if (productoSel) { anadirLinea(); return }
+    const p = productosFiltrados[0] || productosMenu[0]
+    if (!p) return
+    setRecErr(''); setError('')
+    setProdSel(p.id)
+    setLineas([...(p.recetas || []).map(l => ({ insumo_id: l.insumo_id, cantidad: String(l.cantidad ?? '') })), { insumo_id: '', cantidad: '' }])
+  }
   const quitarLinea = ix => setLineas(l => l.filter((_, k) => k !== ix))
   const cambiarLinea = (ix, k, v) => { setLineas(l => l.map((x, j) => (j === ix ? { ...x, [k]: v } : x))); setRecErr('') }
 
@@ -280,13 +330,12 @@ export default function InventoryPage({ rol }) {
     if (limpias.some(l => !l.insumo_id)) { setRecErr(tOr('inventario.recFaltaInsumo', 'Elige un insumo en todas las líneas.')); return }
     if (limpias.some(l => !(numMonto(l.cantidad) > 0))) { setRecErr(tOr('inventario.recFaltaCantidad', 'Cada línea necesita una cantidad mayor que 0.')); return }
     setRecErr(''); setError(''); setGuardandoRec(true)
+    const pLineas = limpias.map(l => ({ insumo_id: l.insumo_id, cantidad: numMonto(l.cantidad) }))
     try {
-      await rpc('receta_reemplazar', {
-        p_producto_id: productoSel.id,
-        p_lineas: limpias.map(l => ({ insumo_id: l.insumo_id, cantidad: numMonto(l.cantidad) })),
-      })
+      if (enBase) await rpc('receta_reemplazar', { p_producto_id: productoSel.id, p_lineas: pLineas })
+      else d({ t: 'receta~', productoId: productoSel.id, lineas: pLineas })
       avisar(tOr('inventario.recetaOk', 'Receta guardada: ya se descuenta al cobrar.'))
-      await cargar(true)
+      if (enBase) await cargar(true)
     } catch (err) {
       setError(mensajeError(err))
     } finally {
@@ -333,9 +382,8 @@ export default function InventoryPage({ rol }) {
       </div>
     )
   }
-  // Insumos/recetas/movimientos viven en Supabase; Proveedores y Cuentas por pagar usan el store,
-  // así que en modo demo solo se bloquean las pestañas que dependen de la base.
-  const pestanaBase = pestana === 'insumos' || pestana === 'recetas' || pestana === 'movimientos'
+  // Insumos, recetas y movimientos funcionan en los dos modos: en la base por rpc y en demo
+  // con el store, que replica las formas del servidor y descuenta stock al cobrar.
 
   const bloqueForm = form && (
     <form className="inv-form" onSubmit={guardarInsumo}>
@@ -393,12 +441,10 @@ export default function InventoryPage({ rol }) {
     <div className="inv-page">
       <div className="inv-cab">
         <h2>{tOr('inventario.titulo', 'Inventario')}</h2>
-        {enBase && (
-          <span className="adm-chip">
-            {insumos.length} {tOr('inventario.chipInsumos', 'insumos')}
-            {nBajos > 0 && <> · {nBajos} {tOr('inventario.chipBajos', 'con stock bajo')}</>}
-          </span>
-        )}
+        <span className="adm-chip">
+          {insumos.length} {tOr('inventario.chipInsumos', 'insumos')}
+          {nBajos > 0 && <> · {nBajos} {tOr('inventario.chipBajos', 'con stock bajo')}</>}
+        </span>
         <span className="sp" />
         {enBase && (
           <button type="button" className="ghost" disabled={cargando || ocupado} onClick={() => cargar()}>
@@ -420,9 +466,13 @@ export default function InventoryPage({ rol }) {
         <button type="button" role="tab" aria-selected={pestana === 'proveedores'} className={'tab' + (pestana === 'proveedores' ? ' on' : '')} onClick={() => setPestana('proveedores')}>
           {tOr('inventario.tabProveedores', 'Proveedores')}
         </button>
+        <button type="button" className="success inv-tab-alta" title={tOr('inventario.nuevoProveedor', 'Proveedor')} aria-label={tOr('inventario.nuevoProveedor', 'Proveedor')}
+          onClick={() => { setPestana('proveedores'); setProvAlta(true) }}>＋</button>
         <button type="button" role="tab" aria-selected={pestana === 'cuentas'} className={'tab' + (pestana === 'cuentas' ? ' on' : '')} onClick={() => setPestana('cuentas')}>
           {tOr('inventario.tabCuentas', 'Cuentas por pagar')}
         </button>
+        <button type="button" className="success inv-tab-alta" title={tOr('inventario.deudaAltaTitulo', 'Registrar deuda')} aria-label={tOr('inventario.deudaAltaTitulo', 'Registrar deuda')}
+          onClick={() => { setPestana('cuentas'); setCuentaAlta(true) }}>＋</button>
       </div>
 
       {error && (
@@ -433,12 +483,12 @@ export default function InventoryPage({ rol }) {
       )}
       {aviso && <div className="inv-ok">✅ {aviso}</div>}
 
-      {pestana === 'insumos' && enBase && (
+      {pestana === 'insumos' && (
         <section className="adm-card inv-bloque">
           <div className="adm-card-cab">
             <h3>{tOr('inventario.insumosTitulo', 'Insumos')}</h3>
             <span className="sp" />
-            <button type="button" className="teal" disabled={ocupado || Boolean(form)} onClick={abrirNuevo}>
+            <button type="button" className="primary" disabled={ocupado || Boolean(form)} onClick={abrirNuevo}>
               ＋ {tOr('inventario.nuevoInsumo', 'Insumo')}
             </button>
           </div>
@@ -520,7 +570,7 @@ export default function InventoryPage({ rol }) {
         </section>
       )}
 
-      {pestana === 'recetas' && enBase && (
+      {pestana === 'recetas' && (
         <section className="adm-card inv-bloque">
           <div className="adm-card-cab">
             <h3>{tOr('inventario.recTitulo', 'Recetas del menú')}</h3>
@@ -529,6 +579,17 @@ export default function InventoryPage({ rol }) {
             </span>
           </div>
           <p className="adm-sub">{tOr('inventario.recIntro', 'Vincula cada plato con sus insumos: al cobrar una venta, la base descuenta el stock según la receta.')}</p>
+
+          {!!productosMenu.length && (
+            <div className="adm-fila inv-receta-barra">
+              <button type="button" className="success" disabled={guardandoRec || ocupado || !insumos.length} onClick={anadirLineaDesdeBarra}
+                title={!insumos.length ? tOr('inventario.primeroInsumos', 'Primero crea insumos en la pestaña Insumos.')
+                  : productoSel ? `${tOr('inventario.anadirLinea', 'Añadir línea')}: ${productoSel.nombre}` : tOr('inventario.anadirLinea', 'Añadir línea')}>
+                ＋ {tOr('inventario.anadirLinea', 'Añadir línea')}
+              </button>
+              {!insumos.length && <span className="adm-msg warn">{tOr('inventario.primeroInsumos', 'Primero crea insumos en la pestaña Insumos.')}</span>}
+            </div>
+          )}
 
           {!cargando && !productosMenu.length && (
             <div className="adm-vacio">{tOr('inventario.vacioProductos', 'El menú no tiene productos todavía. Crea primero los platos en Menú.')}</div>
@@ -576,12 +637,6 @@ export default function InventoryPage({ rol }) {
                               <button type="button" className="danger" disabled={guardandoRec} onClick={() => quitarLinea(ix)}>✕</button>
                             </div>
                           ))}
-                          <div className="adm-fila">
-                            <button type="button" className="success" disabled={guardandoRec || !insumos.length} onClick={anadirLinea}>
-                              ＋ {tOr('inventario.anadirLinea', 'Añadir línea')}
-                            </button>
-                            {!insumos.length && <span className="adm-msg warn">{tOr('inventario.primeroInsumos', 'Primero crea insumos en la pestaña Insumos.')}</span>}
-                          </div>
 
                           <div className="inv-receta-resumen">
                             <span className="adm-chip">{tOr('inventario.costoTeorico', 'Costo teórico')}: {MONEDA} {fmt(analisisReceta.costo)}</span>
@@ -615,7 +670,7 @@ export default function InventoryPage({ rol }) {
         </section>
       )}
 
-      {pestana === 'movimientos' && enBase && (
+      {pestana === 'movimientos' && (
         <section className="adm-card inv-bloque">
           <div className="adm-card-cab">
             <h3>{tOr('inventario.movsTitulo', 'Historial de movimientos')}</h3>
@@ -671,18 +726,12 @@ export default function InventoryPage({ rol }) {
         </section>
       )}
 
-      {!enBase && pestanaBase && (
-        <section className="adm-card inv-bloque">
-          <div className="auth-aviso">{tOr('inventario.demoNo', 'El inventario necesita la base de datos (Supabase): en modo demo no hay insumos que mostrar. Proveedores y Cuentas por pagar sí funcionan en demo.')}</div>
-        </section>
-      )}
-
       {pestana === 'proveedores' && (
-        <ProveedoresTab onPagar={id => { setProvFiltro(id); setPestana('cuentas') }} />
+        <ProveedoresTab onPagar={id => { setProvFiltro(id); setPestana('cuentas') }} alta={provAlta} onAltaDone={() => setProvAlta(false)} />
       )}
 
       {pestana === 'cuentas' && (
-        <CuentasTab filtroProveedor={provFiltro} onFiltro={setProvFiltro} />
+        <CuentasTab filtroProveedor={provFiltro} onFiltro={setProvFiltro} alta={cuentaAlta} onAltaDone={() => setCuentaAlta(false)} />
       )}
     </div>
   )

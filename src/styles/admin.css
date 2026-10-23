@@ -159,6 +159,9 @@
    Cada submenú es una píldora horizontal (icono + nombre + flecha a la derecha) igual que los
    bloques de Configuración, y al abrirse muestra su cuerpo con una línea de explicación. ── */
 .imp-submenu-lista{display:flex;flex-direction:column;gap:10px;min-width:0}
+/* Barra de alta de Impresoras: los botones de crear no pueden depender de abrir un submenú cerrado. */
+.imp-alta-barra{flex-wrap:wrap;gap:8px 10px;align-items:center;padding:2px 0}
+.imp-alta-barra .imp-dato{flex:1 1 200px;min-width:0}
 .imp-sub{display:flex;flex-direction:column;gap:8px;min-width:0}
 .imp-sub-cab{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:10px 16px;text-align:left;
   border:1.5px solid var(--line-fuerte);border-radius:var(--r-pill);background:var(--card-2);color:var(--ink);

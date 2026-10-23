@@ -10,7 +10,8 @@ import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
 import ComprobanteQr, { VerComprobante } from '../pago/ComprobanteQr.jsx'
 import PagoQrCard from '../pago/PagoQrCard.jsx'
 import '../pago/ComprobanteQr.css'
-import { listasDe, cumple, maxDe, notaDeUnidad, indicacionesDeUnidad, componerNota, comentarioDe, MAX_NOTA, extraDe, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
+import { listasDe, notaDeUnidad, indicacionesDeUnidad, componerNota, comentarioDe, MAX_NOTA, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
+import IndicacionesPrevio from './IndicacionesPrevio.jsx'
 import './OrderPanel.css'
 import { round2, hora, limpiarMonto, numMonto } from '../../../services/format.js'
 
@@ -71,7 +72,7 @@ function Ventana({ titulo, onClose, children }) {
 
 // `cobro` = llegó desde Caja: solo lo necesario para cobrar. `onEdicion` es el botón «Editar mesa»,
 // que apaga ese modo y devuelve la vista completa de mesero.
-export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloqueado, cobro, onEdicion }) {
+export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, onClose, bloqueado, cobro, onEdicion }) {
   const { s, d } = useStore()
   const { money } = useMoneda()
   const { t, tOr } = useIdioma()
@@ -86,12 +87,10 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const [marcados, setMarcados] = useState([])
   const [destino, setDestino] = useState('')
   const [canje, setCanje] = useState('')
-  const [cantidad, setCantidad] = useState('')
+  const [partes, setPartes] = useState({})
   const [apertura, setApertura] = useState(null)
   // Apertura directa: al tocar una mesa libre se abre la cuenta (1 comensal) y los comensales se cambian dentro.
   const autoMesa = useRef(null)
-  const autoPend = useRef(false)
-  const autoCuenta = useRef(null)
   const [uniendo, setUniendo] = useState(false)
   const [aUnir, setAUnir] = useState([])
   const [aUnirCtas, setAUnirCtas] = useState([])
@@ -103,13 +102,15 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const [borrando, setBorrando] = useState(null)
   const [nota, setNota] = useState(null)
   const [aviso, setAviso] = useState('')
-  const [cuentaSelId, setCuentaSelId] = useState(null)
+  // Caja puede abrir la mesa ya posicionada en una subcuenta (2b), no siempre en la primera.
+  const [cuentaSelId, setCuentaSelId] = useState(cuentaInicial ?? null)
   const [menu, setMenu] = useState(false)
   const [modo, setModo] = useState(null)
   const [previa, setPrevia] = useState(null)
   const [verQr, setVerQr] = useState(false)
   const [cliente, setCliente] = useState({ nombre: '', tel: '' })
   const avisoTimer = useRef(null)
+  useEffect(() => { if (cuentaInicial) setCuentaSelId(cuentaInicial) }, [cuentaInicial])
   // Refs de los campos «Monto» por id de línea de pago: con índices, borrar una línea
   // descoloca el foco; con id siempre apuntamos al input correcto.
   const montoRefs = useRef({})
@@ -132,25 +133,23 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const c = cuenta ?? hermanas.find(x => x.id === cuentaSelId) ?? hermanas[0]
   const sufijo = c?.tipo === 'mesa' && hermanas.length > 1 && c.etiqueta ? c.etiqueta : ''
   const titulo = c?.canal === 'llevar' ? tOr('pedido.llevarCabecera', `Pedido ${c.numero ?? ''}`, { n: c.numero }) + (c.clienteNombre ? ' · ' + c.clienteNombre : '') : c?.tipo === 'directa' ? t('pedido.turnoNumero', { n: c.numero }) : ((mesa?.nombre ?? t('pedido.cuenta')) + sufijo)
-  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setAUnirCtas([]); setCantidad(''); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null); focoPendiente.current = null }
+  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setAUnirCtas([]); setPartes({}); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null); focoPendiente.current = null }
   const cerrar = () => {
-    // Si la cuenta se abrió con el toque y no se pidió nada, se descarta: así tocar una mesa por error no la deja ocupada.
-    if (c && autoCuenta.current === c.id && c.tipo === 'mesa' && c.estado === 'abierta' && !(c.items || []).length && !(c.pagos || []).length) d({ t: 'abrir-descartar', cuentaId: c.id })
-    autoCuenta.current = null
+    // Cualquier cuenta de mesa que quede en blanco se descarta al salir, la abrieron un toque de más
+    // o sobró de una división: una mesa «activa» sin platos no sirve para nada y ensucia Caja.
+    if (mesaVacia) d({ t: 'abrir-descartar', cuentaId: c.id })
     reset(); onClose()
   }
   useEffect(() => {
-    if (!mesa) { autoMesa.current = null; autoCuenta.current = null; autoPend.current = false; return }
+    if (!mesa) { autoMesa.current = null; return }
     // En modo cobro Caja solo mira: tocar una mesa libre no abre una cuenta vacía.
     if (cobro) return
     if (bloqueado || !puede(rol, 'abrir_mesa') || autoMesa.current === mesa.id) return
     autoMesa.current = mesa.id
     if (cuentasDeMesa(s, mesa.id).length) return
-    autoPend.current = true
     d({ t: 'abrir', mesaId: mesa.id, comensales: 1, usuario })
   }, [mesa?.id, bloqueado, cobro])
-  useEffect(() => { if (autoPend.current && c?.id) { autoCuenta.current = c.id; autoPend.current = false } }, [c?.id])
-  const toggle = id => { setMarcados(m => (m.includes(id) ? m.filter(x => x !== id) : [...m, id])); setCanje(''); setCantidad('') }
+  const toggle = id => { setMarcados(m => (m.includes(id) ? m.filter(x => x !== id) : [...m, id])); setCanje(''); setPartes({}) }
   const nombreMesa = id => s.mesas.find(m => m.id === id)?.nombre ?? t('pedido.mesaCorta')
 
   const pctProp = Number(s.config?.propinaPct) || 0
@@ -216,6 +215,10 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const puedeUnir = puede(rol, 'unir_mesas')
   const puedeMover = puede(rol, 'mover_items')
   const puedeBorrar = puede(rol, 'borrar_producto')
+  // Mesa en blanco: abierta de un toque por error o sobrante de una división. Sin ítems NI anulados,
+  // que es justo lo que el servidor acepta para borrar (descartar_cuenta_vacia).
+  const mesaVacia = !enCobro && editable && c.tipo === 'mesa' && c.estado === 'abierta' && !(c.items || []).length && !(c.pagos || []).length
+  const cerrarVacia = () => { d({ t: 'abrir-descartar', cuentaId: c.id }); avisar(tOr('pedido.mesaVaciaCerrada', 'La mesa estaba vacía: se cerró.')) }
   const estadoVisto = tOr('estado.' + c.estado, c.estado)
 
   // Nombre/teléfono del pedido para llevar: guarda con el action 'llevar~' ya existente,
@@ -242,18 +245,23 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const destinoSel = destinos.find(x => x.key === destino)
   const cuentaDestino = destinoSel?.cuenta || null
   const itemsDestino = (cuentaDestino?.items || []).filter(i => i.estado !== 'anulado')
-  // Un solo ítem marcado con varias unidades = se puede mover solo una parte (2 de 3 iguales).
-  const unico = marcados.length === 1 ? vivos.find(i => i.id === marcados[0]) : null
-  const cantMax = unico?.qty ?? 1
-  const cant = Math.min(Math.max(1, Number(cantidad) || cantMax), cantMax)
+  // Cuántas unidades se llevan de cada plato marcado: se ajusta con el − / + de la propia fila,
+  // no con un campo aparte. Sin marcar nada, cantDe no se usa; con 1 marcado y qty 1 mueve el entero.
+  const cantDe = i => Math.min(Math.max(1, Number(partes[i.id]) || i.qty), i.qty)
+  const marcadosVivos = marcados.map(id => vivos.find(i => i.id === id)).filter(Boolean)
+  const parciales = marcadosVivos.filter(i => cantDe(i) < i.qty)
+  const enteros = marcadosVivos.filter(i => cantDe(i) >= i.qty)
+  const nMovidas = marcadosVivos.reduce((t2, i) => t2 + cantDe(i), 0)
   const mover = () => {
     if (!destinoSel || !marcados.length) return
     const destino = destinoSel.cuenta ? { cuentaDestinoId: destinoSel.cuenta.id } : { mesaDestino: destinoSel.mesaId }
-    if (unico && unico.qty > 1 && cant < unico.qty) d({ t: 'mover-parcial', cuentaId: c.id, itemId: unico.id, cantidad: cant, ...destino, usuario })
-    else d({ t: 'mover', cuentaId: c.id, itemIds: marcados, ...destino, usuario })
-    setMarcados([]); setDestino(''); setCanje(''); setCantidad('')
-    avisar(unico && cant < (unico.qty ?? 1)
-      ? tOr('pedido.movidoParcialOk', '{n} de {total}× {producto} fueron a {mesa}', { n: cant, total: unico.qty, producto: unico.nombre, mesa: destinoSel.nombre })
+    // Primero las partidas (nacen como fila nueva en el destino) y después los platos completos.
+    parciales.forEach(i => d({ t: 'mover-parcial', cuentaId: c.id, itemId: i.id, cantidad: cantDe(i), ...destino, usuario }))
+    if (enteros.length) d({ t: 'mover', cuentaId: c.id, itemIds: enteros.map(i => i.id), ...destino, usuario })
+    setMarcados([]); setDestino(''); setCanje(''); setPartes({}); setModo(null)
+    const detalle = parciales.map(i => `${cantDe(i)}/${i.qty} ${i.nombre}`).join(', ')
+    avisar(parciales.length
+      ? tOr('pedido.movidoParcialOk', 'Movido: {detalle} a {mesa}', { detalle, mesa: destinoSel.nombre })
       : t('pedido.movidoOk', { mesa: destinoSel.nombre }))
   }
   const intercambiar = () => {
@@ -367,6 +375,12 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
 
   const datosImpresion = () => ({ salon: (s.zonas || []).find(z => z.id === mesa?.zona)?.nombre, mesa: titulo, orden: ordenDelDia(s.cuentas, c) })
 
+  // «Sacar cuenta» = dejar la mesa en pre-cuenta (por cobrar) E imprimir el ticket del cliente, en un solo toque.
+  const sacarCuenta = async () => {
+    if (!c.items.length) return avisar(t('pedido.cuentaVacia'))
+    if (c.estado === 'abierta') d({ t: 'precuenta', cuentaId: c.id })
+    await imprimirTicketCuenta()
+  }
   const imprimirTicketCuenta = async () => {
     if (!c.items.length) return avisar(t('pedido.cuentaVacia'))
     const r = await imprimirCuenta({
@@ -401,7 +415,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   }
 
   const chico = { minHeight: 32, padding: '2px 10px' }
-  const abrirModo = m => { setModo(m); setMenu(false); setMarcados([]); setDestino(''); setCanje(''); setCantidad(''); setBorrando(null) }
+  const abrirModo = m => { setModo(m); setMenu(false); setMarcados([]); setDestino(''); setCanje(''); setPartes({}); setBorrando(null) }
   const dividir = () => { setMenu(false); d({ t: 'dividir', cuentaId: c.id, usuario }); setModo('mover'); avisar(t('pedido.divididaOk')) }
   // 2A y 2B comparten la misma mesa, así que unir_mesas (que trabaja por mesa) no las ve: se unen por cuenta.
   const hermanasOtras = s.cuentas.filter(x => x.id !== c.id && x.estado !== 'cerrada' && x.mesaIds.some(m => c.mesaIds.includes(m)))
@@ -419,71 +433,23 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const agregarProd = p => {
     if (agotados[p.id]) return avisar(t('agotado.bloqueado', { nombre: p.nombre, motivo: agotados[p.id].motivo ? t('agotado.motivoSep', { motivo: agotados[p.id].motivo }) : '' }))
     const listas = listasDe(s.config, p)
-    const u = nuevaUnidad()
-    return listas.length ? setPrevia({ p, listas, unidades: [u], foco: 0, li: Math.max(0, primeraPendiente(listas, u)) }) : d({ t: 'item+', cuentaId: c.id, p })
+    return listas.length ? setPrevia({ p, listas }) : d({ t: 'item+', cuentaId: c.id, p })
   }
-  const nuevaUnidad = () => ({ sel: {}, texto: '' })
-  const unidadCompleta = (listas, u) => listas.every(l => cumple(l, u.sel[l.id]))
-  const satisfecha = (u, l) => cumple(l, u.sel[l.id])
-  // Índice del primer grupo de opciones que aún no está bien para esa unidad (-1 si ya está completa).
-  const primeraPendiente = (listas, u, desde = 0) => {
-    for (let k = 0; k < listas.length; k++) { const i = (desde + k) % listas.length; if (!satisfecha(u, listas[i])) return i }
-    return -1
-  }
-  const cambiarCantidad = dq => setPrevia(v => {
-    const n = Math.min(30, Math.max(1, v.unidades.length + dq))
-    const unidades = n > v.unidades.length ? [...v.unidades, ...Array.from({ length: n - v.unidades.length }, nuevaUnidad)] : v.unidades.slice(0, n)
-    const foco = Math.min(v.foco, n - 1)
-    return { ...v, unidades, foco, li: Math.max(0, primeraPendiente(v.listas, unidades[foco], v.li)) }
-  })
-  // Toca una opción: actúa sobre la unidad en foco y sobre EL grupo que se está editando.
-  // Cuando ese grupo queda bien, salta al siguiente pendiente; si era el último, pasa a la siguiente unidad.
-  const tocarOpcion = (lista, o) => setPrevia(v => {
-    const unidades = v.unidades.map((u, i) => {
-      if (i !== v.foco) return u
-      const act = u.sel[lista.id] || []
-      let nuevo
-      if (act.includes(o)) nuevo = act.filter(x => x !== o)
-      else if (maxDe(lista) === 1) nuevo = [o]
-      else nuevo = act.length >= maxDe(lista) ? act : [...act, o]
-      return { ...u, sel: { ...u.sel, [lista.id]: nuevo } }
-    })
-    let foco = v.foco
-    let li = v.li
-    if (satisfecha(unidades[foco], lista)) {
-      const sig = primeraPendiente(v.listas, unidades[foco], v.li + 1)
-      if (sig >= 0) li = sig
-      else {
-        const sigU = unidades.findIndex((u, i) => i !== foco && !unidadCompleta(v.listas, u))
-        if (sigU >= 0) { foco = sigU; li = Math.max(0, primeraPendiente(v.listas, unidades[foco])) }
-      }
-    }
-    return { ...v, unidades, foco, li }
-  })
 
   const quitarAgotado = id => d({ t: 'cfg~', cambios: { agotados: conMarca(s.config, id, null) } })
   const q = busca.trim().toLowerCase()
   const enCarta = s.productos.filter(p => p.activo
     && (q ? (p.nombre || '').toLowerCase().includes(q) : secActiva === TODOS || p.seccionId === secActiva))
   const agotadosEnSeccion = enCarta.filter(p => agotados[p.id])
-  const previaLista = previa ? previa.unidades.every(u => unidadCompleta(previa.listas, u)) : false
-  const liActivo = previa ? Math.min(Math.max(0, previa.li || 0), previa.listas.length - 1) : 0
-  const listaActiva = previa ? previa.listas[liActivo] : null
-  const elegidoActo = previa
-    ? previa.listas.map(l => {
-      const sel = (previa.unidades[previa.foco] || previa.unidades[0])?.sel[l.id] || []
-      return sel.length ? (l.legacy ? '' : l.nombre + ': ') + sel.join(', ') : ''
-    }).filter(Boolean).join(' · ')
-    : ''
-  const confirmarPrevia = () => {
-    if (!previaLista) return
-    // Una unidad = un ítem con su nota; las iguales se juntan solas («2× Carne — Medio»).
-    previa.unidades.forEach(u => {
-      const nota = notaDeUnidad(previa.listas, u)
-      const indicaciones = indicacionesDeUnidad(previa.listas, u)
-      const extra = extraDeUnidad(previa.listas, u)
-      const sel = selDeUnidad(previa.listas, u)
-      d({ t: 'item+', cuentaId: c.id, p: previa.p, ...(nota ? { nota } : {}), ...(indicaciones ? { indicaciones } : {}), ...(extra ? { extra } : {}), ...(sel.length ? { sel } : {}) })
+  // Una unidad = un ítem con su nota; las iguales se juntan solas («2× Carne — Medio»).
+  const confirmarPrevia = unidades => {
+    const { p, listas } = previa
+    unidades.forEach(u => {
+      const nota = notaDeUnidad(listas, u)
+      const indicaciones = indicacionesDeUnidad(listas, u)
+      const extra = extraDeUnidad(listas, u)
+      const sel = selDeUnidad(listas, u)
+      d({ t: 'item+', cuentaId: c.id, p, ...(nota ? { nota } : {}), ...(indicaciones ? { indicaciones } : {}), ...(extra ? { extra } : {}), ...(sel.length ? { sel } : {}) })
     })
     setPrevia(null)
   }
@@ -510,7 +476,6 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                     <ul className="pm-mas-menu" role="menu">
                       {vivos.length > 0 && <li><button type="button" className="peligro" role="menuitem" onClick={() => abrirModo('eliminar')}>🗑 {t('pedido.menuEliminar')}</button></li>}
                       {puedeMover && vivos.length > 0 && <li><button type="button" role="menuitem" onClick={() => abrirModo('mover')}>↔ {t('pedido.menuMover')}</button></li>}
-                      {puedeUnir && c.tipo === 'mesa' && hermanas.length < 8 && <li><button type="button" role="menuitem" onClick={dividir}>✂ {t('pedido.menuDividir')}</button></li>}
                       {puedeUnir && c.tipo === 'mesa' && (c.mesaIds.length < s.mesas.length || hermanasOtras.length > 0) && <li><button type="button" role="menuitem" onClick={() => { setMenu(false); setAUnir([]); setAUnirCtas([]); setUniendo(true) }}>🔗 {t('pedido.menuUnir')}</button></li>}
                       {puedeUnir && c.mesaIds.length > 1 && c.mesaIds.map(id => (
                         <li key={id}><button type="button" role="menuitem" onClick={() => { setMenu(false); d({ t: 'separar', cuentaId: c.id, mesaId: id, usuario }) }}>⛓ {t('pedido.menuSeparar', { mesa: nombreMesa(id) })}</button></li>
@@ -522,12 +487,15 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
             )}
           </span>
         )}
-        <span className="pm-pasos" role="status" title={tOr('pedido.pasosAyuda', 'Prep → tomando pedido · Parcial/Listo → cocina · Cuenta → pre-cuenta · Pagada → cobrada')}>
+        <ol className="pm-pasos" aria-label={tOr('pedido.pasosAyuda', 'Prep → tomando pedido · Parcial/Listo → cocina · Cuenta → pre-cuenta · Pagada → cobrada')}>
           {PASOS.map((p, k) => (
-            <em key={p} data-paso={p} aria-current={k === iPaso ? 'step' : undefined}
-              className={'pm-paso' + (k === iPaso ? ' on' : k < iPaso ? ' hecho' : '')}>{k < iPaso ? '✓' : ''}{tOr('paso.' + p, PASOS_TXT[p])}</em>
+            <li key={p} data-paso={p} aria-current={k === iPaso ? 'step' : undefined}
+              className={'pm-paso ' + (k < iPaso ? 'hecho' : k === iPaso ? 'actual' : 'futuro')}>
+              <i aria-hidden="true">{k < iPaso ? '✓' : k + 1}</i>
+              <span>{tOr('paso.' + p, PASOS_TXT[p])}</span>
+            </li>
           ))}
-        </span>
+        </ol>
       </div>
       <p className="pm-ayuda">{enCobro
         ? tOr('caja.modoCobroAyuda', 'Vista de cobro: la cuenta con lo que falta pagar. «✎ Editar mesa» abre la vista del mesero.')
@@ -535,7 +503,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
       {!cuenta && hermanas.length > 1 && (
         <div className="barra pm-subcuentas" role="tablist">
           {hermanas.map(x => (
-            <button key={x.id} type="button" role="tab" aria-selected={x.id === c.id} className={'tab' + (x.id === c.id ? ' on' : '')} onClick={() => { setCuentaSelId(x.id); setMarcados([]); setDestino('') }}>
+            <button key={x.id} type="button" role="tab" aria-selected={x.id === c.id} className={'tab' + (x.id === c.id ? ' on' : '')} onClick={() => { setCuentaSelId(x.id); setMarcados([]); setDestino(''); setPartes({}) }}>
               {mesa.nombre}{x.etiqueta} · {money(totalFinal(x))}
             </button>
           ))}
@@ -608,8 +576,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
         </div>
       )}
 
-      <div className={'pm-cols' + (editable ? ' dos' : '')}>
-        {editable && (
+      <div className={'pm-cols' + (editable && !modo ? ' dos' : '')}>
+        {editable && !modo && (
           <section className="pm-carta">
             <div className="pm-busca-fila">
               <input name="buscar-producto" type="search" inputMode="search" autoComplete="off" value={busca}
@@ -670,7 +638,13 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                     </span>
                   )}
                 </span>
-                {editable && i.estado === 'pendiente' ? (
+                {modo === 'mover' && marcados.includes(i.id) && i.qty > 1 ? (
+                  <span className="qty qty-partir" title={tOr('pedido.moverCantidad', 'Unidades a mover')}>
+                    <button type="button" aria-label={tOr('comun.menos', 'Menos')} disabled={cantDe(i) <= 1} onClick={() => setPartes(p => ({ ...p, [i.id]: cantDe(i) - 1 }))}>−</button>
+                    <b>{cantDe(i)}<small>/{i.qty}</small></b>
+                    <button type="button" aria-label={tOr('comun.mas', 'Más')} disabled={cantDe(i) >= i.qty} onClick={() => setPartes(p => ({ ...p, [i.id]: cantDe(i) + 1 }))}>+</button>
+                  </span>
+                ) : editable && i.estado === 'pendiente' ? (
                   <span className="qty"><button onClick={() => d({ t: 'qty', cuentaId: c.id, itemId: i.id, d: -1 })}>−</button>{i.qty}<button onClick={() => d({ t: 'qty', cuentaId: c.id, itemId: i.id, d: 1 })}>+</button></span>
                 ) : <span>×{i.qty}</span>}
                 <span className="pr">{money(i.precio * i.qty)}</span>
@@ -739,15 +713,9 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                   {destinos.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
                 </select>
               </label>
-              {unico && cantMax > 1 && (
-                <label className="pm-campo">{`${tOr('pedido.moverCantidad', 'Unidades a mover')} (1–${cantMax})` }
-                  <input name="mover-cantidad" type="text" inputMode="numeric" autoComplete="off"
-                    value={cantidad === '' ? String(cant) : cantidad}
-                    onChange={e => setCantidad(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))} />
-                </label>
-              )}
+              <p className="pm-mover-ayuda">{tOr('pedido.moverPiezasAyuda', 'Toca el − / + del propio plato para elegir cuántas piezas se van a la otra mesa.')}</p>
               <div className="barra" style={{ margin: 0 }}>
-                <button className="teal" disabled={!destino || !marcados.length} onClick={mover}>{t('pedido.moverN', { n: unico ? cant : marcados.length })}</button>
+                <button className="primary" disabled={!destino || !marcados.length} onClick={mover}>{t('pedido.moverN', { n: nMovidas })}</button>
               </div>
               {destino && marcados.length === 1 && (
                 itemsDestino.length ? (
@@ -845,7 +813,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
               <div className="barra" style={{ margin: 0, flexWrap: 'wrap' }}>
                 <span className="pm-pista-cobro">{t('pedido.pistaSeleccion')}</span>
                 {marcados.length > 0 && (
-                  <button type="button" className="teal" style={chico} onClick={() => setPagos(ps => ps.map((x, j) => j === 0 ? { ...x, monto: String(totalSeleccion.toFixed(2)) } : x))}>
+                  <button type="button" className="slate" style={chico} onClick={() => setPagos(ps => ps.map((x, j) => j === 0 ? { ...x, monto: String(totalSeleccion.toFixed(2)) } : x))}>
                     {t('pedido.ponerSeleccion', { monto: money(totalSeleccion) })}
                   </button>
                 )}
@@ -889,21 +857,27 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
             </div>
           ) : !sinTurno && (
             <div className="barra pm-acciones">
+              {mesaVacia && <button className="danger solid" onClick={cerrarVacia}>✕ {tOr('pedido.cerrarVacia', 'Cerrar mesa vacía')}</button>}
+              {/* Dividir (crear subcuenta) estaba escondido tras el ⋯: se saca a la fila de acciones
+                  siempre visible, porque un «＋» de alta no debe quedar tras un submenú cerrado. */}
+              {editable && puedeUnir && c.tipo === 'mesa' && hermanas.length < 8 && (
+                <button type="button" className="info" onClick={dividir}>✂ {t('pedido.menuDividir')}</button>
+              )}
               {editable && hayPendientes && <button className="orange" onClick={enviarCocina}>🔥 {t('pedido.enviarCocina')}</button>}
               {puede(rol, 'marcar_listo') && editable && c.items.some(i => i.estado === 'enviado') && (
-                <button className="teal" onClick={() => d({ t: 'listo', cuentaId: c.id, lista: true, usuario })}>✔ {tOr('pedido.marcarListo', 'Marcar listo')}</button>
+                <button className="info" onClick={() => d({ t: 'listo', cuentaId: c.id, lista: true, usuario })}>✔ {tOr('pedido.marcarListo', 'Marcar listo')}</button>
               )}
               {puede(rol, 'marcar_listo') && editable && listo === 'listo' && (
                 <button className="slate" onClick={() => d({ t: 'listo', cuentaId: c.id, lista: false, usuario })}>↺ {tOr('pedido.deshacerListo', 'Deshacer listo')}</button>
               )}
               {/* La cuenta (pre-cuenta) también se saca desde Caja: el cajero la imprime sin volver a la vista del mesero. */}
-              {(editable || enCobro) && c.items.length > 0 && c.estado === 'abierta' && <button className="violet" onClick={() => d({ t: 'precuenta', cuentaId: c.id })}>{t('pedido.precuenta')}</button>}
+              {(editable || enCobro) && c.items.length > 0 && c.estado === 'abierta' && <button className="violet" onClick={sacarCuenta}>🧾 {tOr('pedido.sacarCuenta', 'Sacar cuenta')}</button>}
               {c.estado === 'precuenta' && <button className="warning" onClick={() => d({ t: 'reabrir', cuentaId: c.id })}>{t('pedido.reabrir')}</button>}
               {puede(rol, 'cobrar') && c.items.length > 0 && (
                 <button className="success" onClick={iniciarCobro}>💵 {t('pedido.cobrar')}</button>
               )}
-              {c.items.length > 0 && <button className="slate" onClick={imprimirTicketCuenta}>🖨 {t('pedido.imprimirTicket')}</button>}
-              {!enCobro && c.items.some(i => i.estado === 'enviado') && <button className="teal" onClick={reimprimirComanda}>↻ {t('pedido.reimprimirComanda')}</button>}
+              {c.items.length > 0 && c.estado !== 'abierta' && <button className="slate" onClick={imprimirTicketCuenta}>🖨 {tOr('pedido.reimprimirCuenta', 'Reimprimir cuenta')}</button>}
+              {!enCobro && c.items.some(i => i.estado === 'enviado') && <button className="info" onClick={reimprimirComanda}>↻ {t('pedido.reimprimirComanda')}</button>}
             </div>
           )}
           <p className="pm-sub" style={{ marginTop: 6 }}>{t('pedido.pagadoEstado', { pagado: money(pagadoCuenta(c)), estado: estadoVisto })}</p>
@@ -917,66 +891,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
         </div>
       )}
       {previa && (
-        <div className="pm-previa-fondo" onClick={() => setPrevia(null)}>
-          <div className="pm-previa" role="dialog" aria-label={previa.p.nombre} onClick={e => e.stopPropagation()}>
-            <div className="pm-cant">
-              <b>{previa.p.nombre}</b>
-              <span className="pm-cant-ctl">
-                <button type="button" className="ghost" aria-label="−" disabled={previa.unidades.length <= 1} onClick={() => cambiarCantidad(-1)}>−</button>
-                <output aria-live="polite">{previa.unidades.length}</output>
-                <button type="button" className="ghost" aria-label="+" onClick={() => cambiarCantidad(1)}>+</button>
-              </span>
-            </div>
-            {previa.unidades.length > 1 && (
-              <div className="pm-unidades" role="tablist">
-                {previa.unidades.map((u, i) => (
-                  <button key={i} type="button" role="tab" aria-selected={previa.foco === i}
-                    className={'tab' + (previa.foco === i ? ' on' : '') + (unidadCompleta(previa.listas, u) ? ' ok' : '')}
-                    onClick={() => setPrevia(v => ({ ...v, foco: i, li: Math.max(0, primeraPendiente(v.listas, v.unidades[i])) }))}>
-                    {i + 1}{unidadCompleta(previa.listas, u) ? ' ✓' : ''}
-                  </button>
-                ))}
-              </div>
-            )}
-            {/* Un grupo de opciones cada vez: con tres o cuatro grupos a la vez no se sabía qué se estaba editando. */}
-            {previa.listas.length > 1 && (
-              <div className="pm-listas" role="tablist">
-                {previa.listas.map((l, k) => (
-                  <button key={l.id} type="button" role="tab" aria-selected={k === liActivo}
-                    className={'tab' + (k === liActivo ? ' on' : '') + (satisfecha(previa.unidades[previa.foco], l) ? ' ok' : '')}
-                    onClick={() => setPrevia(v => ({ ...v, li: k }))}>
-                    {l.legacy ? tOr('indic.opciones', 'Opciones') : l.nombre}{satisfecha(previa.unidades[previa.foco], l) ? ' ✓' : ''}{l.obligatoria ? ' *' : ''}
-                  </button>
-                ))}
-              </div>
-            )}
-            {elegidoActo && <small className="pm-elegido">{tOr('indic.elegido', 'Elegido')}: {elegidoActo}</small>}
-            {listaActiva && (
-              <div className="pm-lista">
-                {!listaActiva.legacy && (
-                  <small className="pm-lista-tit">
-                    {listaActiva.nombre}{listaActiva.obligatoria ? ' *' : ''}
-                    {maxDe(listaActiva) !== Infinity && maxDe(listaActiva) > 1 ? ` · ${t('indic.hasta', { n: maxDe(listaActiva) })}` : ''}
-                    {previa.unidades.length > 1 ? ` · ${t('indic.unidadN', { n: previa.foco + 1 })}` : ''}
-                  </small>
-                )}
-                <div className="pm-opciones">
-                  {listaActiva.opciones.map(o => {
-                    const act = (previa.unidades[previa.foco] || previa.unidades[0]).sel[listaActiva.id] || []
-                    return <button key={o} type="button" className={'tab' + (act.includes(o) ? ' on' : '')} onClick={() => tocarOpcion(listaActiva, o)}>{o}{extraDe(listaActiva, o) > 0 ? ` +${money(extraDe(listaActiva, o))}` : ''}</button>
-                  })}
-                </div>
-              </div>
-            )}
-            <input name="nota-extra" value={previa.unidades[previa.foco].texto} maxLength={60} placeholder={t('pedido.notaExtra')}
-              onChange={e => setPrevia(v => ({ ...v, unidades: v.unidades.map((u, i) => (i === v.foco ? { ...u, texto: e.target.value } : u)) }))} />
-            {!previaLista && <small className="pm-falta">{t('indic.faltan')}</small>}
-            <div className="barra" style={{ margin: 0 }}>
-              <button type="button" className="success" disabled={!previaLista} onClick={confirmarPrevia}>{t('indic.agregar', { n: previa.unidades.length })}</button>
-              <button type="button" className="danger" onClick={() => setPrevia(null)}>{t('comun.cancelar')}</button>
-            </div>
-          </div>
-        </div>
+        <IndicacionesPrevio producto={previa.p} listas={previa.listas}
+          onClose={() => setPrevia(null)} onConfirm={confirmarPrevia} />
       )}
     </Ventana>
   )

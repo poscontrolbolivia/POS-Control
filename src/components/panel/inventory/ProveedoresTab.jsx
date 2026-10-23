@@ -8,7 +8,7 @@ const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const CADUCA_PREGUNTA = 4000
 const PROVEEDOR_VACIO = { nombre: '', telefono: '', email: '', direccion: '', nota: '', activo: true }
 
-export default function ProveedoresTab({ onPagar }) {
+export default function ProveedoresTab({ onPagar, alta = false, onAltaDone }) {
   const { s, d } = useStore()
   const { tOr } = useIdioma()
   const { money } = useMoneda()
@@ -55,6 +55,13 @@ export default function ProveedoresTab({ onPagar }) {
 
   const cerrarForm = () => { setForm(null); setEditando(null); setFormErr('') }
   const abrirNuevo = () => { setFormErr(''); setEditando(null); setForm({ ...PROVEEDOR_VACIO }) }
+
+  // La alta puede pedirse desde la barra de pestañas (esta pestaña arranca oculta): al llegar la
+  // señal, se abre el formulario de una y se avisa al padre para que no vuelva a dispararse.
+  useEffect(() => {
+    if (alta) { abrirNuevo(); onAltaDone?.() }
+  }, [alta])
+
   const abrirEditar = p => {
     setFormErr('')
     setEditando(p.id)
@@ -184,7 +191,7 @@ export default function ProveedoresTab({ onPagar }) {
         <button type="button" className="ghost" disabled={!lista.length} onClick={exportarCSV}>
           {tOr('inventario.exportar', 'Exportar CSV')}
         </button>
-        <button type="button" className="teal" disabled={Boolean(form) && !editando} onClick={abrirNuevo}>
+        <button type="button" className="primary" disabled={Boolean(form) && !editando} onClick={abrirNuevo}>
           ＋ {tOr('inventario.nuevoProveedor', 'Proveedor')}
         </button>
       </div>

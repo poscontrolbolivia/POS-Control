@@ -58,6 +58,10 @@
 
 /* Una línea que explica qué es la pestaña activa; sin ella no se distingue un grupo de un producto. */
 .mn-ayuda{margin:2px 0 0;color:var(--mut);font-size:.86rem;font-weight:600;line-height:1.35}
+/* La explicación y el botón de crear comparten fila: el botón queda a la derecha, siempre a la vista. */
+.mn-ayuda-fila{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mn-ayuda-fila .mn-ayuda{flex:1 1 220px;min-width:0}
+.mn-ayuda-nuevo{flex:0 0 auto;min-height:44px;padding:8px 18px;font-size:.92rem;white-space:nowrap}
 
 /* Tarjeta de una lista de indicaciones */
 .mn-tarjeta-ind{padding:4px 0 10px}
@@ -93,15 +97,7 @@
   border:1.5px solid var(--line-fuerte);border-radius:999px;background:var(--card);font-weight:600;cursor:pointer;align-self:flex-start}
 .mn-check input{width:20px;height:20px;min-height:0;accent-color:var(--ac)}
 
-/* Ventana en primer plano. align-items:flex-start + margin:auto: se centra cuando cabe y, cuando no,
-   deja ver la parte de arriba (con align-items:center el título quedaba cortado fuera de la pantalla). */
-.mn-overlay{position:fixed;inset:0;z-index:1000;background:rgba(10,18,30,.62);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;overscroll-behavior:contain}
-.mn-ventana{width:100%;max-width:560px;max-height:calc(100dvh - 32px);margin:auto;overflow-y:auto;background:var(--card);color:var(--ink);border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.45);border:1.5px solid var(--line-fuerte,var(--line))}
-.mn-ventana-tit{margin:0 0 12px;font-size:1.2rem}
-@media (max-width:640px){
-  .mn-overlay{padding:0;align-items:flex-end}
-  .mn-ventana{margin:0;max-width:none;max-height:92dvh;border-radius:20px 20px 0 0;padding:16px 14px}
-}
+/* La ventana en primer plano vive en components/ui/Ventana.css (la comparten Ítems y Equipo). */
 .mn-form{display:flex;flex-direction:column;gap:12px;min-width:0}
 .mn-form .adm-campo{min-width:0}
 .mn-form input:not([type=checkbox]):not([type=file]),.mn-form select{width:100%;max-width:100%;min-width:0;min-height:46px}
@@ -161,6 +157,9 @@
 .mn-margen-vivo{margin:2px 0 0;font-size:.9rem;color:var(--mut)}
 .mn-margen-vivo b{font-variant-numeric:tabular-nums}
 .mn-margen-vivo.sin{font-style:italic}
+
+/* Costo por peso (sin receta) dentro del modal de producto: kilo comprado + gramos por plato */
+.mn-peso{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);margin-top:2px;padding-top:10px}
 
 /* Tabla de simulación */
 .mn-tabla-wrap{max-height:44dvh;overflow:auto;border:1px solid var(--line);border-radius:var(--r-sm)}

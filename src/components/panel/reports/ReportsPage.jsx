@@ -10,6 +10,7 @@ import { reportesResumen } from '../../../services/reportes.js'
 import { calcularResumen } from '../cash/calcularResumen.js'
 import { armarReporte, descargarPdfCierre } from '../../../services/reporteCierre.js'
 import DataTable from '../DataTable.jsx'
+import MapaVentas from './MapaVentas.jsx'
 import {
   resumenDeCuentas, rangoHoy, rangoUltimos7, rangoMesActual, rangoMesPasado, rangoDeFechas,
   fechaClave, aMs, csvDe, bajarCsv, csvDeSecciones,
@@ -42,6 +43,8 @@ export default function ReportsPage({ rol, sesion }) {
   const [cargando, setCargando] = useState(false)
   const [pdfCargando, setPdfCargando] = useState(false)
   const [aviso, setAviso] = useState('')
+  // Mesa elegida en el mapa: filtra las secciones que tienen columna de mesa. Se apaga al cambiar el periodo.
+  const [mesaSel, setMesaSel] = useState(null)
   const seqRef = useRef(0)
 
   const sRef = useRef(s)
@@ -60,6 +63,27 @@ export default function ReportsPage({ rol, sesion }) {
 
   const memoria = useMemo(() => resumenDeCuentas(s, rango.desde, rango.hasta), [s, rango])
   const resumen = modo === 'supabase' && resumenRpc?.origen === 'rpc' ? resumenRpc : memoria
+
+  // por_mesa viene keyed por NOMBRE (así lo devuelve la RPC), por eso el mapa se arma con los nombres
+  // de s.mesas. Lo que no coincide con una mesa del salón —cuentas unidas «1, 3», mostrador, para llevar
+  // o mesas borradas— no se reparte entre mesas (sería inventar): se lista aparte y sigue siendo filtrable.
+  const { ventas, fuera } = useMemo(() => {
+    const nombres = new Set((s.mesas || []).map(x => x.nombre))
+    const por = {}
+    const otros = []
+    lista(resumen, 'por_mesa').forEach(r => {
+      const k = String(r.mesa ?? '').trim()
+      const monto = round2(r.monto || 0)
+      const cuentas = Number(r.cuentas) || 0
+      if (k && !k.includes(',') && nombres.has(k)) {
+        const x = (por[k] ||= { monto: 0, cuentas: 0 })
+        x.monto = round2(x.monto + monto); x.cuentas += cuentas
+      } else {
+        otros.push({ mesa: k || '—', monto, cuentas })
+      }
+    })
+    return { ventas: por, fuera: otros }
+  }, [resumen, s.mesas])
   const T = resumen.totales || {}
   const moneda = resumen.moneda || s.config?.moneda || MONEDA
   const m = n => formatearMonto(n, moneda)
@@ -72,12 +96,14 @@ export default function ReportsPage({ rol, sesion }) {
     const r = p.rango()
     setRango({ ...r, preset: p.id })
     setDesdeTxt(fechaClave(r.desde)); setHastaTxt(fechaClave(r.hasta))
+    setMesaSel(null)
     setAviso('')
   }
   const aplicar = () => {
     const r = rangoDeFechas(desdeTxt, hastaTxt)
     if (!r) { setAviso(tOr('reportes.fechasInvalidas', 'Elige un rango de fechas válido (el hasta no puede ser menor al desde).')); return }
     setRango({ ...r, preset: null })
+    setMesaSel(null)
     setAviso('')
   }
 
@@ -147,7 +173,7 @@ export default function ReportsPage({ rol, sesion }) {
       csvFila: r => [r.usuario, r.cuentas, round2(r.monto)],
     },
     {
-      id: 'mesas', icono: '🪑', titulo: tOr('reportes.porMesa', 'Por mesa'),
+      id: 'mesas', icono: '🪑', titulo: tOr('reportes.porMesa', 'Por mesa'), porMesa: true,
       filas: lista(resumen, 'por_mesa'), getRowId: r => r.mesa,
       columnas: [
         { key: 'mesa', label: L.mesa, render: r => r.mesa },
@@ -179,7 +205,7 @@ export default function ReportsPage({ rol, sesion }) {
       csvFila: r => [r.nombre, r.qty, round2(r.monto)],
     },
     {
-      id: 'pendientes', icono: '⏳', titulo: tOr('reportes.pendientes', 'Cuentas pendientes'),
+      id: 'pendientes', icono: '⏳', titulo: tOr('reportes.pendientes', 'Cuentas pendientes'), porMesa: true,
       filas: lista(resumen, 'pendientes'), getRowId: r => r.cuenta_id,
       columnas: [
         { key: 'mesa', label: L.mesa, render: r => r.mesa },
@@ -194,9 +220,17 @@ export default function ReportsPage({ rol, sesion }) {
     },
   ]
 
+  // El filtro del mapa solo alcanza a las secciones cuyas filas identifican la mesa; en las demás
+  // (días, métodos, productos, meseros) la mesa no está en la fila, así que se muestran completas.
+  const coincide = r => {
+    const k = String(r.mesa ?? '')
+    return k === mesaSel || k.startsWith(`${mesaSel} ·`)
+  }
+  const vistas = mesaSel ? secciones.map(sec => (sec.porMesa ? { ...sec, filas: sec.filas.filter(coincide) } : sec)) : secciones
+
   const exportarSec = sec => bajarCsv(`reportes-${sec.id}-${tag}.csv`, csvDe(sec.csvColumnas, sec.filas.map(sec.csvFila)))
   const exportarTodo = () => bajarCsv(`reportes-${tag}.csv`,
-    csvDeSecciones(secciones.map(sec => ({ titulo: sec.titulo, columnas: sec.csvColumnas, filas: sec.filas.map(sec.csvFila) }))))
+    csvDeSecciones(vistas.map(sec => ({ titulo: sec.titulo, columnas: sec.csvColumnas, filas: sec.filas.map(sec.csvFila) }))))
 
   // Reutiliza el generador del cierre de caja: un turno sintético del rango + armarReporte.
   const pdf = async () => {
@@ -286,8 +320,11 @@ export default function ReportsPage({ rol, sesion }) {
         </div>
       </section>
 
+      <MapaVentas mesas={s.mesas || []} zonas={s.zonas || []} ventas={ventas} fuera={fuera}
+        sel={mesaSel} onSel={setMesaSel} m={m} total={T.total || 0} />
+
       <p className="rp-nota">{tOr('reportes.tablasAyuda', 'Toca un encabezado para ordenar la columna (▲ y luego ▼); arrastra el borde para cambiar el ancho.')}</p>
-      {secciones.map(sec => (
+      {vistas.map(sec => (
         <section key={sec.id} className="adm-card rp-sec">
           <div className="adm-card-cab">
             <h3>{sec.icono} {sec.titulo}</h3>

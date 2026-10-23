@@ -6,9 +6,24 @@
 .vd-sinpermiso{color:var(--mut)}
 
 .vd-menu{display:flex;flex-direction:column;gap:8px;min-width:0}
+/* Cambio mostrador ↔ mesas: siempre arriba, para que el salón sea visible sin salir de la pantalla. */
+.vd-vistas{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0}
+.vd-vistas .vd-tab{min-height:40px;padding:6px 16px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:.9rem;font-weight:600}
+.vd-vista-n{min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--libre);border:1px solid var(--line);
+  color:var(--mut);font-size:.74rem;font-weight:700;font-style:normal;display:inline-flex;align-items:center;justify-content:center}
+.vd-vistas .vd-tab.on .vd-vista-n{background:rgba(255,255,255,.35);border-color:transparent;color:var(--on-btn)}
 .vd-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
-.vd-tab{white-space:nowrap;border-radius:999px}
-.vd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(128px,45%),1fr));gap:8px}
+/* flex:0 0 auto: el button global trae min-width:40px, que anula el «min-width:auto» de los items
+   flex y deja que la píldora se encoja — el fondo quedaba más corto que la palabra y la cortaba. */
+.vd-tab{white-space:nowrap;border-radius:999px;flex:0 0 auto;min-height:44px;padding:8px 16px}
+/* La carta entra por columnas que se deslizan hacia la izquierda con su barra, como los grupos: con
+   «Todos» hay decenas de platos y una rejilla dejaría el resto fuera de la pantalla sin forma de llegar. */
+.vd-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(var(--vd-filas,3),minmax(0,auto));
+  grid-auto-columns:clamp(148px,42vw,168px);gap:8px;overflow-x:auto;padding-bottom:6px;
+  scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.vd-grid>.vd-prod{scroll-snap-align:start}
+/* 3 filas en cualquier pantalla: es la única forma de que quepan de una vez los platos que se ven
+   sin deslizar. En PC las columnas ya son más anchas, así que no hace falta una rejilla distinta. */
 
 .vd-prod{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:76px;padding:12px 10px;text-align:center;font-weight:600;background:var(--card);border:1px solid var(--line);border-radius:999px}
 .vd-prod span{overflow-wrap:break-word;hyphens:auto;line-height:1.15}
@@ -34,6 +49,9 @@
 .vd-qty button:hover:not(:disabled),.vd-x:hover:not(:disabled){background:var(--gloss),var(--pc);filter:brightness(.94);transform:translateY(-1px)}
 .vd-x{--pc:var(--rojo);width:34px;height:34px;padding:0;border:0;border-radius:50%;color:var(--rojo-on);font-weight:700;background:var(--gloss),var(--pc);box-shadow:var(--sh-btn) color-mix(in srgb,var(--pc) 38%,transparent)}
 .vd-pr{min-width:74px;text-align:right;white-space:nowrap}
+/* Las indicaciones elegidas en el mostrador se ven bajo el nombre: sin ellas el cajero no puede
+   comprobar que el plato salió con el término o los adicionales que el cliente pidió. */
+.vd-ind{color:var(--mut);font-size:.85rem;line-height:1.25;overflow-wrap:anywhere}
 .vd-nota{width:100%;font-size:1rem}
 
 .vd-total{display:flex;justify-content:space-between;align-items:center;font-size:1.25rem;margin-top:4px}

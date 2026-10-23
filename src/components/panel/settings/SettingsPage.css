@@ -13,7 +13,9 @@
 .cfg-cab-titulo{flex:1 1 auto;min-width:0}
 .cfg-cab-chip{flex:0 0 auto}
 .cfg-cab-flecha{flex:0 0 auto;margin-left:auto;color:var(--logo-green);font-size:1rem;line-height:1}
-.cfg-bloque.abierto > .cfg-cab{position:sticky;top:var(--topbar-h,0px);z-index:120;
+.cfg-bloque.abierto > .cfg-cab{position:sticky;top:calc(var(--topbar-h,0px) + 6px);z-index:120;
+  /* anillo del color de la página: la cabecera fija es opaca y no deja ver el contenido que pasa por detrás */
+  box-shadow:0 0 0 6px var(--bg);
   border-color:var(--logo-green);background:color-mix(in srgb,var(--logo-green) 12%,var(--card))}
 .cfg-bloque.abierto > .cfg-cab:hover:not(:disabled){background:color-mix(in srgb,var(--logo-green) 18%,var(--card))}
 .cfg-cuerpo{display:flex;flex-direction:column;gap:12px;background:var(--card);border:1px solid var(--line);
@@ -25,7 +27,8 @@
 /* ── NIVEL 2 · Submenús (Impresoras): misma píldora pero en AZUL, que es el color de estado.
    Así un subgroup se ve distinto de su grupo: verde arriba, azul adentro. ── */
 .adm-panel .imp-sub-cab{border-color:var(--line);background:var(--card);box-shadow:none;min-height:46px}
-.adm-panel .imp-sub.abierto > .imp-sub-cab{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,var(--card))}
+.adm-panel .imp-sub.abierto > .imp-sub-cab{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,var(--card));
+  position:sticky;top:calc(var(--topbar-h,0px) + 70px);z-index:110;box-shadow:0 0 0 6px var(--card)}
 
 /* ── NIVEL 3 · Tarjetas planas y grises (grupos, papeles, salidas): sin píldora ni color. ── */
 
@@ -84,3 +87,8 @@
 
 /* Subtítulos de sección dentro de la tarjeta de impresoras (mismo aire que imp-label, pero jerarquía arriba) */
 .imp-subtitulo{margin:12px 0 2px;font-weight:700;font-size:1rem}
+
+/* Equipo dentro de su bloque: sin la tarjeta doble ni su botón de plegar (el bloque ya lo hace). */
+.cfg-cuerpo .adm-equipo{border:0;box-shadow:none;background:transparent;padding:0}
+.cfg-cuerpo .adm-equipo > .adm-card-cab{background:transparent;padding:0}
+.adm-panel .cfg-cuerpo button.ghost.eq-toggle{display:none}

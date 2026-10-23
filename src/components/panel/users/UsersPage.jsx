@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
+import Ventana from '../../ui/Ventana.jsx'
 import { rpc, mensajeError } from '../../../services/supabaseClient.js'
 import { gruposDeComanda } from '../../../services/printing.js'
 import '../../../styles/admin.css'
@@ -66,6 +67,9 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
   const [form, setForm] = useState({ nombre: '', correo: '', rol: 'cajero', clave: '' })
+  // Invitar vive en una ventana que abre un botón de la cabecera: al final de la lista el formulario
+  // quedaba fuera de la pantalla cuando el equipo ya tenía gente.
+  const [invita, setInvita] = useState(false)
   const [validando, setValidando] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [claveFila, setClaveFila] = useState(null)
@@ -133,6 +137,7 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
         p_clave: form.clave,
       }, { conEmpresa: false })
       setForm(f => ({ nombre: '', correo: '', rol: f.rol, clave: '' }))
+      setInvita(false)
       setAviso(tOr('equipo.altaOk', 'Listo: esa persona ya puede entrar con su correo y la clave inicial.'))
       await cargar(true)
     } catch (err) {
@@ -208,6 +213,10 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
         <span className="adm-chip">{miembros.length} {miembros.length === 1 ? tOr('equipo.una', 'persona') : tOr('equipo.varias', 'personas')}</span>
         <span className="sp" />
         <span className="cab-acciones">
+          <button type="button" className="success" disabled={ocupado}
+            onClick={() => { setError(''); setAviso(''); setValidando(''); setInvita(true) }}>
+            ＋ {tOr('equipo.invitar.boton', 'Invitar')}
+          </button>
           <button type="button" className="ghost" disabled={cargando || ocupado} onClick={() => cargar()}>
             {cargando ? tOr('equipo.cargando', 'Cargando…') : tOr('equipo.actualizar', 'Actualizar')}
           </button>
@@ -311,45 +320,49 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
             ? null
             : <div className="adm-vacio">{tOr('equipo.vacio', 'Todavía no hay nadie más en el equipo. Invita a la primera persona abajo.')}</div>}
 
-      <form className="eq-invitar" onSubmit={invitar}>
-        <h4 className="eq-invitar-titulo">{tOr('equipo.invitar.titulo', 'Invitar a una persona')}</h4>
-        <div className="eq-campos">
-          <label className="adm-campo">
-            <span>{tOr('equipo.invitar.nombre', 'Nombre')}</span>
-            <input name="nombre-pista" value={form.nombre} onChange={set('nombre')} placeholder={tOr('equipo.invitar.nombrePista', 'p. ej. María Quispe')} autoComplete="off" />
-          </label>
-          <label className="adm-campo">
-            <span>{tOr('equipo.invitar.correo', 'Correo')}</span>
-            <input name="correo-pista" type="email" inputMode="email" value={form.correo} onChange={set('correo')}
-              placeholder={tOr('equipo.invitar.correoPista', 'maria@negocio.com')} autoComplete="off" />
-          </label>
-          <label className="adm-campo">
-            <span>{tOr('equipo.invitar.rol', 'Rol')}</span>
-            <select name="rol" value={form.rol} onChange={set('rol')}>
-              {ROLES.map(r => <option key={r} value={r}>{rolEtiqueta(r, tOr)}</option>)}
-            </select>
-          </label>
-          <label className="adm-campo">
-            <span>{tOr('equipo.invitar.clave', 'Clave inicial')}</span>
-            <span className="eq-clave-fila">
-              <input name="pista" type="text" value={form.clave} onChange={set('clave')} autoComplete="new-password"
-                placeholder={tOr('equipo.clave.pista', 'mínimo 4 caracteres')} />
-              <button type="button" className="ghost" onClick={() => { setForm(f => ({ ...f, clave: generarClave() })); setValidando('') }}>
-                {tOr('equipo.generar', 'Generar')}
+      {invita && (
+        <Ventana titulo={tOr('equipo.invitar.titulo', 'Invitar a una persona')} onCerrar={() => setInvita(false)}>
+          <form className="eq-invitar" onSubmit={invitar}>
+            <div className="eq-campos">
+              <label className="adm-campo">
+                <span>{tOr('equipo.invitar.nombre', 'Nombre')}</span>
+                <input name="nombre-pista" autoFocus value={form.nombre} onChange={set('nombre')} placeholder={tOr('equipo.invitar.nombrePista', 'p. ej. María Quispe')} autoComplete="off" />
+              </label>
+              <label className="adm-campo">
+                <span>{tOr('equipo.invitar.correo', 'Correo')}</span>
+                <input name="correo-pista" type="email" inputMode="email" value={form.correo} onChange={set('correo')}
+                  placeholder={tOr('equipo.invitar.correoPista', 'maria@negocio.com')} autoComplete="off" />
+              </label>
+              <label className="adm-campo">
+                <span>{tOr('equipo.invitar.rol', 'Rol')}</span>
+                <select name="rol" value={form.rol} onChange={set('rol')}>
+                  {ROLES.map(r => <option key={r} value={r}>{rolEtiqueta(r, tOr)}</option>)}
+                </select>
+              </label>
+              <label className="adm-campo">
+                <span>{tOr('equipo.invitar.clave', 'Clave inicial')}</span>
+                <span className="eq-clave-fila">
+                  <input name="pista" type="text" value={form.clave} onChange={set('clave')} autoComplete="new-password"
+                    placeholder={tOr('equipo.clave.pista', 'mínimo 4 caracteres')} />
+                  <button type="button" className="ghost" onClick={() => { setForm(f => ({ ...f, clave: generarClave() })); setValidando('') }}>
+                    {tOr('equipo.generar', 'Generar')}
+                  </button>
+                </span>
+              </label>
+            </div>
+            <div className="adm-fila">
+              <button type="submit" className="primary" disabled={ocupado || cargando}>
+                {enviando ? tOr('equipo.invitar.enviando', 'Invitando…') : tOr('equipo.invitar.enviar', 'Invitar al equipo')}
               </button>
-            </span>
-          </label>
-        </div>
-        <div className="adm-fila">
-          <button type="submit" className="primary" disabled={ocupado || cargando}>
-            {enviando ? tOr('equipo.invitar.enviando', 'Invitando…') : tOr('equipo.invitar.enviar', 'Invitar al equipo')}
-          </button>
-          {validando && <span className="adm-msg warn">{validando}</span>}
-        </div>
-        <p className="eq-ayuda">
-          {tOr('equipo.invitar.ayuda', 'Se invita con la clave que escribas aquí: el rol decide qué puede hacer en la app (admin manda en todo, cajero cobra, mesero toma pedidos). La base rechaza correos repetidos y no deja quitar el último admin.')}
-        </p>
-      </form>
+              <button type="button" className="ghost" onClick={() => setInvita(false)} disabled={enviando}>{tOr('equipo.cancelar', 'Cancelar')}</button>
+              {validando && <span className="adm-msg warn">{validando}</span>}
+            </div>
+            <p className="eq-ayuda">
+              {tOr('equipo.invitar.ayuda', 'Se invita con la clave que escribas aquí: el rol decide qué puede hacer en la app (admin manda en todo, cajero cobra, mesero toma pedidos). La base rechaza correos repetidos y no deja quitar el último admin.')}
+            </p>
+          </form>
+        </Ventana>
+      )}
     </section>
   )
 }
@@ -359,6 +372,7 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
   const { t, tOr } = useIdioma()
   const usuarios = s.usuariosDemo || []
   const [form, setForm] = useState({ nombre: '', usuario: '', rol: 'cajero', clave: '' })
+  const [invita, setInvita] = useState(false)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
   const [claveFila, setClaveFila] = useState(null)
@@ -375,7 +389,8 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
     if (form.clave.length < MIN_CLAVE) return setError(tOr('equipo.claveCorta', 'La clave inicial necesita al menos 4 caracteres.'))
     d({ t: 'usuario+', usuario: { usuario, nombre: form.nombre.trim(), rol: form.rol, clave: form.clave } })
     setForm(f => ({ nombre: '', usuario: '', rol: f.rol, clave: '' }))
-    setAviso(tOr('equipo.altaOk', 'Listo: esa persona ya puede entrar con su usuario y la clave inicial.'))
+    setInvita(false)
+    setAviso(t('equipo.altaOkUsuario'))
   }
   const guardarClave = e => {
     e.preventDefault()
@@ -398,6 +413,10 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
         <button type="button" className="ghost eq-toggle" onClick={onToggleAbierto}>👥 {tOr('equipo.ocultar', 'Ocultar equipo')}</button>
         <h3>{tOr('equipo.titulo', 'Equipo')}</h3>
         <span className="adm-chip">{usuarios.length}</span>
+        <span className="sp" />
+        <span className="cab-acciones">
+          <button type="button" className="success" onClick={() => { setError(''); setAviso(''); setInvita(true) }}>＋ {tOr('equipo.invitar.boton', 'Invitar')}</button>
+        </span>
       </div>
       <p className="adm-sub eq-nota">{t('equipo.demoNota')}</p>
       {error && <div className="eq-error" role="alert">⚠️ {error}</div>}
@@ -431,23 +450,30 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
           </div>
         ))}
       </div>
-      <form className="eq-invitar" onSubmit={invitar}>
-        <h4 className="eq-invitar-titulo">{tOr('equipo.invitar.titulo', 'Invitar a una persona')}</h4>
-        <div className="eq-campos">
-          <label className="adm-campo"><span>{tOr('equipo.invitar.nombre', 'Nombre')}</span><input name="nombre" value={form.nombre} onChange={set('nombre')} autoComplete="off" /></label>
-          <label className="adm-campo"><span>{t('equipo.invitar.usuario')}</span><input name="usuario" value={form.usuario} onChange={set('usuario')} autoComplete="off" /></label>
-          <label className="adm-campo"><span>{tOr('equipo.invitar.rol', 'Rol')}</span>
-            <select name="rol" value={form.rol} onChange={set('rol')}>{ROLES.map(r => <option key={r} value={r}>{rolEtiqueta(r, tOr)}</option>)}</select>
-          </label>
-          <label className="adm-campo"><span>{tOr('equipo.invitar.clave', 'Clave inicial')}</span>
-            <span className="eq-clave-fila">
-              <input name="clave" type="text" value={form.clave} onChange={set('clave')} autoComplete="new-password" />
-              <button type="button" className="ghost" onClick={() => setForm(f => ({ ...f, clave: generarClave() }))}>{tOr('equipo.generar', 'Generar')}</button>
-            </span>
-          </label>
-        </div>
-        <div className="adm-fila"><button type="submit" className="success">{tOr('equipo.invitar.enviar', 'Invitar al equipo')}</button></div>
-      </form>
+      {invita && (
+        <Ventana titulo={tOr('equipo.invitar.titulo', 'Invitar a una persona')} onCerrar={() => setInvita(false)}>
+          <form className="eq-invitar" onSubmit={invitar}>
+            <div className="eq-campos">
+              <label className="adm-campo"><span>{tOr('equipo.invitar.nombre', 'Nombre')}</span><input name="nombre" autoFocus value={form.nombre} onChange={set('nombre')} autoComplete="off" /></label>
+              <label className="adm-campo"><span>{t('equipo.invitar.usuario')}</span><input name="usuario" value={form.usuario} onChange={set('usuario')} autoComplete="off" /></label>
+              <label className="adm-campo"><span>{tOr('equipo.invitar.rol', 'Rol')}</span>
+                <select name="rol" value={form.rol} onChange={set('rol')}>{ROLES.map(r => <option key={r} value={r}>{rolEtiqueta(r, tOr)}</option>)}</select>
+              </label>
+              <label className="adm-campo"><span>{tOr('equipo.invitar.clave', 'Clave inicial')}</span>
+                <span className="eq-clave-fila">
+                  <input name="clave" type="text" value={form.clave} onChange={set('clave')} autoComplete="new-password" />
+                  <button type="button" className="ghost" onClick={() => setForm(f => ({ ...f, clave: generarClave() }))}>{tOr('equipo.generar', 'Generar')}</button>
+                </span>
+              </label>
+            </div>
+            <div className="adm-fila">
+              <button type="submit" className="success">{tOr('equipo.invitar.enviar', 'Invitar al equipo')}</button>
+              <button type="button" className="ghost" onClick={() => setInvita(false)}>{tOr('equipo.cancelar', 'Cancelar')}</button>
+            </div>
+            <p className="eq-ayuda">{t('equipo.demoNota')}</p>
+          </form>
+        </Ventana>
+      )}
     </section>
   )
 }

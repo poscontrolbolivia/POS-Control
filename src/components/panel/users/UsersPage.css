@@ -65,8 +65,8 @@
 .eq-clave-fila button{flex:0 0 auto}
 .eq-bloque .adm-campo .eq-clave-fila input{min-height:46px}
 
-.eq-invitar{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
-.eq-invitar-titulo{margin:0;font-size:1rem}
+/* El formulario de invitación vive dentro de la ventana (Ventana.jsx), así que ya no necesita filete propio. */
+.eq-invitar{display:flex;flex-direction:column;gap:10px;min-width:0}
 .eq-campos{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
 .eq-bloque .adm-campo select{min-height:46px;font-size:1rem;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 10px}
 

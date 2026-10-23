@@ -112,3 +112,4 @@
 
 /* Una línea que explica cada bloque de la cola (áreas, sacadas, devueltos). */
 .ck-ayuda{margin:0 0 8px;padding:7px 10px;background:var(--card-2);border:1px solid var(--line);border-radius:10px;color:var(--mut);font-size:.83rem;font-weight:600;line-height:1.35}
+.ck-linea { flex: 1 1 100%; font-size: 1.35rem; font-weight: 800; color: var(--ink); line-height: 1.25; overflow-wrap: anywhere; }

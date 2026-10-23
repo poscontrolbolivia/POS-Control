@@ -3,3 +3,8 @@ dist
 print-agent/simulado/
 public/agente.mjs
 public/instalar-agente.bat
+# Nunca deben subir: la clave del proyecto, el respaldo local y los paquetes.
+claves.txt
+*.local.json
+*.zip
+*.rar

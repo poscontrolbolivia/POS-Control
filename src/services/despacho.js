@@ -1,10 +1,22 @@
-import { gruposDeComanda, repartirPorGrupo, GRUPO_DIRECTA } from './printing.js'
+import { gruposDeComanda, repartirPorGrupo, areasDelItem, GRUPO_DIRECTA } from './printing.js'
 
 // Lógica de Despacho separada de la pantalla: lo que cuenta el badge rojo de cada pestaña y lo
 // que hay que entregar del mostrador. Está acá para poder probarla sin navegador.
 
 // Un ítem «enviado» es el que todavía falta sacar; «listo» ya salió y «pendiente» aún no es comanda.
 export const POR_SACAR = 'enviado'
+
+// Un plato que sale a cocina y barra a la vez se saca de un área y del área que falta sigue debiendo.
+// Como el `estado` del ítem es global (pasa a «listo» recién cuando salieron TODAS), el badge no puede
+// mirar el estado: mira qué áreas del ítem todavía no tienen salida. Si ya salió de todas, no cuenta.
+function porSacarPorArea(item, productos) {
+  const areas = areasDelItem(item, productos)
+  if (!areas) return [item]
+  const listas = item.areasListas || []
+  const quedan = areas.filter(x => !listas.includes(x))
+  if (quedan.length === areas.length) return [item]
+  return quedan.length ? [{ ...item, areas: quedan }] : []
+}
 
 // Contador por área: ítems que faltan sacar de cada grupo de comanda, en cuentas abiertas.
 // Se calcula sobre el store (en Supabase trae las cuentas del turno abierto), así los badges no
@@ -13,7 +25,7 @@ export function pendientesPorGrupo(cuentas, productos, config) {
   const out = {}
   gruposDeComanda(config).forEach(g => { out[g.id] = 0 })
   ;(cuentas || []).filter(c => c.estado !== 'cerrada').forEach(c => {
-    const vivos = (c.items || []).filter(i => i.estado === POR_SACAR)
+    const vivos = (c.items || []).filter(i => i.estado === POR_SACAR).flatMap(i => porSacarPorArea(i, productos || []))
     if (!vivos.length) return
     repartirPorGrupo(vivos, productos || [], config).forEach(({ grupo, items }) => {
       out[grupo.id] = (out[grupo.id] || 0) + items.length
@@ -30,7 +42,9 @@ export function mostradorPendientes(cuentas) {
     .filter(c => c.tipo === 'directa' && c.canal !== 'llevar')
     .map(c => {
       const en = c.cerradaEn || c.abiertaEn || null
-      const items = (c.items || []).filter(i => i.estado === POR_SACAR).map(i => ({
+      // Un plato de mostrador que también va a cocina puede estar servido en el área de entrega y
+      // seguir «enviado» en el estado global: ahí ya no queda nada que entregar.
+      const items = (c.items || []).filter(i => i.estado === POR_SACAR && !(i.areasListas || []).includes(GRUPO_DIRECTA)).map(i => ({
         id: i.id, nombre: i.nombre, qty: i.qty, nota: i.nota || '', estado: POR_SACAR,
         areas: i.areas || [], enviada_en: i.enviadoEn || en, listo_en: null,
       }))
@@ -51,7 +65,7 @@ export function badgeDirecta(cuentas = [], productos = [], config = {}) {
   const ids = new Set()
   mostradorPendientes(cuentas).forEach(f => (f.items || []).forEach(i => ids.add(i.id)))
   cuentas.filter(c => c.estado !== 'cerrada').forEach(c => {
-    const vivos = (c.items || []).filter(i => i.estado === POR_SACAR)
+    const vivos = (c.items || []).filter(i => i.estado === POR_SACAR).flatMap(i => porSacarPorArea(i, productos))
     if (!vivos.length) return
     repartirPorGrupo(vivos, productos, config).forEach(({ grupo, items }) => {
       if (grupo.id === GRUPO_DIRECTA) items.forEach(i => ids.add(i.id))

@@ -59,7 +59,8 @@ export default function SettingsPage({ rol, sesion }) {
   const idsRef = useRef([])
   const [abierto, setAbierto] = useState(() => leerAbierto())
   const alternar = id => setAbierto(v => (v === id ? null : id))
-  const props = id => ({ abierto: abierto === id, onToggle: () => alternar(id) })
+  // Con un bloque abierto, los demás desaparecen (ni arriba ni abajo) hasta minimizarlo.
+  const props = id => ({ abierto: abierto === id, oculto: Boolean(abierto) && abierto !== id, onToggle: () => alternar(id) })
   useEffect(() => {
     try {
       localStorage.setItem(CLAVE_ABIERTO, abierto ?? '')
@@ -254,7 +255,9 @@ export default function SettingsPage({ rol, sesion }) {
       </Bloque>
 
       {(sesion ? sesion.rol === 'admin' : rol === 'admin') && (
-        <UsersPage rol={rol} sesion={sesion} abierto={abierto === 'equipo'} onToggleAbierto={() => alternar('equipo')} />
+        <Bloque id="equipo" icono="👥" titulo={tOr('equipo.titulo', 'Equipo')} {...props('equipo')} cuerpoClase="cfg-cuerpo-plano">
+          <UsersPage rol={rol} sesion={sesion} abierto onToggleAbierto={() => alternar('equipo')} />
+        </Bloque>
       )}
 
       <Bloque id="cierres" icono="💰" titulo={t('cierres.titulo')} {...props('cierres')}>
@@ -273,7 +276,8 @@ export default function SettingsPage({ rol, sesion }) {
 // Bloque de Configuración (nivel 1): es el MENÚ y el contenido a la vez — la misma píldora
 // siempre, abierta o cerrada, y el abierto se queda pegado bajo la barra mientras se baja.
 // El acordeón es exclusivo: quién está abierto vive en SettingsPage, así que abrir uno cierra los demás.
-function Bloque({ id, icono, titulo, chip = null, abierto = false, onToggle, cuerpoClase = '', children }) {
+function Bloque({ id, icono, titulo, chip = null, abierto = false, oculto = false, onToggle, cuerpoClase = '', children }) {
+  if (oculto) return null
   return (
     <section className={'cfg-bloque' + (abierto ? ' abierto' : '')}>
       <button type="button" className="cfg-cab" onClick={onToggle} aria-expanded={abierto} aria-controls={'cfg-cuerpo-' + id}>

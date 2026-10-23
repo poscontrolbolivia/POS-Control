@@ -17,7 +17,7 @@ const hoyISO = () => {
 
 const RANGO_ESTADO = { vencida: 0, pendiente: 1, pagada: 2 }
 
-export default function CuentasTab({ filtroProveedor, onFiltro }) {
+export default function CuentasTab({ filtroProveedor, onFiltro, alta = false, onAltaDone }) {
   const { s, d } = useStore()
   const { tOr } = useIdioma()
   const { money } = useMoneda()
@@ -36,8 +36,15 @@ export default function CuentasTab({ filtroProveedor, onFiltro }) {
   const [editErr, setEditErr] = useState('')
   const [confirmaBorrar, setConfirmaBorrar] = useState(null)
   const timerPregunta = useRef(null)
+  const provSelRef = useRef(null)
 
   useEffect(() => () => clearTimeout(timerPregunta.current), [])
+
+  // La alta de deuda puede pedirse desde la barra de pestañas (esta pestaña arranca oculta): al
+  // llegar la señal se enfoca el selector de proveedor para que el formulario quede listo a mano.
+  useEffect(() => {
+    if (alta) { provSelRef.current?.focus(); onAltaDone?.() }
+  }, [alta])
 
   const nombreProv = id => provPorId.get(id)?.nombre || tOr('inventario.provEliminado', 'Proveedor eliminado')
   const estadoDeuda = de => {
@@ -215,7 +222,7 @@ export default function CuentasTab({ filtroProveedor, onFiltro }) {
         <div className="inv-campos">
           <label className="adm-campo">
             <span>{tOr('inventario.provNombre', 'Proveedor')}</span>
-            <select name="proveedor-id" value={form.proveedorId} onChange={setCampo('proveedorId')}>
+            <select name="proveedor-id" ref={provSelRef} value={form.proveedorId} onChange={setCampo('proveedorId')}>
               <option value="">{tOr('inventario.elegirProveedor', 'Elige un proveedor')}</option>
               {activos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
             </select>

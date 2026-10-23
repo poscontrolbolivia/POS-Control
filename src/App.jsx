@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useStore, leerSesionSup, guardarSesionSup } from './context/StoreContext.jsx'
 import { USAR_SUPABASE } from './services/config.js'
-import { sb, fijarEmpresa, fijarEmpresaSesion } from './services/supabaseClient.js'
+import { sb, fijarEmpresa, fijarEmpresaSesion, rpc } from './services/supabaseClient.js'
 import { salirDeEmpresa } from './services/super/superApi.js'
 import { iniciarGuardiaSesion } from './services/session.js'
 import PwaBanners from './components/PwaBanners.jsx'
@@ -60,9 +60,14 @@ function Rutas() {
     window.location.reload()
   }
 
-  const salir = () => {
+  const salir = async () => {
     if (sesion?.operando) salirDeEmpresa().catch(() => {  })
     if (sesion?.supabase) {
+      // La salida se anota ANTES de tirar el token y de limpiar la empresa: sin sesión no hay quién
+      // firme la fila y el turno quedaría abierto para siempre en la bitácora.
+      try {
+        await Promise.race([rpc('registrar_salida', {}, { conEmpresa: false }), new Promise(r => setTimeout(r, 1200))])
+      } catch {  }
       guardarSesionSup(null)
       fijarEmpresa(null)
       try { sb?.auth.signOut() } catch {  }

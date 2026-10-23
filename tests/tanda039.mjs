@@ -1,10 +1,12 @@
 // La tanda v0.39 también se mide en el fuente: hay cosas que un test de lógica no puede ver
 // (qué pantalla renderiza qué, o un useMemo que cae después de un return y revienta en runtime).
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 
 let mal = 0
 const ok = (n, c) => { if (!c) { mal++; console.log('✗', n) } else console.log('✓', n) }
 const R = p => readFileSync(new URL(p, import.meta.url), 'utf8')
+const buscar = dir => readdirSync(new URL(dir, import.meta.url), { withFileTypes: true })
+  .flatMap(e => e.isDirectory() ? buscar(dir + e.name + '/') : /\.jsx$/.test(e.name) ? [dir + e.name] : [])
 
 const cocina = R('../src/components/panel/kitchen/KitchenPage.jsx')
 const cocinaCss = R('../src/components/panel/kitchen/KitchenPage.css')
@@ -25,7 +27,9 @@ ok('la pestaña pinta el badge con .ck-n', /badge\(v\) > 0 && <span className="c
 ok('el badge se lee también con lector de pantalla', /aria-label=\{`.*badge\(v\)/.test(cocina))
 ok('.ck-n es rojo de peligro, no verde', /\.ck-n\s*\{[^}]*background: var\(--danger\)/.test(cocinaCss))
 ok('ya no quedan las píldoras de canal con emoji', !/ck-canal|🥡|🍽|🛒\s*<\/span>/.test(cocina.replace(/icono = a =>[^\n]*/g, '')))
-ok('la comanda en pantalla usa camposComanda', /camposComanda\(\{/.test(cocina))
+// La pantalla ya no arma camposComanda (eso es del papel): pinta salón, mesero y canal desde datosCuenta,
+// que lee la cola del servidor porque un equipo de Despacho quieto no tiene las cuentas nuevas en su store.
+ok('la comanda en pantalla usa datosCuenta', /const \{ salon, mesero \} = datosCuenta\(c\)/.test(cocina) && /c\.canal === 'llevar' \? 'llevar'/.test(cocina))
 // Hooks después de un return temprano = crash en cuanto el rol no tiene permiso.
 const iReturn = cocina.indexOf('if (!permitido) return <div')
 const iHooks = [cocina.indexOf('const pendientes = useMemo'), cocina.indexOf('const porEntregar = useMemo')]
@@ -36,6 +40,24 @@ ok('venta directa importa la impresora de comandas', /import \{[^}]*imprimirComa
 ok('envía la comanda antes de cobrar', quick.indexOf("d({ t: 'enviar'") > 0 && quick.indexOf("d({ t: 'enviar'") < quick.indexOf("d({ t: 'cobrar'"))
 ok('el checkbox de comanda existe y ayuda', quick.includes("name=\"comanda\"") && quick.includes('venta.comandaCheckbox') && quick.includes('venta.comandaAyuda'))
 ok('esa clave está en los tres idiomas', [es, en, pt].every(j => typeof j['venta.comandaCheckbox'] === 'string' && j['venta.comandaCheckbox'].length > 3))
+
+// ── Venta directa: la píldora del grupo no corta la palabra, «Todos» abre la carta y entra deslizando ──
+// El recorte no era del CSS del tab: button trae min-width:40px global, que anula el min-width:auto
+// de los items flex y deja que la píldora se encoja por debajo de su propio texto.
+const quickCss = R('../src/components/panel/quicksale/QuickSalePage.css')
+ok('el mostrador arranca en Todos', /const TODOS = '__todos'/.test(quick) && /useState\(TODOS\)/.test(quick))
+ok('Todos trae toda la carta', /secActiva === TODOS \|\| p\.seccionId === secActiva/.test(quick))
+ok('«Todos» es la primera píldora', quick.indexOf("tOr('venta.todos'") > 0 && quick.indexOf("tOr('venta.todos'") < quick.indexOf('secciones.map(x =>'))
+ok('la píldora del grupo no se encoge bajo su texto', /\.vd-tab\{[^}]*flex:0 0 auto/.test(quickCss))
+ok('la fila de grupos sigue deslizando con barra', /\.vd-tabs\{[^}]*overflow-x:auto/.test(quickCss))
+ok('la carta entra deslizando a la izquierda con su barra', /\.vd-grid\{[^}]*overflow-x:auto/.test(quickCss) && /grid-auto-flow:column/.test(quickCss))
+// 3 filas también en el teléfono: fue un pedido expreso, la media query de PC que ponía 2 ya no existe.
+ok('la tira entra en 3 filas en cualquier pantalla', /grid-template-rows:repeat\(var\(--vd-filas,3\)/.test(quickCss) && !/--vd-filas:3/.test(quickCss))
+ok('la tira vuelve a empezar al cambiar de grupo', /tira\.current\.scrollLeft = 0 \}, \[secActiva\]\)/.test(quick) && quick.includes('className="vd-grid" ref={tira}'))
+// Un hook después del return temprano de permiso revienta en cuanto el rol no puede vender.
+const qReturn = quick.indexOf('if (!puede(rol, \'venta_directa\'))')
+ok('el useRef de la tira vive antes del return de permiso', qReturn > 0 && quick.indexOf('const tira = useRef(null)') < qReturn)
+ok('venta.todos y venta.sinProductosTodos están en los tres idiomas', ['venta.todos', 'venta.sinProductosTodos'].every(k => [es, en, pt].every(j => typeof j[k] === 'string' && j[k].length > 0)))
 
 // ── El papel: texto plano, sin adornos centrados ──
 ok('la comanda del ticket usa lineasComanda', /lineasComanda\(\{/.test(ticket))
@@ -62,6 +84,21 @@ ok('avisa si el salón tiene mesas con cuenta abierta', hall.includes('salon.zon
 const sinComentarios = src => src.replace(/\/\/[^\n]*/g, '')
 ;[['cocina', cocina], ['quick', quick], ['ticket', ticket], ['settings', settings], ['hall', hall]].forEach(([n, src]) =>
   ok(`${n}: sin confirm()/alert() nativos`, !/(^|[^.\w])(confirm|alert)\s*\(/.test(sinComentarios(src))))
+
+// ── i18n dinámico: tOr('familia.' + variable, textoEnEspañol) se cae a español si la clave no existe ──
+const familias = [
+  ['alertas.tipo.', ['todas', 'general', 'cocina', 'cobro', 'inventario', 'mesa']],
+  ['paso.', ['prep', 'parcial', 'listo', 'cuenta', 'pagada']],
+]
+for (const [prefijo, ids] of familias) {
+  ok(`todas las ${prefijo}* están en es/en/pt`, ids.every(i => [es, en, pt].every(i18n => typeof i18n[prefijo + i] === 'string' && i18n[prefijo + i].length > 0)))
+}
+ok('las horas relativas de Alertas existen y llevan {n}', ['haceMin', 'haceHoras', 'haceDias', 'pedidoN'].every(k => [es, en, pt].every(i18n => (i18n['alertas.' + k] || '').includes('{n}')))
+  && typeof es['alertas.laLevanto'] === 'string' && es['alertas.laLevanto'].includes('{quien}'))
+
+// ── Marca de color: la acción es verde; el cyan «teal» ya no pinta botones en ninguna pantalla ──
+const conTeal = buscar('../src/components/').concat(buscar('../src/pages/')).filter(d => /teal/.test(R(d)))
+ok('ningún botón teal en toda la app (verde = acción, azul = información)', conTeal.length === 0)
 
 console.log(mal ? `\n${mal} fallo(s)` : '\ntodo OK')
 process.exit(mal ? 1 : 0)

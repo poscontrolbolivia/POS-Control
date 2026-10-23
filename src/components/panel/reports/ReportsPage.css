@@ -36,6 +36,55 @@
 .rp-btn{min-height:34px;padding:5px 12px;font-size:.82rem}
 .rp-saldo{color:var(--danger-ink)}
 
+/* ── Mapa de ventas (mesas y zonas como visualización clicable) ───────────────
+   El calor usa --verde (verde de marca = dinero). --ac queda para estado/info, como en el Salón. */
+.rp-mapa{gap:10px}
+.rp-mapa-cab{flex-wrap:wrap}
+.rp-vistas{display:inline-flex;gap:6px;flex:0 0 auto}
+.rp-mapa .tab{min-height:38px;padding:5px 12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:.85rem;white-space:nowrap}
+.rp-zonas{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+
+.rp-filtro{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--verde-bg);border:1.5px solid var(--verde-bd);
+  border-radius:14px;padding:8px 12px;font-size:.92rem}
+.rp-filtro b{color:var(--verde-txt)}
+.rp-filtro-x{flex:0 0 auto;width:38px;height:38px;border-radius:50%;border:1.5px solid var(--line-fuerte);
+  background:var(--card);color:var(--ink);font-weight:700;cursor:pointer}
+
+.rp-lienzo{max-height:min(56vh,460px);width:100%;margin:0 auto;touch-action:pan-x pan-y}
+.rp-mesa{cursor:pointer;font:inherit;padding:2px 4px;gap:1px;border-width:3px}
+.rp-mesa .nombre{font-weight:700;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.rp-mesa .rp-mesa-cifra{font-size:.85em;line-height:1.15;font-weight:700;font-variant-numeric:tabular-nums}
+.rp-mesa .rp-mesa-pax{font-size:.75em;line-height:1.1;opacity:.85}
+.rp-mesa .etiqueta-zona{font-size:.68em;line-height:1.1;background:rgba(255,255,255,.5);border-radius:999px;padding:0 6px;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+[data-theme="night"] .rp-mesa .etiqueta-zona{background:rgba(0,0,0,.3)}
+
+.rp-mesa-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.rp-mesa-card{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;min-width:0;padding:10px 12px;
+  border-radius:14px;border:2px solid var(--line-fuerte);text-align:left;font:inherit;cursor:pointer;overflow-wrap:anywhere}
+.rp-mesa-card b{font-size:1.02rem;font-weight:700;line-height:1.2}
+.rp-mesa-card .rp-mesa-zona{font-size:.72rem;opacity:.75;min-height:0}
+.rp-mesa-card .rp-mesa-zona:empty{display:none}
+.rp-mesa-card .rp-mesa-monto{font-weight:700;font-variant-numeric:tabular-nums}
+.rp-mesa-card small{font-size:.78rem;opacity:.9}
+.rp-mesa-card.sel,.rp-mapa .rp-mesa.sel{box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--verde)}
+
+.rp-calor{display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--mut);font-weight:600}
+.rp-calor-barra{flex:1;min-width:60px;height:12px;border-radius:999px;border:1px solid var(--line);
+  background:linear-gradient(90deg,color-mix(in srgb,var(--verde) 6%,var(--card)),var(--verde))}
+.rp-calor b{font-variant-numeric:tabular-nums;color:var(--ink)}
+
+.rp-fuera-chips{display:flex;flex-wrap:wrap;gap:8px}
+.rp-fuera-chip{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:5px 14px;border-radius:999px;
+  border:1.5px solid var(--line-fuerte);background:var(--card);color:var(--ink);font:inherit;font-size:.82rem;font-weight:650;cursor:pointer}
+.rp-fuera-chip small{opacity:.75;font-weight:700}
+.rp-fuera-chip.on{border-color:transparent;color:var(--on-btn);background:var(--gloss),var(--verde)}
+
+@media (max-width:768px){
+  .rp-mapa .txt,.rp-mesa .rp-mesa-pax{display:none}
+  .rp-lienzo{max-height:none}
+}
+
 @media (max-width:640px){
   .rp-cab{flex-direction:column}
   .rp-head{width:100%}

@@ -55,3 +55,7 @@
 @media (max-width:640px){.topbar{gap:6px;padding:8px 10px}
 .topbar-user{display:none}
 .topbar-mods{order:3;width:100%;justify-content:flex-start}}
+/* Móvil: el menú de módulos se despliega SOBRE el contenido (no agranda la barra fija). */
+@media(max-width:850px){
+  .topbar-mods:not(.cerrado){position:absolute;top:100%;left:0;right:0;z-index:151;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--line);box-shadow:var(--sh-2);max-height:calc(100dvh - var(--topbar-h,56px));overflow-y:auto}
+}

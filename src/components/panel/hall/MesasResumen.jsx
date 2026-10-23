@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { totalFinal, pagadoCuenta, saldoCuenta } from '../../../context/StoreContext.jsx'
 import { round2 } from '../../../services/format.js'
 import { useMoneda } from '../../../services/money.js'
@@ -46,6 +46,19 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
   const zonaNombre = id => zonasOrden.find(z => z.id === id)?.nombre ?? t('salon.sinZona')
 
   const abre = m => onOpen(m)
+  // Caja: si la mesa está dividida (2a, 2b), cada cuenta se cobra sola desde la misma tarjeta. Sin
+  // estos chips el cajero tenía que entrar a la mesa y recién ahí adivinar cuál subcuenta era.
+  const chips = (m, cs, estilo) => (cs.length > 1 ? (
+    <div className="mr-subchips" style={estilo} role="group" aria-label={`${m.nombre} · ${tOr('caja.submesas', 'Cuentas de esta mesa')}`}>
+      {cs.map(x => (
+        <button type="button" key={x.id} className={'mr-chip ' + estadoMesa(x)} onClick={() => onOpen(m, x)}
+          title={tOr('caja.cobrarEsta', 'Cobrar esta cuenta')}>
+          <b>{m.nombre}{x.etiqueta || ''}</b>
+          <span>{money(saldoCuenta(x))}</span>
+        </button>
+      ))}
+    </div>
+  ) : null)
   const leyenda = [['libre', t('salon.libre')], ['ocupada', t('salon.ocupada')], ['enviada', t('salon.enviada')], ['porcobrar', t('salon.porcobrar')]]
 
   return (
@@ -87,13 +100,16 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
             const capT = capacidadCuenta(c, mesas) || (m.cap || 0)
             const com = c ? (c.comensales ?? 0) : null
             return (
-              <button type="button" key={m.id} className={'mr-item ' + est} onClick={() => abre(m)}>
-                <b className="mr-nombre">{m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : cs.length > 1 ? ` ✂×${cs.length}` : ''}</b>
-                <span className="mr-est">{t('salon.' + est)}</span>
-                {c && <small className="mr-importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
-                {c && com !== null && <small className={'mr-quien' + (com > capT ? ' alerta' : '')}>👥 {com}/{capT || m.cap || 0}</small>}
-                {activo === TODAS && <span className="mr-zona">{zonaNombre(m.zona)}</span>}
-              </button>
+              <div className="mr-fila" key={m.id}>
+                <button type="button" className={'mr-item ' + est} onClick={() => abre(m)}>
+                  <b className="mr-nombre">{m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : cs.length > 1 ? ` ✂×${cs.length}` : ''}</b>
+                  <span className="mr-est">{t('salon.' + est)}</span>
+                  {c && <small className="mr-importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
+                  {c && com !== null && <small className={'mr-quien' + (com > capT ? ' alerta' : '')}>👥 {com}/{capT || m.cap || 0}</small>}
+                  {activo === TODAS && <span className="mr-zona">{zonaNombre(m.zona)}</span>}
+                </button>
+                {chips(m, cs)}
+              </div>
             )
           })}
         </div>
@@ -107,19 +123,22 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
             const capT = capacidadCuenta(c, mesas) || (m.cap || 0)
             const com = c ? (c.comensales ?? 0) : null
             return (
-              <button
-                type="button"
-                key={m.id}
-                className={'mesa mr-mesa ' + m.forma + ' ' + est}
-                onClick={() => abre(m)}
-                title={tOr('caja.mesasAbrir', 'Abrir en el salón')}
-                style={{ left: `${(m.x / W) * 100}%`, top: `${(m.y / H) * 100}%`, width: `${(m.w / W) * 100}%`, height: `${(m.h / H) * 100}%` }}
-              >
-                <b className="nombre">{m.nombre}</b>
-                <span className={'pax' + (com !== null && com > capT ? ' alerta' : '')}>👥 {c ? `${com}/${capT}` : m.cap}</span>
-                {c && <small className="importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
-                {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
-              </button>
+              <Fragment key={m.id}>
+                <button
+                  type="button"
+                  className={'mesa mr-mesa ' + m.forma + ' ' + est}
+                  onClick={() => abre(m)}
+                  title={tOr('caja.mesasAbrir', 'Abrir en el salón')}
+                  style={{ left: `${(m.x / W) * 100}%`, top: `${(m.y / H) * 100}%`, width: `${(m.w / W) * 100}%`, height: `${(m.h / H) * 100}%` }}
+                >
+                  <b className="nombre">{m.nombre}</b>
+                  <span className={'pax' + (com !== null && com > capT ? ' alerta' : '')}>👥 {c ? `${com}/${capT}` : m.cap}</span>
+                  {c && <small className="importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
+                  {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
+                </button>
+                {/* Las cuentas divididas se cobran desde abajo del cuadro, pegadas a su mesa. */}
+                {chips(m, cs, { left: `${(m.x / W) * 100}%`, top: `${((m.y + m.h) / H) * 100}%`, width: `${(m.w / W) * 100}%` })}
+              </Fragment>
             )
           })}
         </div>

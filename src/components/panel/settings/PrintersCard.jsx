@@ -11,26 +11,15 @@ import '../../../styles/admin.css'
 // así el estado del agente y la salida de cada grupo aparecen UNA sola vez.
 const StationPage = lazy(() => import('../station/StationPage.jsx'))
 
-const abiertoDeDefecto = id => id === 'grupos'
-function leerSub(id) {
-  try {
-    const v = localStorage.getItem('pos-imp-' + id)
-    return v === null ? abiertoDeDefecto(id) : v === '1'
-  } catch { return abiertoDeDefecto(id) }
-}
 
 // Submenú minimizable propio de Impresoras: misma forma que los bloques de Configuración
 // (píldora con icono + nombre completo + flecha a la derecha) y una línea de explicación.
-function Sub({ id, icono, titulo, ayuda, chip = null, children }) {
-  const [abierto, setAbierto] = useState(() => leerSub(id))
-  const alternar = () => setAbierto(v => {
-    const n = !v
-    try { localStorage.setItem('pos-imp-' + id, n ? '1' : '0') } catch { /* noop */ }
-    return n
-  })
+// Un solo submenú visible: el padre (PrintersCard) sabe cuál está abierto; los demás se ocultan hasta minimizarlo.
+function Sub({ id, icono, titulo, ayuda, chip = null, abierto = false, oculto = false, onToggle, children }) {
+  if (oculto) return null
   return (
     <section className={'imp-sub' + (abierto ? ' abierto' : '')}>
-      <button type="button" className="imp-sub-cab" aria-expanded={abierto} aria-controls={'imp-sub-cuerpo-' + id} onClick={alternar}>
+      <button type="button" className="imp-sub-cab" aria-expanded={abierto} aria-controls={'imp-sub-cuerpo-' + id} onClick={onToggle}>
         <span className="imp-sub-icono" aria-hidden="true">{icono}</span>
         <span className="imp-sub-titulo">{titulo}</span>
         {chip}
@@ -54,6 +43,10 @@ export default function PrintersCard({ rol, sesion }) {
   const [, refrescar] = useReducer(x => x + 1, 0)
   const [nuevo, setNuevo] = useState(null)
   const [conf, setConf] = useState(null)
+  // Se entra con «Grupos de comanda» abierto: si todos los submenús arrancan cerrados, el botón de ＋ grupo
+  // queda invisible y parece que no se puede crear nada.
+  const [sub, setSub] = useState('grupos')
+  const sp = id => ({ abierto: sub === id, oculto: Boolean(sub) && sub !== id, onToggle: () => { setConf(null); setNuevo(null); setSub(v => (v === id ? null : id)) } })
   const soportado = soporteSerial()
 
   const claveGrupos = grupos.map(g => `${g.id}:${g.baud}`).join('|')
@@ -131,16 +124,29 @@ export default function PrintersCard({ rol, sesion }) {
         </div>
       )}
 
+      {/* Alta siempre a la vista: sin esta barra había que adivinar qué submenú escondía el botón de crear. */}
+      <div className="adm-fila imp-alta-barra">
+        <button type="button" className="success" onClick={() => { setConf(null); setSub('grupos'); setNuevo('') }}>
+          ＋ {tOr('impresoras.altaGrupo', 'Grupo de comanda')}
+        </button>
+        <button type="button" className="primary" onClick={() => { setConf(null); setNuevo(null); setSub('donde') }}>
+          ＋ {tOr('impresoras.altaImpresora', 'Conectar impresora')}
+        </button>
+        <span className="sp" />
+        <span className="imp-dato">{tOr('impresoras.altaAyuda', 'Primero crea el grupo (la salida); después conéctale la impresora.')}</span>
+      </div>
+
       {/* 1) Qué salidas existen */}
       <Sub
         id="grupos"
+        {...sp('grupos')}
         icono="🧾"
         titulo={tOr('impresoras.gruposTitulo', 'Grupos de comanda')}
         ayuda={tOr('impresoras.subGruposAyuda', 'Cada grupo es una salida aparte (cocina, barra, ticket de pago). Dale nombre y escoge el papel que usa.')}
         chip={<span className="adm-chip">{grupos.length} {grupos.length === 1 ? tOr('impresoras.unGrupo', 'grupo') : tOr('impresoras.variosGrupos', 'grupos')}</span>}
       >
         <div className="adm-fila imp-sub-acciones">
-          <button type="button" className="teal" onClick={() => setNuevo(nuevo === null ? '' : null)}>＋ {t('impresoras.nuevoGrupo')}</button>
+          <button type="button" className="primary" onClick={() => setNuevo(nuevo === null ? '' : null)}>＋ {t('impresoras.nuevoGrupo')}</button>
         </div>
         {nuevo !== null && (
           <form className="adm-fila adm-nuevo" onSubmit={e => { e.preventDefault(); crearGrupo() }}>
@@ -198,6 +204,7 @@ export default function PrintersCard({ rol, sesion }) {
       {/* 2) Qué cae en cada grupo */}
       <Sub
         id="contenido"
+        {...sp('contenido')}
         icono="🍽️"
         titulo={tOr('impresoras.subContenido', 'Qué se imprime en cada grupo')}
         ayuda={tOr('impresoras.subContenidoAyuda', 'Acá mandas secciones completas. Cada plato suelto se escoge en Ítems (área del producto), no dos veces acá.')}
@@ -232,6 +239,7 @@ export default function PrintersCard({ rol, sesion }) {
       {/* 3) Copias, pie de página y corte */}
       <Sub
         id="papel"
+        {...sp('papel')}
         icono="✂️"
         titulo={tOr('impresoras.subPapel', 'Cómo sale el papel')}
         ayuda={tOr('impresoras.subPapelAyuda', 'Copias, texto del pie y corte de cada grupo.')}
@@ -263,6 +271,7 @@ export default function PrintersCard({ rol, sesion }) {
       {/* 4) Esta PC o la estación (única salida del agente y de cada grupo) */}
       <Sub
         id="donde"
+        {...sp('donde')}
         icono="🖥️"
         titulo={t('impresoras.dondeLabel')}
         ayuda={tOr('impresoras.subDondeAyuda', 'Escoge si imprimen los equipos de aquí o la PC de la estación, y revisa la salida de cada grupo.')}
@@ -294,6 +303,7 @@ export default function PrintersCard({ rol, sesion }) {
       {/* 5) Sonido */}
       <Sub
         id="sonido"
+        {...sp('sonido')}
         icono="🔔"
         titulo={tOr('impresoras.subSonido', 'Sonido al imprimir')}
         ayuda={tOr('impresoras.subSonidoAyuda', 'Un pitido en la impresora para que nadie se quede con la comanda sin ver.')}

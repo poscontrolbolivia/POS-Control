@@ -1,0 +1,9 @@
+/* Ventana en primer plano. align-items:flex-start + margin:auto: se centra cuando cabe y, cuando no,
+   deja ver la parte de arriba (con align-items:center el título quedaba cortado fuera de la pantalla). */
+.mn-overlay{position:fixed;inset:0;z-index:1000;background:rgba(10,18,30,.62);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;overscroll-behavior:contain}
+.mn-ventana{width:100%;max-width:560px;max-height:calc(100dvh - 32px);margin:auto;overflow-y:auto;background:var(--card);color:var(--ink);border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.45);border:1.5px solid var(--line-fuerte,var(--line))}
+.mn-ventana-tit{margin:0 0 12px;font-size:1.2rem}
+@media (max-width:640px){
+  .mn-overlay{padding:0;align-items:flex-end}
+  .mn-ventana{margin:0;max-width:none;max-height:92dvh;border-radius:20px 20px 0 0;padding:16px 14px}
+}

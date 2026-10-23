@@ -57,6 +57,11 @@
 .pm-mas-menu button.peligro{color:var(--rojo-txt)}
 .pm-mas-menu button.peligro:hover:not(:disabled){background:var(--rojo-bg)}
 .pm-subcuentas{gap:6px;flex-wrap:wrap}
+/* Partir un plato dentro del propio renglón al mover: el − / + vive sobre la cantidad, no en un campo aparte. */
+.qty-partir{flex-wrap:nowrap}
+.qty-partir b{min-width:3rem;text-align:center;font-variant-numeric:tabular-nums}
+.qty-partir b small{opacity:.65;font-weight:600}
+.pm-mover-ayuda{margin:0 0 8px;color:var(--mut);font-size:.85rem}
 .pm-modo{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:8px 12px;margin:6px 0;border:1px dashed var(--ac);border-radius:12px;background:var(--card);font-size:.9rem}
 .pm-opciones{display:flex;flex-wrap:wrap;gap:8px}
 .pm-previa-fondo{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45)}
@@ -75,7 +80,8 @@
 .prod small.prod-agotado{color:var(--porcobrar-bd);font-weight:750}
 .pm-sugerida{opacity:.7;font-style:italic;font-size:.92rem}
 /* «Total a pagar»: el número más grande y en negrita de todo el bloque de totales. */
-.pm-total{font-size:1.9rem;font-weight:800;margin:12px 0}
+.pm-total{font-size:1.35rem;font-weight:800;margin:12px 0;gap:8px}
+.pm-total span{min-width:0}
 .pm-total span{font-weight:800}
 .pm-total b{font-weight:800}
 /* «Total a pagar con propina»: línea normal/discreta, nunca más grande que el Total. */
@@ -154,3 +160,28 @@
 .pm-listas{display:flex;flex-wrap:wrap;gap:6px}
 .pm-listas .tab.ok{border-color:var(--verde-bd)}
 .pm-elegido{color:var(--mut);font-size:.8rem;font-weight:650;overflow-wrap:anywhere}
+
+/* Avance de la cuenta: ✓ verde = ya pasó · círculo grande de color = en el que está · gris = falta. */
+.pm-pasos{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin:0;padding:8px 4px 6px;list-style:none;gap:0;
+  background:var(--card-2);border:1px solid var(--line);border-radius:14px;flex:1 0 100%;order:5}
+.pm-paso{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;padding:0;border:0;border-radius:0;
+  background:transparent;box-shadow:none;opacity:1;font-size:.72rem;font-weight:650;color:var(--mut);text-align:center;line-height:1.1}
+.pm-paso span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pm-paso i{position:relative;z-index:1;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;font-style:normal;font-weight:800;
+  font-size:.8rem;background:var(--card);border:2px solid var(--line-fuerte);color:var(--mut)}
+.pm-paso:not(:first-child)::before{content:"";position:absolute;top:12px;right:50%;width:100%;height:3px;background:var(--line-fuerte)}
+.pm-paso.hecho{color:var(--ok-ink)}
+.pm-paso.hecho i{background:var(--ok);border-color:var(--ok);color:#fff}
+.pm-paso.hecho::before,.pm-paso.actual::before{background:var(--ok)}
+.pm-paso.actual{color:var(--ink);font-weight:800}
+.pm-paso.actual i{background:var(--ac);border-color:var(--ac);color:var(--on-btn);transform:scale(1.18);box-shadow:0 0 0 4px color-mix(in srgb,var(--ac) 28%,transparent)}
+.pm-paso.actual[data-paso="listo"] i,.pm-paso.actual[data-paso="pagada"] i{background:var(--ok);border-color:var(--ok);color:#fff;box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 28%,transparent)}
+.pm-paso.actual[data-paso="cuenta"] i{background:var(--btn-yellow);border-color:var(--btn-yellow);color:var(--on-warning);box-shadow:0 0 0 4px color-mix(in srgb,var(--btn-yellow) 35%,transparent)}
+.pm-paso.futuro{opacity:.75}
+
+/* Limpia los restos de la píldora anterior del avance (fondo/opacidad) para que solo mande el círculo. */
+.pm-pasos > .pm-paso,.pm-pasos > .pm-paso.hecho,.pm-pasos > .pm-paso.actual{background:transparent;border:0;box-shadow:none;border-radius:0;padding:0;opacity:1}
+.pm-pasos > .pm-paso.futuro{opacity:.8}
+/* Con 100+ productos: el único scroll es el del recuadro de 9; la carta en sí no scrollea por dentro. */
+.pm-carta{max-height:none;overflow:visible}
+.pm-productos{overscroll-behavior:contain;scrollbar-width:thin}

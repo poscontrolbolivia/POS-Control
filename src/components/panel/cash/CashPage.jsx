@@ -5,6 +5,7 @@ import { MONEDA } from '../../../services/config'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { imprimirCuenta } from '../../printing/Ticket.jsx'
 import MesasResumen from '../hall/MesasResumen.jsx'
+import OrderPanel from '../order/OrderPanel.jsx'
 import { VerComprobante } from '../pago/ComprobanteQr.jsx'
 import '../pago/ComprobanteQr.css'
 import { sb } from '../../../services/supabaseClient.js'
@@ -88,10 +89,15 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
   const [aviso, setAviso] = useState('')
   const avisoTimer = useRef(null)
 
-  // Tocar una mesa en Caja lleva al Salón con ESA cuenta en modo cobro (sin la carta del mesero).
-  const irSalon = mesa => { if (mesa?.id && onAbrirMesa) onAbrirMesa({ mesaId: mesa.id, desde: 'caja' }); else window.location.hash = '#salon' }
-  // Un pedido para llevar no tiene mesa: se abre su cuenta directa, acá es donde se cobra.
-  const irLlevar = c => { if (c?.id && onAbrirMesa) onAbrirMesa({ cuentaId: c.id, desde: 'caja' }); else window.location.hash = '#salon' }
+  // Tocar una mesa o un pedido para llevar abre su cuenta en modo cobro AQUÍ MISMO, dentro de Caja:
+  // al cobrar o volver, el cajero sigue en Caja sin pasar por el Salón.
+  const [cobrando, setCobrando] = useState(null)
+  const irSalon = (mesa, subcuenta) => { if (mesa?.id) setCobrando({ mesaId: mesa.id, subId: subcuenta?.id }); else window.location.hash = '#salon' }
+  const irLlevar = c => { if (c?.id) setCobrando({ cuentaId: c.id }); else window.location.hash = '#salon' }
+  const mesaCobro = cobrando?.mesaId ? s.mesas.find(x => x.id === cobrando.mesaId) : undefined
+  const cuentaCobro = cobrando?.cuentaId ? s.cuentas.find(x => x.id === cobrando.cuentaId) : undefined
+  // Tocar el chip de «2b» en la lista de mesas abre esa cuenta ya seleccionada, no la primera de la mesa.
+  const subCobro = cobrando?.subId && s.cuentas.some(x => x.id === cobrando.subId && x.estado !== 'cerrada') ? cobrando.subId : undefined
 
   const avisar = msg => { setAviso(msg); clearTimeout(avisoTimer.current); avisoTimer.current = setTimeout(() => setAviso(''), 6000) }
   useEffect(() => () => clearTimeout(avisoTimer.current), [])
@@ -218,6 +224,11 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
         <p className="caja-nota">{t('caja.otrosTurnos', { lista: s.caja.otros.map(x => `${x.abiertoPor} (${new Date(x.abiertoEn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`).join(', ') })}</p>
       )}
       {paneles}
+      {cobrando && (
+        <OrderPanel rol={rol} sesion={sesion} mesa={mesaCobro} cuenta={cuentaCobro} cuentaInicial={subCobro} cobro
+          onEdicion={() => { const f = cobrando; setCobrando(null); onAbrirMesa?.(f) }}
+          onClose={() => setCobrando(null)} />
+      )}
       <section className="caja-card caja-turno">
         <div className="caja-head">
           <h2>{t('caja.turnoNumero', { n: numeroActual })}</h2>
@@ -321,7 +332,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
         <div className="caja-head">
           <h2>{tOr('caja.preArqueo', 'Pre-arqueo')}</h2>
           <span className="sp" />
-          {!pre && <button className="teal" type="button" onClick={() => setPre({ contado: '' })}>{tOr('caja.preArqueo', 'Pre-arqueo')}</button>}
+          {!pre && <button className="primary" type="button" onClick={() => setPre({ contado: '' })}>{tOr('caja.preArqueo', 'Pre-arqueo')}</button>}
         </div>
         {!pre ? (
           <p className="caja-nota">{tOr('caja.preArqueoAyuda', 'Cuenta la caja sin cerrar el turno: compara lo contado con lo esperado.')}</p>

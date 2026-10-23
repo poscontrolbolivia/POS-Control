@@ -98,23 +98,28 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   // Zoom del lienzo: escale de TODO el mapa (mesas, textos y rejilla) sin cambiar las coordenadas guardadas.
   // Se recuerda por negocio en este equipo, igual que la vista lista/mapa: si no, al salir de «Editar salón» volvía al 100 %.
   const CLAVE_ZOOM = 'pos-salon-zoom'
+  // En la demo no hay empresa real: sin este nombre, el zoom se guardaba bajo la clave «undefined».
+  const claveZoom = s._empresaId ?? 'demo'
   const [zoom, setZoom] = useState(() => {
     try {
       const guardado = JSON.parse(localStorage.getItem(CLAVE_ZOOM) || 'null')
-      const z = guardado?.[s._empresaId]
+      const z = guardado?.[claveZoom]
       return typeof z === 'number' && z >= ZOOM_MIN && z <= ZOOM_MAX ? z : 1
     } catch { return 1 }
   })
-  const aplicarZoom = z => setZoom(actual => {
-    const nuevo = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100))
+  // El paso se aplica sobre el valor actual (no sobre el del render): dos toques seguidos en ＋
+  // sumaban el mismo paso dos veces y el segundo quedaba perdido.
+  const limitarZoom = z => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100))
+  const zoomAcercar = () => setZoom(actual => limitarZoom(actual + ZOOM_PASO))
+  const zoomAlejar = () => setZoom(actual => limitarZoom(actual - ZOOM_PASO))
+  const zoomReset = () => setZoom(1)
+  // Se guarda en un efecto: dentro del updater React lo ejecutaría más de una vez.
+  useEffect(() => {
     try {
       const prev = JSON.parse(localStorage.getItem(CLAVE_ZOOM) || '{}')
-      localStorage.setItem(CLAVE_ZOOM, JSON.stringify({ ...prev, [s._empresaId]: nuevo }))
+      localStorage.setItem(CLAVE_ZOOM, JSON.stringify({ ...prev, [claveZoom]: zoom }))
     } catch {  }
-    return nuevo
-  })
-  const zoomAcercar = () => aplicarZoom(zoom + ZOOM_PASO)
-  const zoomAlejar = () => aplicarZoom(zoom - ZOOM_PASO)
+  }, [zoom])
 
   // Una alerta o la Caja pueden traer el foco de vuelta: se abre el salón completo y se selecciona su cuenta.
   // `desde: 'caja'` abre además el modo cobro: solo lo necesario para cobrar, sin la carta del mesero.
@@ -140,7 +145,8 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   const zonas = useMemo(() => ordenarZonas(s.zonas), [s.zonas])
 
   const activo = zona === TODAS || zona === LLEVAR || zonas.some(z => z.id === zona) ? zona : (zonas[0]?.id ?? TODAS)
-  const destinoAlta = activo === TODAS ? (zonas[0]?.id ?? null) : activo
+  // «Para llevar» no es un salón: si fuera destino de alta, la mesa nacería con una zona inexistente.
+  const destinoAlta = activo === LLEVAR ? null : activo === TODAS ? (zonas[0]?.id ?? null) : activo
   const mesasZona = s.mesas.filter(m => activo === TODAS || m.zona === activo)
   const mesaSel = s.mesas.find(m => m.id === sel)
   const enLlevar = activo === LLEVAR
@@ -226,6 +232,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
 
     d({ t: 'zona+', zona: { id, nombre, orden: ordenNuevaZona(zonas) } })
     setNueva(null); setZona(id)
+    if (vista === 'lista' && !edit) cambiarVista('mapa')
   }
   const guardarRen = () => {
     const nombre = (ren?.nombre || '').trim().slice(0, LARGO_ZONA)
@@ -267,6 +274,13 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
     d({ t: 'mesa+', mesa: { id, zona: destinoAlta, nombre: proximaMesaNombre(s.mesas), ...cascadar(k), w: 110, h: 110, forma: 'cuadrada', cap: 4 } })
     setSel(id)
   }
+
+  // El alta de mesas y zonas es parte del mapa, no un submenú: el botón siempre está a la vista y entrar
+  // en «Editar salón» pasa solo. Antes había que descubrir ese botón primero y las altas parecían rotas.
+  const entrarEdicion = () => { setEdit(true); setRen(null); setConf(null) }
+  const irAlMapa = () => { if (vista === 'lista' && !edit) cambiarVista('mapa') }
+  const altaZona = () => { entrarEdicion(); irAlMapa(); setNueva(nueva === null ? '' : null) }
+  const altaMesa = () => { if (!destinoAlta) return; entrarEdicion(); irAlMapa(); crear() }
 
   const tam = (dim, k) => {
     const ajusta = v => Math.max(TAM_MIN, Math.min(dim === 'w' ? W : H, v + k))
@@ -353,8 +367,8 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
                 )}
               </span>
             )))}
-            {edit && admin && (
-              <button className="tab mas" title={t('salon.nuevaZona')} onClick={() => { setRen(null); setNueva(nueva === null ? '' : null) }}>
+            {admin && (
+              <button className="tab mas" title={t('salon.nuevaZona')} onClick={altaZona}>
                 ＋ {t('salon.nuevaZona')}
               </button>
             )}
@@ -369,6 +383,15 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
               <span aria-hidden="true">{edit ? '✓' : '✎'}</span><span className="txt">{edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}</span>
             </button>
           )}
+          {/* El alta de pedido para llevar estaba solo dentro de la vista «Para llevar»: se ofrece
+              también en la cabecera para crearlo sin cambiar de vista. Al entrar en esa vista se
+              oculta aquí y manda el botón de adentro, así nunca hay dos «＋» a la vez. */}
+          {puede(rol, 'abrir_mesa') && !enLlevar && (
+            <button type="button" className="success" onClick={nuevoLlevar}
+              aria-label={tOr('salon.llevarNuevoPedido', 'Nuevo pedido')} title={tOr('salon.llevarNuevoPedido', 'Nuevo pedido')}>
+              <span aria-hidden="true">＋</span><span className="txt">{t('salon.llevar')}</span>
+            </button>
+          )}
         </div>
 
         {aviso && (
@@ -378,7 +401,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           </div>
         )}
 
-        {edit && admin && nueva !== null && (
+        {admin && nueva !== null && (
           <div className="barra zona-alta">
             <input name="nueva-zona" autoFocus className="zinput" placeholder={t('salon.nuevaZonaPlace')} value={nueva} maxLength={LARGO_ZONA}
               aria-label={t('salon.nuevaZona')}
@@ -389,13 +412,13 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           </div>
         )}
 
-        {edit && admin && (
+        {admin && !enLlevar && (
           <div className="barra">
-            <button className="success" onClick={crear} disabled={!destinoAlta} aria-label={t('salon.masMesa')}
-              title={destinoAlta ? t('salon.masMesa') : t('salon.sinZonas')}>
+            <button className="success" onClick={altaMesa} disabled={!destinoAlta} aria-label={t('salon.masMesaAria')}
+              title={destinoAlta ? t('salon.masMesaAria') : t('salon.sinZonas')}>
               <span aria-hidden="true">＋</span><span className="txt">{t('salon.masMesa')}</span>
             </button>
-            <span className="pista">{movil ? t('salon.arrastraMesaMovil') : t('salon.arrastraMesa')}</span>
+            {edit && <span className="pista">{movil ? t('salon.arrastraMesaMovil') : t('salon.arrastraMesa')}</span>}
           </div>
         )}
 
@@ -516,14 +539,13 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           })}
             </div>
           </div>
-          {/* El zoom es una herramienta de edición del mapa: fuera de «Editar salón» estorbaba la vista de las mesas. */}
-          {edit && admin && (
-            <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
-              <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
-              <button type="button" className="zoom-pct" onClick={() => aplicarZoom(1)} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
-              <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
-            </div>
-          )}
+          {/* Zoom: siempre a la vista mientras se ve el mapa. Se guarda por negocio, así que si solo
+              apareciera al editar, al salir quedaba el mapa recortado en 150 % sin forma de volverlo. */}
+          <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
+            <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
+            <button type="button" className="zoom-pct" onClick={zoomReset} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
+            <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
+          </div>
         </div>
 
         {enLlevar && (

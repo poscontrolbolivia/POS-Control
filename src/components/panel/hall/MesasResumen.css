@@ -34,7 +34,29 @@
 [data-theme="night"] .mr-mesa .etiqueta-zona{background:rgba(0,0,0,.28)}
 .mr-leyenda{gap:8px 14px;font-size:.8rem}
 
+/* Subcuentas a la vista: si la mesa está dividida, cada cuenta tiene su propio chip cobrable en la misma tarjeta. */
+.mr-fila{display:flex;flex-direction:column;gap:5px;min-width:0}
+.mr-subchips{display:flex;flex-wrap:wrap;gap:4px}
+.mr-lienzo{overflow:visible}
+.mr-lienzo .mr-subchips{position:absolute;z-index:2}
+/* 360px: los % del lienzo dejan de coincidir con los píxeles; el margen evita que el chip de la última fila tape la leyenda. */
+.mr-lienzo:has(.mr-subchips){margin-bottom:30px}
+.mr-chip{display:inline-flex;align-items:center;gap:5px;min-height:24px;padding:1px 9px;border-radius:999px;border:1.5px solid var(--line-fuerte);background:var(--card);color:var(--ink);font:inherit;font-size:.72rem;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.16)}
+.mr-chip span{font-variant-numeric:tabular-nums;opacity:.9}
+.mr-chip.libre{background:var(--libre-bg);border-color:var(--libre-bd);color:var(--libre-ink)}
+.mr-chip.ocupada{background:var(--ocupada-bg);border-color:var(--ocupada-bd);color:var(--ocupada-ink)}
+.mr-chip.enviada{background:var(--enviada-bg);border-color:var(--enviada-bd);color:var(--enviada-ink)}
+.mr-chip.porcobrar{background:var(--porcobrar-bg);border-color:var(--porcobrar-bd);color:var(--porcobrar-ink)}
+.mr-chip:hover{filter:brightness(.96);transform:translateY(-1px)}
 @media(max-width:768px){
   .mr-cab .txt{display:none}
   .mr-lienzo .pax{display:none}
 }
+
+/* La regla móvil del Salón (.zonas-scroll{order:1}) mandaba el selector de salón DEBAJO de la lista en Caja. */
+.mr-bloque .zonas-scroll{order:0;flex:0 0 auto;width:100%}
+.mr-bloque .caja-head{order:0}
+/* 360 px: dos tarjetas por fila sin recortar el nombre de la mesa (puede partirse en 2 líneas). */
+.mr-item{min-width:0;overflow:visible}
+.mr-item .mr-nombre{overflow-wrap:anywhere;word-break:break-word}
+@media(max-width:400px){.mr-lista{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mr-item{padding:8px 10px}}

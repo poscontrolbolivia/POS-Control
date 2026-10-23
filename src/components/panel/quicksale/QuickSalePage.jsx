@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, nuevoId } from '../../../context/StoreContext.jsx'
 import { puede } from '../../../services/permissions'
 import { MONEDA } from '../../../services/config'
@@ -6,8 +6,11 @@ import { LADO_VISUAL_PX, urlImagenProducto, urlImagenNegocio } from '../../../se
 import { useIdioma } from '../../../i18n/index.jsx'
 import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
 import { imprimirCuenta, imprimirComandas, precalcularCambio } from '../../printing/Ticket.jsx'
+import { listasDe, notaDeUnidad, indicacionesDeUnidad, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
+import IndicacionesPrevio from '../order/IndicacionesPrevio.jsx'
 import ComprobanteQr from '../pago/ComprobanteQr.jsx'
 import PagoQrCard from '../pago/PagoQrCard.jsx'
+import MesasResumen from '../hall/MesasResumen.jsx'
 import '../pago/ComprobanteQr.css'
 import './QuickSalePage.css'
 import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
@@ -47,35 +50,77 @@ function imputarPagos(lineas, total) {
 
 const NOTAS_RAPIDAS = ['Para llevar', 'Sin cebolla', 'Poco sal', 'Bien cocido', 'Extra queso']
 
-export default function QuickSalePage({ rol, sesion }) {
+// Píldora «Todos» de la fila de grupos: no es una sección del negocio, así que su id no puede
+// chocar con ninguno real.
+const TODOS = '__todos'
+
+export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   const { s, d } = useStore()
   const { t, tOr } = useIdioma()
   const usuario = sesion?.usuario || sesion?.nombre || rol || '—'
   const moneda = s.config?.moneda || MONEDA
   const m = n => formatearMonto(n, moneda)
 
+  // En el mostrador también se cobra una mesa (el cliente llega con la cuenta bajo el brazo): el salón
+  // tiene que verse acá, sin cambiar de pantalla. No se recuerda la elección: el mostrador es lo primero.
+  const [pantalla, setPantalla] = useState('mostrador')
+  const mesasAbiertas = s.cuentas.filter(c => c.tipo === 'mesa' && c.estado !== 'cerrada').length
+  const irSalon = mesa => { if (mesa?.id && onAbrirMesa) onAbrirMesa({ mesaId: mesa.id, desde: 'caja' }); else window.location.hash = '#salon' }
+
   const secciones = useMemo(() => [...(s.secciones || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0)), [s.secciones])
-  const [sec, setSec] = useState(secciones[0]?.id)
-  const secActiva = secciones.some(x => x.id === sec) ? sec : secciones[0]?.id
+  // «Todos» abre el mostrador: el cajero ve la carta completa sin adivinar en qué sección está el plato
+  // que el cliente acaba de nombrar.
+  const [sec, setSec] = useState(TODOS)
+  const secActiva = sec === TODOS || secciones.some(x => x.id === sec) ? sec : TODOS
   const [carrito, setCarrito] = useState([])
+  // La barra de la carta se queda donde el cajero la dejó; al cambiar de grupo eso deja los platos
+  // nuevos fuera por la izquierda, así que cada cambio de grupo la vuelve a arrancar.
+  const tira = useRef(null)
+  useEffect(() => { if (tira.current) tira.current.scrollLeft = 0 }, [secActiva])
+  const [previa, setPrevia] = useState(null)
   const [cobro, setCobro] = useState(null)
   const [pendiente, setPendiente] = useState(null)
   const [aviso, setAviso] = useState('')
 
-  const productos = s.productos.filter(p => p.activo && p.seccionId === secActiva)
+  const productos = s.productos.filter(p => p.activo && (secActiva === TODOS || p.seccionId === secActiva))
   const agotados = agotadosHoy(s.config)
   const agotadosEnSeccion = productos.filter(p => agotados[p.id])
-  const total = round2(carrito.reduce((acc, l) => acc + l.p.precio * l.qty, 0))
+  const total = round2(carrito.reduce((acc, l) => acc + (l.p.precio + (l.extra || 0)) * l.qty, 0))
   const hayQrNegocio = Boolean(urlImagenNegocio(s.config, 'qr'))
 
   const agregar = p => {
     if (!puede(rol, 'pedir')) return setAviso(t('venta.sinPermisoPedir'))
     if (agotados[p.id]) return setAviso(t('agotado.bloqueado', { nombre: p.nombre, motivo: agotados[p.id].motivo ? t('agotado.motivoSep', { motivo: agotados[p.id].motivo }) : '' }))
+    const listas = listasDe(s.config, p)
+    if (listas.length) return setPrevia({ p, listas })
     setCarrito(c => {
       const ex = c.find(l => l.p.id === p.id && !l.nota)
       if (ex) return c.map(l => (l === ex ? { ...l, qty: l.qty + 1 } : l))
       return [...c, { id: nuevoId(), p, qty: 1, nota: '' }]
     })
+    setAviso('')
+  }
+
+  // En el mostrador también se arma la indicaciones: sin picker, un plato con una lista obligatoria
+  // («Término de la carne») se cobraba sin ninguna y cocina no tenía de dónde saberlo.
+  const confirmarPrevia = unidades => {
+    const { p, listas } = previa
+    setCarrito(c => {
+      const out = [...c]
+      unidades.forEach(u => {
+        const n = {
+          nota: notaDeUnidad(listas, u),
+          indicaciones: indicacionesDeUnidad(listas, u),
+          extra: extraDeUnidad(listas, u),
+          sel: selDeUnidad(listas, u),
+        }
+        const i = out.findIndex(l => l.p.id === p.id && (l.nota || '') === n.nota)
+        if (i >= 0) out[i] = { ...out[i], qty: out[i].qty + 1 }
+        else out.push({ id: nuevoId(), p, qty: 1, ...n })
+      })
+      return out
+    })
+    setPrevia(null)
     setAviso('')
   }
   const mudarQty = (id, delta) => setCarrito(c => c
@@ -104,7 +149,7 @@ export default function QuickSalePage({ rol, sesion }) {
     if (!pagos.length) return setAviso(t('venta.sinPago'))
     const numero = s.caja.siguienteTurno
     d({ t: 'abrir-directa', usuario })
-    setPendiente({ numero, lineas: carrito.map(l => ({ p: l.p, qty: l.qty, nota: l.nota })), fase: 0, pagos, imprimir: cobro.imprimir, comanda: cobro.comanda, usuario })
+    setPendiente({ numero, lineas: carrito.map(l => ({ p: l.p, qty: l.qty, nota: l.nota, indicaciones: l.indicaciones, extra: l.extra, sel: l.sel })), fase: 0, pagos, imprimir: cobro.imprimir, comanda: cobro.comanda, usuario })
   }
 
   useEffect(() => {
@@ -113,48 +158,51 @@ export default function QuickSalePage({ rol, sesion }) {
     if (!c || c.estado === 'cerrada') { if (c) setPendiente(null); return }
 
     const idx = Math.floor(pendiente.fase)
-    const mediaFase = pendiente.fase % 1 !== 0
 
-    if (mediaFase) {
-
+    if (idx < pendiente.lineas.length) {
       const l = pendiente.lineas[idx]
-      const item = [...c.items].reverse().find(i => i.productoId === l.p.id && i.estado === 'pendiente' && !i.nota)
-      if (item) d({ t: 'nota', cuentaId: c.id, itemId: item.id, nota: l.nota })
+      for (let i = 0; i < l.qty; i++) {
+        d({
+          t: 'item+', cuentaId: c.id, p: l.p,
+          ...(l.nota ? { nota: l.nota } : {}), ...(l.indicaciones ? { indicaciones: l.indicaciones } : {}),
+          ...(l.extra ? { extra: l.extra } : {}), ...(l.sel?.length ? { sel: l.sel } : {}),
+        })
+      }
       setPendiente({ ...pendiente, fase: idx + 1 })
       return
     }
 
-    if (idx < pendiente.lineas.length) {
-      const l = pendiente.lineas[idx]
-      for (let i = 0; i < l.qty; i++) d({ t: 'item+', cuentaId: c.id, p: l.p })
-      setPendiente({ ...pendiente, fase: l.nota ? idx + 0.5 : idx + 1 })
-      return
-    }
-
     const { pagos, imprimir, comanda, usuario: usr } = pendiente
-    // La comanda se envía antes de cobrar: al cerrarse la cuenta el área ya no la devuelve, pero
-    // Despacho la sigue mostrando como «por entregar» hasta que el producto sale.
     const porEnviar = (c.items || []).filter(i => i.estado === 'pendiente')
+    // Enviar antes de cobrar: al cerrarse la cuenta el área ya no la devuelve, pero Despacho la
+    // sigue mostrando como «por entregar» hasta que el producto sale. Ambos van a la misma cola,
+    // así que el envío queda escrito antes del cierre.
     if (porEnviar.length) d({ t: 'enviar', cuentaId: c.id })
-    if (comanda && porEnviar.length) {
-      imprimirComandas({
-        cuenta: c, items: porEnviar, productos: s.productos, config: s.config,
-        titulo: t('pedido.comandaTitulo', { titulo: t('venta.mostrador') }),
-        datos: { salon: t('venta.mostrador'), mesa: `#${c.numero}` },
-      }).catch(() => { })
-    }
     d({ t: 'cobrar', cuentaId: c.id, pagos, usuario: usr })
     const cambio = round2(pagos.reduce((acc, p) => acc + (p.cambio || 0), 0))
     const base = t('venta.cobrada', { n: c.numero }) + (cambio > 0 ? t('venta.cambioSuffix', { monto: m(cambio) }) : '')
     setAviso(base)
-    if (imprimir) {
-      imprimirCuenta({ cuenta: { ...c, estado: 'cerrada', pagos, cerradaEn: Date.now() }, config: s.config, datos: { salon: t('venta.mostrador') } })
-        .then(r => { if (r === 'sin-impresora') setAviso(base + t('venta.sinImpresoraDialogo'))
-          else if (r === 'error') setAviso(base + t('venta.sinImpresoraBoton')) })
-    }
     setPendiente(null)
     setCarrito([])
     setCobro(null)
+    const cuentaCerrada = { ...c, estado: 'cerrada', pagos, cerradaEn: Date.now() }
+    // La impresión va diferida y después del cobro: el diálogo nativo de Windows congela el hilo
+    // y, con la cola de Supabase todavía por escribir, se perdía la venta completa.
+    setTimeout(() => {
+      if (comanda && porEnviar.length) {
+        imprimirComandas({
+          cuenta: c, items: porEnviar, productos: s.productos, config: s.config,
+          titulo: t('pedido.comandaTitulo', { titulo: t('venta.mostrador') }),
+          datos: { salon: t('venta.mostrador'), mesa: `#${c.numero}` },
+        }).catch(() => { })
+      }
+      if (imprimir) {
+        imprimirCuenta({ cuenta: cuentaCerrada, config: s.config, datos: { salon: t('venta.mostrador') } })
+          .then(r => { if (r === 'sin-impresora') setAviso(base + t('venta.sinImpresoraDialogo'))
+            else if (r === 'error') setAviso(base + t('venta.sinImpresoraBoton')) })
+          .catch(() => { })
+      }
+    }, 0)
   }, [pendiente, s.cuentas])
 
   const cambioPreview = cobro ? precalcularCambio(cobro.lineas, total) : 0
@@ -168,10 +216,26 @@ export default function QuickSalePage({ rol, sesion }) {
     <div className="vd">
       <section className="vd-menu">
         <h2 className="vd-titulo">{t('venta.titulo', { nombre: s.config?.nombre || t('venta.mostrador') })}</h2>
+        <div className="vd-vistas" role="group" aria-label={tOr('venta.vistas', 'Qué mostrar')}>
+          <button type="button" className={'vd-tab' + (pantalla === 'mostrador' ? ' on' : '')} aria-pressed={pantalla === 'mostrador'} onClick={() => setPantalla('mostrador')}>
+            🧾 {t('venta.mostrador')}
+          </button>
+          <button type="button" className={'vd-tab' + (pantalla === 'mesas' ? ' on' : '')} aria-pressed={pantalla === 'mesas'} onClick={() => setPantalla('mesas')}>
+            🪑 {tOr('venta.vistaMesas', 'Mesas')}
+            {mesasAbiertas > 0 && <em className="vd-vista-n">{mesasAbiertas}</em>}
+          </button>
+        </div>
+
+        {pantalla === 'mesas' ? (
+          <MesasResumen mesas={s.mesas} zonas={s.zonas} cuentas={s.cuentas} onOpen={irSalon} />
+        ) : (
+          <>
         <p className="vd-ayuda">{tOr('venta.ayuda', 'Mostrador: el cliente pide, paga y se va, sin mesa ni cuenta abierta. Las mesas se cobran en Caja.')}</p>
         <div className="vd-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={secActiva === TODOS}
+            className={secActiva === TODOS ? 'vd-tab on' : 'vd-tab'} onClick={() => setSec(TODOS)}>{tOr('venta.todos', 'Todos')}</button>
           {secciones.map(x => (
-            <button key={x.id} role="tab" aria-selected={x.id === secActiva}
+            <button key={x.id} type="button" role="tab" aria-selected={x.id === secActiva}
               className={x.id === secActiva ? 'vd-tab on' : 'vd-tab'} onClick={() => setSec(x.id)}>{x.nombre}</button>
           ))}
         </div>
@@ -185,7 +249,9 @@ export default function QuickSalePage({ rol, sesion }) {
             ))}
           </div>
         )}
-        <div className="vd-grid">
+        {/* La carta entra por una tira que se desliza hacia la izquierda con su barra, igual que los
+            grupos: con «Todos» hay decenas de platos y una rejilla solo dejaría ver los primeros. */}
+        {!!productos.length && <div className="vd-grid" ref={tira}>
           {productos.map(p => (
             <button key={p.id} className={'vd-prod' + (agotados[p.id] ? ' agotado' : '')} onClick={() => agregar(p)}
               title={agotados[p.id] ? t('agotado.bloqueado', { nombre: p.nombre, motivo: agotados[p.id].motivo ? t('agotado.motivoSep', { motivo: agotados[p.id].motivo }) : '' }) : undefined}>
@@ -194,8 +260,10 @@ export default function QuickSalePage({ rol, sesion }) {
               {agotados[p.id] && <small className="vd-agotado-tag">{t('agotado.badge')}</small>}
             </button>
           ))}
-          {!productos.length && <p className="vd-vacio">{t('venta.sinProductos')}</p>}
-        </div>
+        </div>}
+        {!productos.length && <p className="vd-vacio">{secActiva === TODOS ? tOr('venta.sinProductosTodos', 'No hay productos activos todavía.') : t('venta.sinProductos')}</p>}
+          </>
+        )}
       </section>
 
       <aside className="vd-panel">
@@ -212,9 +280,10 @@ export default function QuickSalePage({ rol, sesion }) {
                   <b>{l.qty}</b>
                   <button onClick={() => mudarQty(l.id, 1)} aria-label={t('venta.agregarUno')}>+</button>
                 </span>
-                <b className="vd-pr">{m(l.p.precio * l.qty)}</b>
+                <b className="vd-pr">{m((l.p.precio + (l.extra || 0)) * l.qty)}</b>
                 <button className="vd-x" onClick={() => quitar(l.id)} aria-label={t('venta.eliminar')}>×</button>
               </div>
+              {l.indicaciones && <small className="vd-ind">{l.indicaciones}</small>}
               <input name="nota-placeholder" className="vd-nota" list="vd-notas-rapidas" placeholder={t('venta.notaPlaceholder')}
                 value={l.nota} onChange={e => mudarNota(l.id, e.target.value)} />
             </li>
@@ -272,6 +341,10 @@ export default function QuickSalePage({ rol, sesion }) {
             </>}
         </div>
       </aside>
+      {previa && (
+        <IndicacionesPrevio producto={previa.p} listas={previa.listas}
+          onClose={() => setPrevia(null)} onConfirm={confirmarPrevia} />
+      )}
     </div>
   )
 }

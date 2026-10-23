@@ -10,10 +10,12 @@ import {
   LADO_VISUAL_PX, urlImagenProducto, procesarYGuardarImagen, quitarImagenGuardada,
 } from '../../../services/imageUpload.js'
 import { useIdioma } from '../../../i18n/index.jsx'
+import Ventana from '../../ui/Ventana.jsx'
 import '../../../styles/admin.css'
 import './MenuPage.css'
 import { formatearMonto } from '../../../services/money.js'
 import { limpiarMonto, numMonto } from '../../../services/format.js'
+import { costoPorPeso, tieneReceta } from '../../../services/costoPeso.js'
 import { margenDe, utilidadDe, simularMargen, bandaMargen } from './margen.js'
 
 // El % de precio masivo admite signo negativo (bajar precios), así que necesita su propio sanitizer:
@@ -40,23 +42,7 @@ function Miniatura({ producto }) {
 }
 
 // Ventana en primer plano (sobre todo lo demás): se cierra con Esc o tocando fuera.
-function Ventana({ titulo, onCerrar, children }) {
-  useEffect(() => {
-    const f = e => { if (e.key === 'Escape') onCerrar() }
-    document.addEventListener('keydown', f)
-    const previo = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.removeEventListener('keydown', f); document.body.style.overflow = previo }
-  }, [onCerrar])
-  return (
-    <div className="mn-overlay" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) onCerrar() }}>
-      <div className="mn-ventana" role="dialog" aria-modal="true" aria-label={titulo}>
-        <h3 className="mn-ventana-tit">{titulo}</h3>
-        {children}
-      </div>
-    </div>
-  )
-}
+// Vive en components/ui para que Equipo y el resto de pantallas compartan exactamente el mismo modal.
 
 const norm = x => String(x ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 // Tipos que se listan por separado en la pantalla de la carta.
@@ -285,7 +271,7 @@ export default function MenuPage({ rol }) {
     const sid = secId || secciones.find(x => abiertas.has(x.id))?.id || secciones[0]?.id
     if (!sid) return
     setConfProd(false); setAvisoImg(null); setMotivoTmp(''); setOptProdTmp('')
-    setVProd({ id: null, seccionId: sid, nombre: '', precio: '', opciones: '', areas: areasPorDefecto(null, sid), costo: '', proveedorId: null })
+    setVProd({ id: null, seccionId: sid, nombre: '', precio: '', opciones: '', areas: areasPorDefecto(null, sid), costo: '', proveedorId: null, precioKg: '', gramos: '' })
   }
   const abrirEditarProd = p => {
     setConfProd(false); setAvisoImg(null); setMotivoTmp(''); setOptProdTmp('')
@@ -293,6 +279,8 @@ export default function MenuPage({ rol }) {
     setVProd({
       id: p.id, seccionId: p.seccionId, nombre: p.nombre, precio: String(p.precio), opciones: (p.opciones || []).join(', '), areas: areasPorDefecto(p),
       costo: c0?.costo == null || !Number.isFinite(Number(c0.costo)) ? '' : String(c0.costo), proveedorId: c0?.proveedorId ?? null,
+      // Costo por peso: los dos números viven en el producto («producto~» hace spread de los cambios en demo).
+      precioKg: p.precioKg == null ? '' : String(p.precioKg), gramos: p.gramos == null ? '' : String(p.gramos),
     })
   }
   const guardarProducto = e => {
@@ -302,20 +290,30 @@ export default function MenuPage({ rol }) {
     if (!nombre || !Number.isFinite(precio) || precio < 0 || !vProd.seccionId) return
     const datos = { nombre, precio, seccionId: vProd.seccionId, areas: vProd.areas, opciones: parsearOpciones(vProd.opciones) }
     // Costo y proveedor (solo admin): se despacha «costo~» únicamente si alguno cambió respecto al store.
-    const costoNuevo = vProd.costo === '' ? null : nCosto(vProd.costo)
+    if (veCostos) {
+      // El precio por kilo y los gramos se guardan dentro del producto (en demo «producto~» spread los cambios;
+      // en Supabase el costo calculado persiste vía «costo~», los dos números quedan en el estado local).
+      datos.precioKg = numMonto(vProd.precioKg) || null
+      datos.gramos = numMonto(vProd.gramos) || null
+    }
     const provNuevo = vProd.proveedorId || null
+    // Prioridad del costo: con receta manda la receta (costos_desde_receta lo escribe en la fila, no se suma);
+    // sin receta, si los dos campos del peso son válidos manda el cálculo por peso; si no, el costo escrito.
+    const conReceta = vProd.id ? tieneReceta(s.recetas, vProd.id) : false
+    const costoNuevo = conReceta ? null : costoPorPeso(vProd.precioKg, vProd.gramos)
+    const costoFinal = costoNuevo ?? (vProd.costo === '' ? null : nCosto(vProd.costo))
     if (vProd.id) {
       d({ t: 'producto~', id: vProd.id, cambios: datos })
       const c0 = costoDe(vProd.id)
-      if (veCostos && (nCosto(c0?.costo) !== costoNuevo || (c0?.proveedorId || null) !== provNuevo)) {
-        d({ t: 'costo~', productoId: vProd.id, costo: costoNuevo ?? 0, proveedorId: provNuevo })
+      if (veCostos && (nCosto(c0?.costo) !== costoFinal || (c0?.proveedorId || null) !== provNuevo)) {
+        d({ t: 'costo~', productoId: vProd.id, costo: costoFinal ?? 0, proveedorId: provNuevo })
       }
     } else {
       // Ítem nuevo con costo/proveedor: se fija un id de cliente para poder despacharle su «costo~».
-      const nid = veCostos && (costoNuevo != null || provNuevo) ? nuevoId() : null
+      const nid = veCostos && (costoFinal != null || provNuevo) ? nuevoId() : null
       if (nid) {
         d({ t: 'producto+', producto: { id: nid, ...datos } })
-        d({ t: 'costo~', productoId: nid, costo: costoNuevo ?? 0, proveedorId: provNuevo })
+        d({ t: 'costo~', productoId: nid, costo: costoFinal ?? 0, proveedorId: provNuevo })
       } else {
         d({ t: 'producto+', producto: datos })
       }
@@ -588,7 +586,14 @@ export default function MenuPage({ rol }) {
         </div>
       )}
 
-      {!vacio && <p className="mn-ayuda">{ayudaTipo[tipo]}</p>}
+      {/* Crear va pegado a la explicación del menú, no al final de la carta:
+          abajo del todo el botón desaparecía cuando la lista era larga. */}
+      <div className="mn-ayuda-fila">
+        {!vacio && <p className="mn-ayuda">{ayudaTipo[tipo]}</p>}
+        <button type="button" className="success mn-ayuda-nuevo" onClick={vacio ? abrirNuevoGrupo : crearSegunTipo}>
+          + {vacio ? t('menu.grupoMas') : etiquetaNuevo[tipo]}
+        </button>
+      </div>
 
       {!vacio && (
         <div className="adm-fila menu-barra mn-barra">
@@ -730,15 +735,11 @@ export default function MenuPage({ rol }) {
         )
       })}
 
-      {/* Crear va debajo de la lista: primero se ve la carta y al final lo que se agrega. */}
-      <div className="adm-fila mn-crear">
-        <button type="button" className="success" onClick={vacio ? abrirNuevoGrupo : crearSegunTipo}>
-          + {vacio ? t('menu.grupoMas') : etiquetaNuevo[tipo]}
-        </button>
-        {selActiva && sel.size === 0 && (
+      {selActiva && sel.size === 0 && (
+        <div className="adm-fila mn-crear">
           <span className="mn-nota">{tOr('items.selHint', 'Marca artículos en la lista y usa «✎ Editar» de la barra del buscador para cambiar varios a la vez.')}</span>
-        )}
-      </div>
+        </div>
+      )}
 
       {vInd && (
         <Ventana titulo={vInd.id ? t('indic.editar') : t('indic.nueva')} onCerrar={() => setVInd(null)}>
@@ -932,8 +933,34 @@ export default function MenuPage({ rol }) {
                       </select>
                     </label>
                   </div>
+                  {/* Costo por peso (sin receta): cortes que se venden por gramo, sin insumos en Inventario. */}
+                  <div className="mn-peso">
+                    <h4 className="mn-bloque-tit">{tOr('menu.costoPesoBloque', 'Costo por peso (sin receta)')}</h4>
+                    <div className="mn-dos">
+                      <label className="adm-campo"><span>{tOr('menu.campoPrecioKg', `Precio de compra (${moneda}/kg)`, { moneda })}</span>
+                        <input name="precio-kg" type="text" inputMode="decimal" autoComplete="off" value={vProd.precioKg}
+                          onChange={e => setVProd({ ...vProd, precioKg: limpiarMonto(e.target.value) })}
+                          onBlur={() => setVProd(x => ({ ...x, precioKg: normalizarMonto(x.precioKg) }))}
+                          onFocus={e => e.target.select()} placeholder="0.00" />
+                      </label>
+                      <label className="adm-campo"><span>{tOr('menu.campoGramos', 'Peso de la porción (g)')}</span>
+                        <input name="gramos" type="text" inputMode="numeric" autoComplete="off" value={vProd.gramos}
+                          onChange={e => setVProd({ ...vProd, gramos: e.target.value.replace(/\D/g, '').slice(0, 5) })}
+                          onFocus={e => e.target.select()} placeholder="0" />
+                      </label>
+                    </div>
+                    <small className="mn-nota">
+                      {prodEditando && tieneReceta(s.recetas, prodEditando.id)
+                        ? tOr('menu.costoPesoConReceta', 'Este plato tiene receta: manda el costo de la receta, el peso no lo cambia.')
+                        : tOr('menu.costoPesoAyuda', 'Costo = precio por kilo ÷ 1000 × gramos. Con los dos datos, el costo calculado reemplaza al escrito a mano.')}
+                    </small>
+                  </div>
                   {(() => {
-                    const costoV = vProd.costo === '' ? null : nCosto(vProd.costo)
+                    // Misma prioridad que al guardar: receta > peso > costo escrito.
+                    const conReceta = prodEditando ? tieneReceta(s.recetas, prodEditando.id) : false
+                    const costoPeso = conReceta ? null : costoPorPeso(vProd.precioKg, vProd.gramos)
+                    const costoManual = vProd.costo === '' ? null : nCosto(vProd.costo)
+                    const costoV = costoPeso ?? costoManual
                     const pV = numMonto(vProd.precio)
                     const u = utilidadDe(pV, costoV)
                     const m = margenDe(pV, costoV)
@@ -941,6 +968,7 @@ export default function MenuPage({ rol }) {
                       ? <p className="mn-margen-vivo sin">{tOr('menu.costoVivoSin', 'Anota el costo para ver la utilidad y el margen en vivo.')}</p>
                       : (
                         <p className="mn-margen-vivo">
+                          {costoPeso != null && <>{tOr('menu.costoPesoResultante', 'Costo por peso')}: <b>{money(costoPeso)}</b>{' · '}</>}
                           {tOr('menu.utilidad', 'Utilidad')}: <b>{money(u)}</b>
                           {' · '}{tOr('menu.margen', 'Margen')}: <b className={'mn-mg mg-' + bandaMargen(m)}>{m == null ? '—' : `${m.toFixed(1)} %`}</b>
                         </p>

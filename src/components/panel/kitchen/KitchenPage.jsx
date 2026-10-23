@@ -4,7 +4,6 @@ import { rpc, mensajeError, sb, obtenerEmpresaActiva } from '../../../services/s
 import { useStore } from '../../../context/StoreContext.jsx'
 import { gruposDeComanda, repartirPorGrupo, SIN_AREA, GRUPO_DIRECTA } from '../../../services/printing.js'
 import { pendientesPorGrupo, mostradorPendientes, badgeDirecta } from '../../../services/despacho.js'
-import { camposComanda } from '../../../services/comanda.js'
 import './KitchenPage.css'
 import { hora } from '../../../services/format.js'
 
@@ -325,12 +324,13 @@ export default function KitchenPage({ rol, sesion }) {
   const datosCuenta = c => {
     const enStore = (s.cuentas || []).find(x => x.id === c.cuenta_id)
     const ids = enStore?.mesaIds || []
-    const canal = enStore?.canal || c.canal || (c.mesa ? '' : 'mostrador')
+    // Lo que trae la cola del servidor manda: un equipo de Despacho quieto no tiene las cuentas nuevas en su store local.
+    const canal = c.canal === 'llevar' ? 'llevar' : (enStore?.canal || c.canal || (c.mesa ? '' : 'mostrador'))
     const zonaId = (s.mesas || []).find(x => ids.includes(x.id))?.zona
     const salon = canal === 'llevar' ? t('cocina.canalLlevar')
       : canal === 'mostrador' ? t('cocina.canalMostrador')
         : ((s.zonas || []).find(z => z.id === zonaId)?.nombre || '')
-    return { canal, salon, mesero: enStore?.abiertaPor || c.abiertaPor || '' }
+    return { canal, salon, mesero: c.mesero || enStore?.abiertaPor || c.abiertaPor || '' }
   }
 
   const renderItem = (it, c) => {
@@ -350,15 +350,15 @@ export default function KitchenPage({ rol, sesion }) {
           </div>
           <div className="ck-item-acc">
             {!anulacion && !listo && (
-              <button type="button" className="ck-check" disabled={!!ocupado && ocupado !== it.id} onClick={() => marcarSalio(it, c)}
+              <button type="button" className="ck-check" disabled={ocupado === it.id} onClick={() => marcarSalio(it, c)}
                 title={tOr('cocina.yaSalio', 'Ya salió')} aria-label={`${tOr('cocina.yaSalio', 'Ya salió')}: ${it.nombre}`}>✓</button>
             )}
             {listo && (
-              <button type="button" className="ck-mini ghost" disabled={!!ocupado && ocupado !== it.id} onClick={() => deshacer(it, c)}
+              <button type="button" className="ck-mini ghost" disabled={ocupado === it.id} onClick={() => deshacer(it, c)}
                 title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button>
             )}
             {!anulacion && !listo && (
-              <button type="button" className="ck-mini danger" disabled={!!ocupado && ocupado !== it.id} onClick={() => abrirAnular(it, c)}
+              <button type="button" className="ck-mini danger" disabled={ocupado === it.id} onClick={() => abrirAnular(it, c)}
                 title={tOr('cocina.anular', 'Anular')} aria-label={`${tOr('cocina.anular', 'Anular')}: ${it.nombre}`}>⊘</button>
             )}
           </div>
@@ -369,8 +369,8 @@ export default function KitchenPage({ rol, sesion }) {
             <b>⛔ {tOr('cocina.quiereAnular', 'Quiere anular')}: {it.anulacion_motivo || tOr('cocina.sinMotivo', 'sin motivo')}</b>
             {puedeAutorizar ? (
               <div className="ck-anul-acc">
-                <button type="button" className="cocina-btn success" disabled={!!ocupado && ocupado !== it.id} onClick={() => resolver(it, c, true)}>✓ {tOr('cocina.aprobar', 'Aprobar')}</button>
-                <button type="button" className="cocina-btn danger" disabled={!!ocupado && ocupado !== it.id} onClick={() => resolver(it, c, false)}>✕ {tOr('cocina.rechazar', 'Rechazar')}</button>
+                <button type="button" className="cocina-btn success" disabled={ocupado === it.id} onClick={() => resolver(it, c, true)}>✓ {tOr('cocina.aprobar', 'Aprobar')}</button>
+                <button type="button" className="cocina-btn danger" disabled={ocupado === it.id} onClick={() => resolver(it, c, false)}>✕ {tOr('cocina.rechazar', 'Rechazar')}</button>
               </div>
             ) : <small className="ck-espera">⏳ {tOr('cocina.esperandoCaja', 'Esperando autorización de caja')}</small>}
           </div>
@@ -388,7 +388,7 @@ export default function KitchenPage({ rol, sesion }) {
               onChange={e => setMotivo(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') pedirAnulacion(); if (e.key === 'Escape') cerrarAnular() }} />
             <div className="ck-anul-acc">
-              <button type="button" className="cocina-btn danger" disabled={!motivo.trim() || (!!ocupado && ocupado !== it.id)} onClick={pedirAnulacion}>{tOr('cocina.pedirAnulacion', 'Pedir anulación')}</button>
+              <button type="button" className="cocina-btn danger" disabled={!motivo.trim() || ocupado === it.id} onClick={pedirAnulacion}>{tOr('cocina.pedirAnulacion', 'Pedir anulación')}</button>
               <button type="button" className="cocina-btn ghost" onClick={cerrarAnular}>{tOr('comun.cancelar', 'Cancelar')}</button>
             </div>
           </div>
@@ -402,19 +402,19 @@ export default function KitchenPage({ rol, sesion }) {
     const pendientes = (c.items || []).filter(i => i.estado === 'enviado').length
     const nueva = recien[clave] && ahora - recien[clave] < 8000
     const { salon, mesero } = datosCuenta(c)
-    const campos = camposComanda({ salon, mesa: tituloMesa(c), enviadoPor: mesero, en: c.desde || ms(c.enviada_en) })
+    const cuando = c.desde || ms(c.enviada_en)
+    // Una sola línea en texto plano: Salón · Mesa X · Mesero · enviado a las HH:MM
+    const linea = [salon, tituloMesa(c), mesero, cuando ? tOr('cocina.enviadoA', `enviado a las ${hora(cuando)}`, { h: hora(cuando) }) : ''].filter(Boolean).join(' · ')
     return (
       <article key={clave} className={'ck-card' + nivel(c.desde) + (nueva ? ' nueva' : '')}>
         <header className="ck-cab">
-          {campos.map(x => (
-            <span key={x.clave} className={'ck-dato' + (x.clave === 'comanda.mesa' ? ' ck-dato-fuerte' : '')}>{t(x.clave, x.params)}</span>
-          ))}
+          <span className="ck-linea">{linea}</span>
           {Number(c.comensales) > 0 && <span className="ck-tag" title={tOr('cocina.comensales', 'Comensales')}>👥 {c.comensales}</span>}
           <span className="ck-sp" />
           <span className={'ck-timer' + nivel(c.desde)} title={c.desde ? `${tOr('cocina.entro', 'Entró a las')} ${hora(c.desde)}` : ''}>⏱ {cronometro(c.desde, ahora)}</span>
         </header>
         <div className="ck-meta">
-          <span>{c.desde ? `${tOr('cocina.entro', 'Entró a las')} ${hora(c.desde)}` : ''}</span>
+          <span />
           {pendientes > 0 && <span className="ck-tag pend">{tOr('cocina.porSalir', `Por salir: ${pendientes}`, { n: pendientes })}</span>}
         </div>
         <ul className="ck-items">{(c.items || []).map(it => renderItem(it, c))}</ul>
@@ -472,7 +472,7 @@ export default function KitchenPage({ rol, sesion }) {
                     <ul>
                       {(c.items || []).map(it => (
                         <li key={it.id}><span>{it.qty}× {it.nombre}{it.nota ? ` · ${it.nota}` : ''}</span>
-                          <button type="button" className="ck-mini ghost" disabled={!!ocupado && ocupado !== it.id} onClick={() => deshacer(it, c)} title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button></li>
+                          <button type="button" className="ck-mini ghost" disabled={ocupado === it.id} onClick={() => deshacer(it, c)} title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button></li>
                       ))}
                     </ul>
                   </li>

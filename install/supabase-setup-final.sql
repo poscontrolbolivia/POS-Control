@@ -583,6 +583,15 @@ begin
   insert into public.cuenta_mesas (empresa_id, cuenta_id, mesa_id)
   values (v_emp, v_id, p_mesa_id);
 
+  begin
+    perform private.auditar(v_emp, 'cuenta_abierta', jsonb_build_object(
+      'cuenta', v_id::text, 'mesa', p_mesa_id::text,
+      'comensales', greatest(coalesce(p_comensales, 1), 1)),
+      'cuenta', (select m.nombre from public.mesas m where m.id = p_mesa_id));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
+
   return v_id;
 end $fn$;
 
@@ -617,6 +626,14 @@ begin
   values (v_emp, 'directa', v_num, 'abierta', auth.uid())
   returning id into v_id;
 
+  begin
+    perform private.auditar(v_emp, 'cuenta_venta_directa', jsonb_build_object(
+      'cuenta', v_id::text, 'numero', v_num),
+      'cuenta', 'Venta directa ' || v_num);
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
+
   return v_id;
 end $fn$;
 
@@ -644,6 +661,8 @@ declare
   v_extras jsonb;
   v_extra  numeric;
   v_ind    text;
+  v_nuegas integer := 0;
+  v_nombres text := '';
 begin
   v_emp    := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
@@ -714,7 +733,18 @@ begin
          coalesce(v_prod.areas, array['cocina']::text[]), v_extras)
       returning id into v_item;
     end if;
+
+    v_nuegas := v_nuegas + 1;
+    v_nombres := left(v_nombres || case when v_nombres = '' then '' else ', ' end || v_prod.nombre, 160);
   end loop;
+
+  begin
+    perform private.auditar(v_emp, 'item_agregado', jsonb_build_object(
+      'cuenta', v_cuenta.id::text, 'items', v_nuegas),
+      'cuenta_item', nullif(v_nombres, ''));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 
   return private.jsonb_items(v_cuenta.id);
 end $fn$;
@@ -758,10 +788,26 @@ begin
   v_nue := v_it.qty + p_delta;
   if v_nue <= 0 then
     delete from public.cuenta_items where id = p_item_id;
+    begin
+      perform private.auditar(v_emp, 'item_cantidad', jsonb_build_object(
+        'item', p_item_id::text, 'cuenta', v_it.cuenta_id::text,
+        'de', v_it.qty, 'eliminado', true),
+        'cuenta_item', v_it.nombre_snapshot);
+    exception when others then
+      null; -- una falla de la bitácora nunca revierte la operación
+    end;
     return jsonb_build_object('id', p_item_id, 'eliminado', true);
   end if;
 
   update public.cuenta_items set qty = v_nue where id = p_item_id;
+  begin
+    perform private.auditar(v_emp, 'item_cantidad', jsonb_build_object(
+      'item', p_item_id::text, 'cuenta', v_it.cuenta_id::text,
+      'de', v_it.qty, 'a', v_nue),
+      'cuenta_item', v_it.nombre_snapshot);
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
   return jsonb_build_object(
     'id', p_item_id, 'eliminado', false,
     'item', (select jsonb_build_object('id', i.id, 'nombre', i.nombre_snapshot,
@@ -812,6 +858,15 @@ begin
   else
     update public.cuenta_items set nota = coalesce(p_nota, '') where id = p_item_id;
   end if;
+
+  begin
+    perform private.auditar(v_emp, 'item_nota', jsonb_build_object(
+      'item', p_item_id::text, 'cuenta', v_it.cuenta_id::text,
+      'nota', left(coalesce(p_nota, ''), 120)),
+      'cuenta_item', v_it.nombre_snapshot);
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 end $fn$;
 
 create or replace function public.enviar_items(
@@ -842,6 +897,18 @@ begin
           or id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids)));
 
   get diagnostics v_n = row_count;
+
+  if v_n > 0 then
+    begin
+      perform private.auditar(v_emp, 'comanda_enviada', jsonb_build_object(
+        'cuenta', v_cuenta.id::text, 'numero', v_cuenta.numero, 'items', v_n,
+        'parcial', p_item_ids is not null),
+        'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+    exception when others then
+      null; -- una falla de la bitácora nunca revierte la comanda
+    end;
+  end if;
+
   return v_n;
 end $fn$;
 
@@ -889,6 +956,16 @@ begin
   if v_it.estado = 'listo' or coalesce(array_length(v_it.areas_listas, 1), 0) > 0 then
     perform private.crear_devoluciones(v_emp, v_it, coalesce(nullif(trim(p_motivo), ''), 'sin motivo'));
   end if;
+
+  begin
+    perform private.auditar(v_emp, 'item_anulado', jsonb_build_object(
+      'item', p_item_id::text, 'cuenta', v_it.cuenta_id::text, 'qty', v_it.qty,
+      'estado_previo', v_it.estado,
+      'motivo', coalesce(nullif(trim(p_motivo), ''), 'sin motivo')),
+      'cuenta_item', v_it.nombre_snapshot);
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 end $fn$;
 
 create or replace function public.unir_mesas(
@@ -906,6 +983,7 @@ declare
   v_cuenta    public.cuentas;
   v_mesa      uuid;
   v_absorbida uuid;
+  v_com       integer;
   v_absorb    jsonb := '[]'::jsonb;
 begin
   v_emp    := private.fijar_empresa(p_empresa_id);
@@ -940,11 +1018,17 @@ begin
       update public.cuenta_items
          set cuenta_id = v_cuenta.id
        where cuenta_id = v_absorbida and empresa_id = v_emp;
+      -- El abono se traslada: si quedara suelto, al borrar la cuenta pagos.cuenta_id se pondría
+      -- null en silencio y ese dinero desaparecería del arqueo del turno.
+      update public.pagos
+         set cuenta_id = v_cuenta.id
+       where cuenta_id = v_absorbida and empresa_id = v_emp;
+      select greatest(1, coalesce(o.comensales, 1)) into v_com from public.cuentas o where o.id = v_absorbida;
       update public.cuentas
-         set estado = 'cerrada', cerrada_por = auth.uid(),
-             cerrada_en = now(), nota = 'unida a otra cuenta'
-       where id = v_absorbida and empresa_id = v_emp;
+         set comensales = least(coalesce(comensales, 1) + coalesce(v_com, 1), 99)
+       where id = v_cuenta.id and empresa_id = v_emp;
       delete from public.cuenta_mesas where cuenta_id = v_absorbida;
+      delete from public.cuentas where id = v_absorbida and empresa_id = v_emp;
       v_absorb := v_absorb || jsonb_build_array(v_absorbida);
     end loop;
 
@@ -952,6 +1036,25 @@ begin
     values (v_emp, v_cuenta.id, v_mesa)
     on conflict (cuenta_id, mesa_id) do nothing;
   end loop;
+
+  -- Sin letra cuando ya no queda otra cuenta abierta en ninguna de sus mesas (igual que en unir_subcuentas).
+  update public.cuentas set etiqueta = null
+   where id = p_cuenta_id and empresa_id = v_emp
+     and not exists (
+       select 1 from public.cuentas o
+        where o.id <> p_cuenta_id and o.empresa_id = v_emp and o.estado <> 'cerrada'
+          and exists (select 1 from public.cuenta_mesas a
+                       where a.cuenta_id = p_cuenta_id
+                         and exists (select 1 from public.cuenta_mesas b
+                                      where b.cuenta_id = o.id and b.mesa_id = a.mesa_id)));
+
+  begin
+    perform private.auditar(v_emp, 'mesa_unidas', jsonb_build_object(
+      'cuenta', v_cuenta.id::text, 'mesas', p_mesa_ids, 'absorbidas', v_absorb),
+      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 
   return jsonb_build_object('cuenta_id', v_cuenta.id, 'absorbidas', v_absorb);
 end $fn$;
@@ -997,6 +1100,15 @@ begin
 
   insert into public.cuenta_mesas (empresa_id, cuenta_id, mesa_id)
   values (v_emp, v_nueva, p_mesa_id);
+
+  begin
+    perform private.auditar(v_emp, 'mesa_separada', jsonb_build_object(
+      'cuenta_origen', v_cuenta.id::text, 'cuenta_nueva', v_nueva::text,
+      'mesa', p_mesa_id::text),
+      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 
   return v_nueva;
 end $fn$;
@@ -1067,6 +1179,15 @@ begin
      and estado <> 'anulado'
      and id in (select "value"::uuid from jsonb_array_elements_text(p_item_ids));
 
+  begin
+    perform private.auditar(v_emp, 'item_movido', jsonb_build_object(
+      'origen', v_origen.id::text, 'destino', v_dest::text,
+      'mesa_destino', p_mesa_destino::text, 'items', p_item_ids),
+      'cuenta', 'cuenta ' || coalesce(v_origen.numero::text, left(v_origen.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
+
   return v_dest;
 end $fn$;
 
@@ -1130,15 +1251,32 @@ begin
        set comensales = least(coalesce(comensales, 1) + coalesce(v_com, 1), 99)
      where id = v_cuenta.id and empresa_id = v_emp;
 
-    update public.cuentas
-       set estado = 'cerrada', cerrada_por = auth.uid(),
-           cerrada_en = now(), nota = 'unida a otra cuenta'
-     where id = v_otra and empresa_id = v_emp;
-
     delete from public.cuenta_mesas where cuenta_id = v_otra;
+    -- La absorbida se borra, no se deja «cerrada con nota»: en la mesa sobraba su letra y un cliente
+    -- no entiende por qué la 2a sigue existiendo después de unirla con la 2b.
+    delete from public.cuentas where id = v_otra and empresa_id = v_emp;
 
     v_absorb := v_absorb || jsonb_build_array(v_otra);
   end loop;
+
+  -- La letra solo vive mientras hay más de una cuenta abierta en la mesa; unida la mesa, se suelta.
+  update public.cuentas set etiqueta = null
+   where id = p_cuenta_id and empresa_id = v_emp
+     and not exists (
+       select 1 from public.cuentas o
+        where o.id <> p_cuenta_id and o.empresa_id = v_emp and o.estado <> 'cerrada'
+          and exists (select 1 from public.cuenta_mesas a
+                       where a.cuenta_id = p_cuenta_id
+                         and exists (select 1 from public.cuenta_mesas b
+                                      where b.cuenta_id = o.id and b.mesa_id = a.mesa_id)));
+
+  begin
+    perform private.auditar(v_emp, 'subcuentas_unidas', jsonb_build_object(
+      'cuenta', v_cuenta.id::text, 'cuentas', p_cuenta_ids, 'absorbidas', v_absorb),
+      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 
   return jsonb_build_object('cuenta_id', v_cuenta.id, 'absorbidas', v_absorb);
 end $fn$;
@@ -1224,6 +1362,14 @@ begin
 
   if p_cantidad >= v_it.qty then
     update public.cuenta_items set cuenta_id = v_dest where id = v_it.id;
+    begin
+      perform private.auditar(v_emp, 'item_movido_parcial', jsonb_build_object(
+        'item', v_it.id::text, 'cantidad', v_it.qty, 'completo', true,
+        'origen', v_origen.id::text, 'destino', v_dest::text),
+        'cuenta_item', v_it.nombre_snapshot);
+    exception when others then
+      null; -- una falla de la bitácora nunca revierte la operación
+    end;
     return v_dest;
   end if;
 
@@ -1246,6 +1392,15 @@ begin
     from public.cuenta_item_areas a
    where a.item_id = v_it.id
   on conflict (item_id, area) do nothing;
+
+  begin
+    perform private.auditar(v_emp, 'item_movido_parcial', jsonb_build_object(
+      'item', v_it.id::text, 'cantidad', p_cantidad, 'completo', false,
+      'origen', v_origen.id::text, 'destino', v_dest::text),
+      'cuenta_item', v_it.nombre_snapshot);
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 
   return v_nuevo;
 end $fn$;
@@ -1291,6 +1446,16 @@ begin
 
   v_total := private.total_items(v_cuenta.id);
   v_final := greatest(v_total - v_cuenta.descuento, 0) + v_cuenta.propina;
+
+  begin
+    perform private.auditar(v_emp, 'cuenta_extras', jsonb_build_object(
+      'cuenta', v_cuenta.id::text, 'propina', v_cuenta.propina,
+      'descuento', v_cuenta.descuento, 'total', v_final),
+      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
+
   return jsonb_build_object(
     'cuenta_id', v_cuenta.id,
     'subtotal',  v_total,
@@ -1311,6 +1476,7 @@ set search_path = ''
 as $fn$
 declare
   v_emp uuid;
+  v_num integer;
 begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
@@ -1319,6 +1485,13 @@ begin
   if not found then
     raise exception 'no se pudo pasar a pre-cuenta (cuenta no abierta en la empresa activa)';
   end if;
+  select numero into v_num from public.cuentas where id = p_cuenta_id;
+  begin
+    perform private.auditar(v_emp, 'cuenta_precuenta', jsonb_build_object('cuenta', p_cuenta_id::text),
+      'cuenta', 'cuenta ' || coalesce(v_num::text, left(p_cuenta_id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 end $fn$;
 
 create or replace function public.reabrir_cuenta(
@@ -1332,6 +1505,7 @@ set search_path = ''
 as $fn$
 declare
   v_emp uuid;
+  v_num integer;
 begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
@@ -1340,6 +1514,13 @@ begin
   if not found then
     raise exception 'la cuenta no está en pre-cuenta (empresa activa)';
   end if;
+  select numero into v_num from public.cuentas where id = p_cuenta_id;
+  begin
+    perform private.auditar(v_emp, 'cuenta_reabierta', jsonb_build_object('cuenta', p_cuenta_id::text),
+      'cuenta', 'cuenta ' || coalesce(v_num::text, left(p_cuenta_id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 end $fn$;
 
 create or replace function public.cobrar_cuenta(
@@ -1493,6 +1674,19 @@ begin
     null;
   end;
 
+  begin
+    perform private.auditar(v_emp, 'cuenta_cobrada', jsonb_build_object(
+      'cuenta', v_cuenta.id::text, 'numero', v_cuenta.numero, 'tipo', v_cuenta.tipo,
+      'mesas', v_mesas, 'subtotal', v_subtotal, 'descuento', v_cuenta.descuento,
+      'propina', v_cuenta.propina, 'total', v_final, 'pagado', v_pagado,
+      'cambio', v_pagado - v_final,
+      'metodos', (select coalesce(jsonb_agg(distinct p.metodo), '[]'::jsonb)
+                    from public.pagos p where p.cuenta_id = v_cuenta.id)),
+      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte el cobro
+  end;
+
   return jsonb_build_object(
     'cuenta_id',  v_cuenta.id,
     'tipo',       v_cuenta.tipo,
@@ -1587,6 +1781,15 @@ begin
      where t.id = v_turno;
   end if;
 
+  begin
+    perform private.auditar(v_emp, 'cuenta_abonada', jsonb_build_object(
+      'cuenta', v_cuenta.id::text, 'abonado', v_abonado, 'total', v_final,
+      'pagado', v_previo + v_abonado, 'saldo', greatest(v_final - v_previo - v_abonado, 0)),
+      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte el abono
+  end;
+
   return jsonb_build_object(
     'cuenta_id', v_cuenta.id,
     'total',     v_final,
@@ -1634,6 +1837,15 @@ begin
   insert into public.turnos_caja (empresa_id, abierto_por, fondo, modo)
   values (v_emp, auth.uid(), greatest(coalesce(p_fondo, 0), 0), v_modo)
   returning id into v_id;
+
+  begin
+    perform private.auditar(v_emp, 'turno_abierto', jsonb_build_object(
+      'turno', v_id::text, 'fondo', greatest(coalesce(p_fondo, 0), 0), 'modo', v_modo),
+      'turno', 'turno ' || left(v_id::text, 8));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
+
   return v_id;
 end $fn$;
 
@@ -1687,6 +1899,15 @@ begin
            true
          )
    where id = v_turno.id and empresa_id = v_emp;
+
+  begin
+    perform private.auditar(v_emp, 'caja_movimiento', jsonb_build_object(
+      'turno', v_turno.id::text, 'tipo', p_tipo, 'monto', v_monto,
+      'motivo', coalesce(p_motivo, '')),
+      'turno', 'turno ' || left(v_turno.id::text, 8));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 
   return jsonb_build_object('turno_id', v_turno.id, 'movimiento', v_mov);
 end $fn$;
@@ -1767,6 +1988,16 @@ begin
            ), true
          )
    where t.id = v_turno.id and t.empresa_id = v_emp;
+
+  begin
+    perform private.auditar(v_emp, 'turno_cerrado', jsonb_build_object(
+      'turno', v_turno.id::text, 'esperado', v_esperado,
+      'contado', coalesce(p_contado, 0), 'diferencia', v_dif,
+      'venta_efectivo', v_efectivo, 'ingresos', v_ingresos, 'egresos', v_egresos),
+      'turno', 'turno ' || left(v_turno.id::text, 8));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 
   return jsonb_build_object(
     'turno_id',       v_turno.id,
@@ -2551,6 +2782,10 @@ begin
   if exists (select 1 from public.empresas where lower(codigo) = lower(p_codigo)) then
     raise exception 'el codigo % ya existe', p_codigo;
   end if;
+
+  -- Un respaldo son cientos de filas: los triggers de bitácora las duplicarían contra la fila
+  -- de resumen 'super_importo' que se anota al final del import.
+  perform set_config('pos.sin_bitacora', 'on', true);
 
   insert into public.empresas (nombre, codigo, moneda, iva_pct, propina_pct, config)
   values (p_datos->'empresa'->>'nombre', lower(p_codigo),
@@ -3825,9 +4060,14 @@ begin
                                         from public.cuenta_mesas cm
                                         join public.mesas m on m.id = cm.mesa_id
                                        where cm.cuenta_id = cu.id), 'Mostrador'),
-               'canal',      case when exists (select 1 from public.cuenta_mesas cm
-                                               where cm.cuenta_id = cu.id)
+               'canal',      case when cu.canal = 'llevar' then 'llevar'
+                                  when exists (select 1 from public.cuenta_mesas cm
+                                                where cm.cuenta_id = cu.id)
                                   then 'mesa' else 'mostrador' end,
+               'numero',     cu.numero,
+               'cliente',    cu.cliente_nombre,
+               'mesero',     coalesce((select nullif(pf.display_name, '') from public.perfiles pf
+                                        where pf.user_id = cu.abierta_por), ''),
                'comensales', cu.comensales,
                'etiqueta',   cu.etiqueta,
                'abierta_en', cu.abierta_en,
@@ -3860,7 +4100,7 @@ begin
                   then not (i.areas && coalesce(p_validas, '{}'::text[]))
                   else i.areas @> array[p_area]::text[] end
          and i.estado in ('enviado','listo','anulacion')
-       group by cu.id, cu.comensales, cu.abierta_en, cu.etiqueta
+       group by cu.id, cu.comensales, cu.abierta_en, cu.etiqueta, cu.canal, cu.numero, cu.cliente_nombre, cu.abierta_por
     ) t;
   return v_out;
 end $fn$;
@@ -3957,6 +4197,8 @@ begin
   if coalesce(p_area, '') !~ '^[a-z0-9][a-z0-9_-]{0,39}$' or coalesce(p_reemplazo, '') !~ '^[a-z0-9][a-z0-9_-]{0,39}$' then
     raise exception 'Área inválida';
   end if;
+  -- Es un cambio en lote: se anota una sola fila 'area_retirada', no una por producto.
+  perform set_config('pos.sin_bitacora', 'on', true);
   update public.productos
      set areas = case when coalesce(array_length(array_remove(areas, p_area), 1), 0) > 0
                       then array_remove(areas, p_area)
@@ -4159,6 +4401,24 @@ end $fn$;
 revoke all on function public.auditoria_listar(integer, text, uuid, integer, uuid) from public, anon, authenticated;
 grant execute on function public.auditoria_listar(integer, text, uuid, integer, uuid) to authenticated;
 
+-- La salida del turno también queda en la bitácora: sin esto, el hilo de un mesero o un cajero
+-- termina sin firma y el arqueo no puede decir quién cerró la sesión. No recibe parámetros:
+-- el actor y la empresa se leen de la propia sesión, así nada del cliente se puede falsificar.
+create or replace function public.registrar_salida()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+begin
+  if auth.uid() is null then
+    return;
+  end if;
+  perform private.auditar(private.empresa_activa(), 'salida', '{}'::jsonb);
+end $fn$;
+revoke all on function public.registrar_salida() from public, anon, authenticated;
+grant execute on function public.registrar_salida() to authenticated;
+
 -- ## E) INVENTARIO
 
 create table if not exists public.insumos (
@@ -4325,6 +4585,16 @@ begin
            actualizado_en = now()
     returning id into v_out;
   end if;
+
+  begin
+    perform private.auditar(v_emp, 'insumo_guardar', jsonb_build_object(
+      'insumo', v_out::text, 'nombre', v_nombre, 'unidad', v_unidad,
+      'stock', v_stock, 'costo', v_costo, 'edicion', v_id is not null),
+      'insumo', v_nombre);
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
+
   return v_out;
 end $fn$;
 revoke all on function public.insumo_guardar(jsonb, uuid) from public, anon, authenticated;
@@ -4728,6 +4998,14 @@ begin
   insert into public.cuenta_mesas (empresa_id, cuenta_id, mesa_id)
   select v_emp, v_nueva, cm.mesa_id from public.cuenta_mesas cm where cm.cuenta_id = v_cuenta.id;
 
+  begin
+    perform private.auditar(v_emp, 'cuenta_dividida', jsonb_build_object(
+      'cuenta', v_cuenta.id::text, 'nueva', v_nueva::text, 'etiqueta', chr(v_max + 1)),
+      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
+
   return v_nueva;
 end $fn$;
 revoke all on function public.dividir_cuenta(uuid, uuid) from public, anon;
@@ -5074,13 +5352,21 @@ set search_path = ''
 as $fn$
 declare
   v_emp uuid;
+  c     public.cuentas;
 begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
-  perform private.load_cuenta(p_cuenta_id, array['abierta','precuenta']::text[]);
+  c := private.load_cuenta(p_cuenta_id, array['abierta','precuenta']::text[]);
   update public.cuentas
      set detalle = left(nullif(btrim(coalesce(p_detalle, '')), ''), 500)
    where id = p_cuenta_id and empresa_id = v_emp;
+  begin
+    perform private.auditar(v_emp, 'cuenta_detalle', jsonb_build_object(
+      'cuenta', c.id::text, 'detalle', left(coalesce(nullif(btrim(coalesce(p_detalle, '')), ''), ''), 120)),
+      'cuenta', 'cuenta ' || coalesce(c.numero::text, left(c.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 end $fn$;
 revoke all on function public.poner_detalle_cuenta(uuid, text, uuid) from public, anon;
 grant execute on function public.poner_detalle_cuenta(uuid, text, uuid) to authenticated;
@@ -5177,6 +5463,13 @@ begin
   values (v_emp, 'directa', 'llevar', v_num, 'abierta', auth.uid(), nullif(v_nom, ''),
           left(nullif(btrim(coalesce(p_telefono, '')), ''), 40))
   returning id into v_id;
+  begin
+    perform private.auditar(v_emp, 'cuenta_abierta', jsonb_build_object(
+      'cuenta', v_id::text, 'numero', v_num, 'canal', 'llevar', 'cliente', nullif(v_nom, '')),
+      'cuenta', 'Para llevar ' || v_num);
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
   return v_id;
 end $fn$;
 revoke all on function public.abrir_para_llevar(text, text, uuid) from public, anon;
@@ -5206,6 +5499,14 @@ begin
      set cliente_nombre = nullif(v_nom, ''),
          cliente_tel    = left(nullif(btrim(coalesce(p_telefono, '')), ''), 40)
    where id = p_cuenta_id and empresa_id = v_emp;
+  begin
+    perform private.auditar(v_emp, 'llevar_edicion', jsonb_build_object(
+      'cuenta', c.id::text, 'cliente', nullif(v_nom, ''),
+      'telefono', nullif(left(btrim(coalesce(p_telefono, '')), 40), '')),
+      'cuenta', 'Para llevar ' || coalesce(c.numero::text, left(c.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 end $fn$;
 revoke all on function public.editar_cliente_llevar(uuid, text, text, uuid) from public, anon;
 grant execute on function public.editar_cliente_llevar(uuid, text, text, uuid) to authenticated;
@@ -5329,6 +5630,10 @@ begin
   if exists (select 1 from public.empresas where lower(codigo) = lower(p_codigo)) then
     raise exception 'el codigo % ya existe', p_codigo;
   end if;
+
+  -- Un respaldo son cientos de filas: los triggers de bitácora las duplicarían contra la fila
+  -- de resumen 'super_importo' que se anota al final del import.
+  perform set_config('pos.sin_bitacora', 'on', true);
 
   insert into public.empresas (nombre, codigo, moneda, iva_pct, propina_pct, config)
   values (p_datos->'empresa'->>'nombre', lower(p_codigo),
@@ -5758,6 +6063,14 @@ begin
          proveedor_id = excluded.proveedor_id,
          actualizado_en = now(),
          actualizado_por = excluded.actualizado_por;
+  begin
+    perform private.auditar(v_emp, 'costo_guardado', jsonb_build_object(
+      'costo', round(p_costo, 2),
+      'proveedor', (select pr.nombre from public.proveedores pr where pr.id = p_proveedor_id)),
+      'producto', (select p.nombre from public.productos p where p.id = p_producto_id));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 end $fn$;
 revoke all on function public.costo_guardar(uuid, numeric, uuid, uuid) from public, anon, authenticated;
 grant execute on function public.costo_guardar(uuid, numeric, uuid, uuid) to authenticated;
@@ -5801,6 +6114,9 @@ begin
   end if;
 
   if p_aplicar then
+    -- Reajuste en lote: la fila 'margen_aplicado' de abajo resume los N precios, el trigger
+    -- no debe escribir una por producto.
+    perform set_config('pos.sin_bitacora', 'on', true);
     update public.productos p
        set precio = round((select c.costo from public.costos_producto c where c.producto_id = p.id)
                           / (1 - p_margen_pct / 100), 2)
@@ -6564,6 +6880,10 @@ begin
     raise exception 'el codigo % ya existe', p_codigo;
   end if;
 
+  -- Un respaldo son cientos de filas: los triggers de bitácora las duplicarían contra la fila
+  -- de resumen 'super_importo' que se anota al final del import.
+  perform set_config('pos.sin_bitacora', 'on', true);
+
   insert into public.empresas (nombre, codigo, moneda, iva_pct, propina_pct, config)
   values (p_datos->'empresa'->>'nombre', lower(p_codigo),
           coalesce(p_datos->'empresa'->>'moneda','Bs'),
@@ -6881,6 +7201,7 @@ as $fn$
 declare
   v_emp uuid;
   c     public.cuentas;
+  v_mesas text;
 begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
@@ -6890,9 +7211,139 @@ begin
   -- Solo se descarta si de verdad está vacía: sin ítems y sin pagos (otro aparato pudo haberle agregado algo).
   if exists (select 1 from public.cuenta_items i where i.cuenta_id = c.id) then return; end if;
   if exists (select 1 from public.pagos p where p.cuenta_id = c.id) then return; end if;
+  -- El nombre de la mesa se guarda antes de borrar: la cascada de cuenta_mesas lo borra con la cuenta.
+  select string_agg(m.nombre, ', ') into v_mesas
+    from public.cuenta_mesas cm join public.mesas m on m.id = cm.mesa_id
+   where cm.cuenta_id = c.id;
   delete from public.cuentas where id = c.id and empresa_id = v_emp;
+  begin
+    perform private.auditar(v_emp, 'cuenta_descartada', jsonb_build_object(
+      'cuenta', c.id::text, 'numero', c.numero, 'mesa', v_mesas),
+      'cuenta', coalesce(v_mesas, 'cuenta ' || left(c.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
 end $fn$;
 revoke all on function public.descartar_cuenta_vacia(uuid, uuid) from public, anon;
 grant execute on function public.descartar_cuenta_vacia(uuid, uuid) to authenticated;
+
+-- ############################################################################
+-- ## v0.41 · BITÁCORA POR TRIGGER: lo que la app escribe directo, sin RPC
+-- ############################################################################
+-- mesas, zonas, secciones de la carta, productos, alertas y empresas.config se
+-- salvan por PostgREST sin pasar por una RPC, así que no dejaban ninguna fila en
+-- auditoría: el negocio leía su bitácora y el salón o la carta aparecían intactos
+-- aunque alguien hubiera borrado diez mesas. Un trigger genérico los anota con los
+-- mismos nombres de acción que ya usa el modo demo, para que se lea igual en ambos.
+create or replace function private.auditar_fila()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp    uuid;
+  v_old    jsonb;
+  v_new    jsonb;
+  v_diff   jsonb := '{}'::jsonb;
+  v_accion text;
+  v_tipo   text;
+  v_label  text;
+  v_op     text := case when tg_op = 'INSERT' then 'alta'
+                        when tg_op = 'UPDATE'  then 'edicion' else 'baja' end;
+begin
+  -- Sin usuario no hay nada que anotar: ni quien pega este SQL en el dashboard, ni un seed manual.
+  if auth.uid() is null then return null; end if;
+  -- Escrito desde dentro de otro trigger (el contador de productos, el alta de una empresa nueva).
+  if pg_trigger_depth() > 1 then return null; end if;
+  -- Caminos que ya anotan una sola fila de resumen: import de respaldo, margen en masa, retirar área.
+  if coalesce(current_setting('pos.sin_bitacora', true), '') = 'on' then return null; end if;
+
+  v_new := case when tg_op = 'DELETE' then '{}'::jsonb else to_jsonb(new) end;
+  v_old := case when tg_op = 'INSERT' then '{}'::jsonb else to_jsonb(old) end;
+
+  v_emp := coalesce(nullif(v_new->>'empresa_id', '')::uuid,
+                    nullif(v_old->>'empresa_id', '')::uuid,
+                    -- empresas no tiene empresa_id: la empresa es su propia fila
+                    case when tg_table_name = 'empresas'
+                         then coalesce(nullif(v_new->>'id', '')::uuid, nullif(v_old->>'id', '')::uuid)
+                    end);
+  if v_emp is null then return null; end if;
+
+  if tg_op = 'UPDATE' then
+    select coalesce(jsonb_object_agg(k, jsonb_build_object('antes', v_old->k, 'despues', v_new->k)), '{}'::jsonb)
+      into v_diff
+      from jsonb_object_keys(v_new) k
+     where v_new->k is distinct from v_old->k
+       and k not in ('id', 'empresa_id', 'creada_en');
+
+    if tg_table_name = 'empresas' then
+      -- config es un jsonb grande: se anota clave por clave, no el blob entero.
+      select coalesce(v_diff || jsonb_object_agg('config.' || k, jsonb_build_object(
+               'antes',  left((v_old->'config'->k)::text, 200),
+               'despues', left((v_new->'config'->k)::text, 200))), v_diff)
+        into v_diff
+        from jsonb_object_keys(coalesce(v_new->'config', '{}'::jsonb)) k
+       where (v_new->'config'->k) is distinct from (v_old->'config'->k);
+      v_diff := v_diff - 'contador_productos' - 'config';
+    end if;
+
+    if v_diff = '{}'::jsonb then return null; end if; -- no cambió nada que le importe al dueño
+  elsif tg_op = 'INSERT' then
+    v_diff := v_new - 'id' - 'empresa_id' - 'creada_en' - 'contador_productos' - 'config';
+  else
+    v_diff := jsonb_build_object('id', v_old->>'id');
+  end if;
+
+  v_tipo := case tg_table_name
+    when 'mesas'          then 'mesa'
+    when 'zonas'          then 'zona'
+    when 'secciones_menu' then 'grupo'
+    when 'productos'      then 'producto'
+    when 'alertas'        then 'alerta'
+    else 'config' end;
+
+  v_accion := case tg_table_name
+    when 'empresas' then case when tg_op = 'INSERT' then 'alta_empresa' else 'config_cambio' end
+    when 'alertas' then case
+      when tg_op = 'INSERT' then 'alerta_creado'
+      when tg_op = 'DELETE' then 'alerta_baja'
+      when coalesce(v_new->>'resuelta_en', '') is distinct from coalesce(v_old->>'resuelta_en', '') then 'alerta_resuelta'
+      when coalesce(v_new->>'mesa_id', '')     is distinct from coalesce(v_old->>'mesa_id', '')     then 'alerta_movida'
+      else 'alerta_edicion' end
+    else case tg_table_name
+      when 'mesas'          then 'salon_mesa_'
+      when 'zonas'          then 'salon_zona_'
+      when 'secciones_menu' then 'menu_grupo_'
+      else 'menu_item_' end || v_op
+  end;
+
+  v_label := coalesce(
+    nullif(btrim(coalesce(v_new->>'nombre', v_old->>'nombre', '')), ''),
+    nullif(btrim(coalesce(v_new->>'titulo', v_old->>'titulo', '')), ''),
+    nullif(coalesce(v_new->>'numero', v_old->>'numero'), ''),
+    left(coalesce(v_new->>'id', v_old->>'id', ''), 8));
+
+  perform private.auditar(v_emp, v_accion, v_diff, v_tipo, v_label);
+  return null;
+exception when others then
+  -- Un trigger que falla revierte el guardado del usuario: la bitácora jamás interrumpe la operación.
+  return null;
+end $fn$;
+revoke all on function private.auditar_fila() from public, anon, authenticated;
+
+drop trigger if exists trg_bitacora_mesas          on public.mesas;
+drop trigger if exists trg_bitacora_zonas          on public.zonas;
+drop trigger if exists trg_bitacora_secciones_menu on public.secciones_menu;
+drop trigger if exists trg_bitacora_productos      on public.productos;
+drop trigger if exists trg_bitacora_alertas        on public.alertas;
+drop trigger if exists trg_bitacora_empresas       on public.empresas;
+
+create trigger trg_bitacora_mesas          after insert or update or delete on public.mesas          for each row execute function private.auditar_fila();
+create trigger trg_bitacora_zonas          after insert or update or delete on public.zonas          for each row execute function private.auditar_fila();
+create trigger trg_bitacora_secciones_menu after insert or update or delete on public.secciones_menu for each row execute function private.auditar_fila();
+create trigger trg_bitacora_productos      after insert or update or delete on public.productos      for each row execute function private.auditar_fila();
+create trigger trg_bitacora_alertas        after insert or update or delete on public.alertas        for each row execute function private.auditar_fila();
+create trigger trg_bitacora_empresas       after insert or update on public.empresas                 for each row execute function private.auditar_fila();
 
 commit;

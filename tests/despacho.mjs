@@ -43,6 +43,23 @@ ok('badge: la cuenta cerrada no suma en su área', contar.cocina === 2)
 ok('badge: toda área conocida tiene clave, aunque sea 0', gruposDeComanda(cfg).every(g => contar[g.id] !== undefined))
 ok('badge: una barra vacía marca 0, no undefined', contar.barra === 0)
 
+// ── 2b · El plato que sale a dos áreas: el badge descuenta solo el área ya servida ──
+const prod2 = [{ id: 'p9', seccionId: 'sc', nombre: 'Combo', areas: ['cocina', 'barra'] }]
+const mix = (areasListas, estado = 'enviado') => ({ id: 'x1', productoId: 'p9', nombre: 'Combo', qty: 1, estado, areas: ['cocina', 'barra'], areasListas })
+const cuentaMix = id => ({ id, estado: 'abierta', tipo: 'mesa', items: [mix([])] })
+eq('multi-área sin servir: cuenta 1 en cocina y 1 en barra',
+  [pendientesPorGrupo([cuentaMix('cm1')], prod2, cfg).cocina, pendientesPorGrupo([cuentaMix('cm1')], prod2, cfg).barra], [1, 1])
+const servidoCocina = { id: 'cm2', estado: 'abierta', tipo: 'mesa', items: [mix(['cocina'])] }
+const trasCocina = pendientesPorGrupo([servidoCocina], prod2, cfg)
+eq('multi-área servido de cocina: cocina 0 y barra sigue en 1', [trasCocina.cocina, trasCocina.barra], [0, 1])
+const servidoBarra = { id: 'cm3', estado: 'abierta', tipo: 'mesa', items: [mix(['cocina', 'barra'])] }
+const trasAmbas = pendientesPorGrupo([servidoBarra], prod2, cfg)
+eq('multi-área servido de las dos: no cuenta en ninguna', [trasAmbas.cocina, trasAmbas.barra], [0, 0])
+ok('servido de un área NO cambia el estado global (el reducer lo hace al último)', servidoCocina.items[0].estado === 'enviado')
+const dosPlatos = { id: 'cm4', estado: 'abierta', tipo: 'mesa', items: [mix(['cocina']), { ...mix(['cocina']), id: 'x2' }, it('x3', 'p1', 'enviado')] }
+const mixContado = pendientesPorGrupo([dosPlatos], prod2.concat(prod), cfg)
+eq('meziendo platos: cada área cuenta solo lo suyo', [mixContado.cocina, mixContado.barra], [1, 2])
+
 // ── 3 · El mostrador cobrado no está en la cola del servidor: lo arma el cliente ──
 const mostradorCerrada = {
   id: 'c3', estado: 'cerrada', tipo: 'directa', numero: 12, abiertaPor: 'Ana', cerradaEn: 500, abiertaEn: 100,
