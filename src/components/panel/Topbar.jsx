@@ -1,5 +1,5 @@
 import { useIdioma } from '../../i18n/index.jsx'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BrandMark from '../login/BrandMark.jsx'
 import '../../styles/auth.css'
 
@@ -7,6 +7,19 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
   const { t, tOr } = useIdioma()
 
   const [abierto, setAbierto] = useState(() => typeof window === 'undefined' || window.innerWidth > 850)
+  // La barra va pegada arriba (sticky) y mide su propio alto para que los menús que se pegan
+  // debajo (Configuración) no queden tapados: --topbar-h lo consume SettingsPage.css.
+  const barra = useRef(null)
+  useEffect(() => {
+    const el = barra.current
+    if (!el || typeof window === 'undefined') return
+    const publicar = () => document.documentElement.style.setProperty('--topbar-h', el.offsetHeight + 'px')
+    publicar()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publicar) : null
+    ro?.observe(el)
+    window.addEventListener('resize', publicar)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', publicar) }
+  }, [])
   const elegir = id => { onModulo?.(id); if (typeof window !== 'undefined' && window.innerWidth <= 850) setAbierto(false) }
   // El módulo «Menú» se muestra como «Ítems» para no chocar con la impresión (única en Configuración).
   const items = modulos
@@ -20,7 +33,7 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
   const rolVisto = rol ? tOr('rol.' + rol, rol) : t('topbar.invitado')
 
   return (
-    <header className="topbar" style={{ position: 'relative' }}>
+    <header className="topbar" ref={barra}>
       <div className="topbar-izq">
         <span className="topbar-empresa"><BrandMark size={22} /> {sesion?.empresa || t('comun.miNegocio')}</span>
         {!abierto && actual && <span className="topbar-actual" aria-live="polite">{actual}</span>}

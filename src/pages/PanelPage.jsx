@@ -55,6 +55,8 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
     setFoco({ mesaId: mesaId || null, cuentaId: cuentaId || null, desde: desde || null, seq: Date.now() })
     setModulo('salon')
   }
+  // El cajero cobra de mesa en mesa: al terminar, la vista de cobro lo devuelve a Caja en vez de dejarlo en Salón.
+  const volverCaja = () => { setFoco(null); setModulo('caja') }
 
   const configRef = useRef(s.config)
   configRef.current = s.config
@@ -103,7 +105,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
         </div>
       )}
       <Suspense fallback={<div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}>
-        {modulo === 'salon' && <HallPage rol={sesion.rol} sesion={sesion} foco={foco} />}
+        {modulo === 'salon' && <HallPage rol={sesion.rol} sesion={sesion} foco={foco} onVolverCaja={volverCaja} />}
         {modulo === 'caja' && <CashPage rol={sesion.rol} sesion={sesion} onAbrirMesa={abrirDeAlerta} />}
         {modulo === 'venta' && <QuickSalePage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'cocina' && <KitchenPage rol={sesion.rol} sesion={sesion} />}

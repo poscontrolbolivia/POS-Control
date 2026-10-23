@@ -18,6 +18,7 @@ const cap = x => (x ? String(x).charAt(0).toUpperCase() + String(x).slice(1) : '
 
 const PASOS = ['prep', 'parcial', 'listo', 'cuenta', 'pagada']
 const PASOS_TXT = { prep: 'Prep', parcial: 'Parcial', listo: 'Listo', cuenta: 'Cuenta', pagada: 'Pagada' }
+const TODOS = 'todas'
 
 const nombreArea = (id, tOr, config) => nombreDeArea(config, id, tOr('areas.' + id, cap(id)))
 
@@ -77,12 +78,15 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const enCobro = Boolean(cobro)
   const usuario = sesion?.usuario || sesion?.nombre || rol
   const secciones = [...(s.secciones || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0))
-  const [sec, setSec] = useState(secciones[0]?.id)
+  // «Todos» abre la carta: sin buscador ni filtro, el mesero encontraba el producto sección por sección.
+  const [sec, setSec] = useState(TODOS)
+  const [busca, setBusca] = useState('')
 
-  const secActiva = secciones.some(x => x.id === sec) ? sec : secciones[0]?.id
+  const secActiva = sec === TODOS || secciones.some(x => x.id === sec) ? sec : secciones[0]?.id
   const [marcados, setMarcados] = useState([])
   const [destino, setDestino] = useState('')
   const [canje, setCanje] = useState('')
+  const [cantidad, setCantidad] = useState('')
   const [apertura, setApertura] = useState(null)
   // Apertura directa: al tocar una mesa libre se abre la cuenta (1 comensal) y los comensales se cambian dentro.
   const autoMesa = useRef(null)
@@ -90,6 +94,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const autoCuenta = useRef(null)
   const [uniendo, setUniendo] = useState(false)
   const [aUnir, setAUnir] = useState([])
+  const [aUnirCtas, setAUnirCtas] = useState([])
   const [desc, setDesc] = useState(null)
   const [prop, setProp] = useState(null)
   const [detalle, setDetalle] = useState('')
@@ -127,7 +132,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const c = cuenta ?? hermanas.find(x => x.id === cuentaSelId) ?? hermanas[0]
   const sufijo = c?.tipo === 'mesa' && hermanas.length > 1 && c.etiqueta ? c.etiqueta : ''
   const titulo = c?.canal === 'llevar' ? tOr('pedido.llevarCabecera', `Pedido ${c.numero ?? ''}`, { n: c.numero }) + (c.clienteNombre ? ' · ' + c.clienteNombre : '') : c?.tipo === 'directa' ? t('pedido.turnoNumero', { n: c.numero }) : ((mesa?.nombre ?? t('pedido.cuenta')) + sufijo)
-  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null); focoPendiente.current = null }
+  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setAUnirCtas([]); setCantidad(''); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null); focoPendiente.current = null }
   const cerrar = () => {
     // Si la cuenta se abrió con el toque y no se pidió nada, se descarta: así tocar una mesa por error no la deja ocupada.
     if (c && autoCuenta.current === c.id && c.tipo === 'mesa' && c.estado === 'abierta' && !(c.items || []).length && !(c.pagos || []).length) d({ t: 'abrir-descartar', cuentaId: c.id })
@@ -145,7 +150,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
     d({ t: 'abrir', mesaId: mesa.id, comensales: 1, usuario })
   }, [mesa?.id, bloqueado, cobro])
   useEffect(() => { if (autoPend.current && c?.id) { autoCuenta.current = c.id; autoPend.current = false } }, [c?.id])
-  const toggle = id => { setMarcados(m => (m.includes(id) ? m.filter(x => x !== id) : [...m, id])); setCanje('') }
+  const toggle = id => { setMarcados(m => (m.includes(id) ? m.filter(x => x !== id) : [...m, id])); setCanje(''); setCantidad('') }
   const nombreMesa = id => s.mesas.find(m => m.id === id)?.nombre ?? t('pedido.mesaCorta')
 
   const pctProp = Number(s.config?.propinaPct) || 0
@@ -237,11 +242,19 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const destinoSel = destinos.find(x => x.key === destino)
   const cuentaDestino = destinoSel?.cuenta || null
   const itemsDestino = (cuentaDestino?.items || []).filter(i => i.estado !== 'anulado')
+  // Un solo ítem marcado con varias unidades = se puede mover solo una parte (2 de 3 iguales).
+  const unico = marcados.length === 1 ? vivos.find(i => i.id === marcados[0]) : null
+  const cantMax = unico?.qty ?? 1
+  const cant = Math.min(Math.max(1, Number(cantidad) || cantMax), cantMax)
   const mover = () => {
     if (!destinoSel || !marcados.length) return
-    d({ t: 'mover', cuentaId: c.id, itemIds: marcados, ...(destinoSel.cuenta ? { cuentaDestinoId: destinoSel.cuenta.id } : { mesaDestino: destinoSel.mesaId }), usuario })
-    setMarcados([]); setDestino(''); setCanje('')
-    avisar(t('pedido.movidoOk', { mesa: destinoSel.nombre }))
+    const destino = destinoSel.cuenta ? { cuentaDestinoId: destinoSel.cuenta.id } : { mesaDestino: destinoSel.mesaId }
+    if (unico && unico.qty > 1 && cant < unico.qty) d({ t: 'mover-parcial', cuentaId: c.id, itemId: unico.id, cantidad: cant, ...destino, usuario })
+    else d({ t: 'mover', cuentaId: c.id, itemIds: marcados, ...destino, usuario })
+    setMarcados([]); setDestino(''); setCanje(''); setCantidad('')
+    avisar(unico && cant < (unico.qty ?? 1)
+      ? tOr('pedido.movidoParcialOk', '{n} de {total}× {producto} fueron a {mesa}', { n: cant, total: unico.qty, producto: unico.nombre, mesa: destinoSel.nombre })
+      : t('pedido.movidoOk', { mesa: destinoSel.nombre }))
   }
   const intercambiar = () => {
     if (!cuentaDestino || marcados.length !== 1 || !canje) return
@@ -287,6 +300,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   }
 
   const listo = pasoPedido(c)
+  const iPaso = PASOS.indexOf(listo)
   // Cobrar nunca depende de «Marcar listo»: el paso solo se muestra, no corta nada.
   const iniciarCobro = () => {
     if (!s.caja?.turno) { setSinTurno({ fondo: '' }); return }
@@ -351,15 +365,19 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
     agregarPago()
   }
 
+  const datosImpresion = () => ({ salon: (s.zonas || []).find(z => z.id === mesa?.zona)?.nombre, mesa: titulo, orden: ordenDelDia(s.cuentas, c) })
+
   const imprimirTicketCuenta = async () => {
     if (!c.items.length) return avisar(t('pedido.cuentaVacia'))
     const r = await imprimirCuenta({
       cuenta: c, config: s.config, titulo: t('pedido.ticketTitulo', { titulo }),
-      datos: { salon: (s.zonas || []).find(z => z.id === mesa?.zona)?.nombre, mesa: titulo, orden: ordenDelDia(s.cuentas, c) },
+      datos: datosImpresion(),
     })
     if (r === 'error') avisar(t('pedido.avisoFalloImpresora'))
     else if (r === 'sin-impresora') avisar(t('pedido.avisoSinImpresoraTicket'))
     else if (r === 'encolado') avisar(t('pedido.ticketEnviadoEstacion'))
+    // Sin este aviso el ticket silencioso salía y la pantalla no decía nada: parecía que el botón no hacía nada.
+    else if (r === 'silencioso') avisar(tOr('pedido.ticketImpreso', 'Ticket impreso en la impresora del grupo de cuentas.'))
   }
 
   const resumenEnvio = salida => salida.map(({ grupo, resultado, n }) => (
@@ -372,19 +390,27 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
     const pend = c.items.filter(i => i.estado === 'pendiente')
     if (!pend.length) return
     d({ t: 'enviar', cuentaId: c.id })
-    const salida = await imprimirComandas({ cuenta: c, items: pend, productos: s.productos, config: s.config, titulo: t('pedido.comandaTitulo', { titulo }) })
+    const salida = await imprimirComandas({ cuenta: c, items: pend, productos: s.productos, config: s.config, titulo: t('pedido.comandaTitulo', { titulo }), datos: datosImpresion() })
     avisar(`${t('pedido.enviadoOk')}: ${resumenEnvio(salida)}`)
   }
   const reimprimirComanda = async () => {
     const env = c.items.filter(i => i.estado === 'enviado')
     if (!env.length) return avisar(t('pedido.nadaQueReimprimir'))
-    const salida = await imprimirComandas({ cuenta: c, items: env, productos: s.productos, config: s.config, titulo: t('pedido.comandaTitulo', { titulo }) })
+    const salida = await imprimirComandas({ cuenta: c, items: env, productos: s.productos, config: s.config, titulo: t('pedido.comandaTitulo', { titulo }), datos: datosImpresion() })
     avisar(resumenEnvio(salida))
   }
 
   const chico = { minHeight: 32, padding: '2px 10px' }
-  const abrirModo = m => { setModo(m); setMenu(false); setMarcados([]); setDestino(''); setCanje(''); setBorrando(null) }
+  const abrirModo = m => { setModo(m); setMenu(false); setMarcados([]); setDestino(''); setCanje(''); setCantidad(''); setBorrando(null) }
   const dividir = () => { setMenu(false); d({ t: 'dividir', cuentaId: c.id, usuario }); setModo('mover'); avisar(t('pedido.divididaOk')) }
+  // 2A y 2B comparten la misma mesa, así que unir_mesas (que trabaja por mesa) no las ve: se unen por cuenta.
+  const hermanasOtras = s.cuentas.filter(x => x.id !== c.id && x.estado !== 'cerrada' && x.mesaIds.some(m => c.mesaIds.includes(m)))
+  const cerrarUnir = () => { setUniendo(false); setAUnir([]); setAUnirCtas([]) }
+  const unirAhora = () => {
+    if (aUnirCtas.length) d({ t: 'unir-sub', cuentaId: c.id, cuentaIds: aUnirCtas, usuario })
+    if (aUnir.length) d({ t: 'unir', cuentaId: c.id, mesaIds: aUnir })
+    cerrarUnir()
+  }
   const hayMenu = editable && (vivos.length > 0 || (puedeUnir && c.tipo === 'mesa'))
 
   const agotados = agotadosHoy(s.config)
@@ -393,16 +419,25 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
   const agregarProd = p => {
     if (agotados[p.id]) return avisar(t('agotado.bloqueado', { nombre: p.nombre, motivo: agotados[p.id].motivo ? t('agotado.motivoSep', { motivo: agotados[p.id].motivo }) : '' }))
     const listas = listasDe(s.config, p)
-    return listas.length ? setPrevia({ p, listas, unidades: [nuevaUnidad()], foco: 0 }) : d({ t: 'item+', cuentaId: c.id, p })
+    const u = nuevaUnidad()
+    return listas.length ? setPrevia({ p, listas, unidades: [u], foco: 0, li: Math.max(0, primeraPendiente(listas, u)) }) : d({ t: 'item+', cuentaId: c.id, p })
   }
   const nuevaUnidad = () => ({ sel: {}, texto: '' })
   const unidadCompleta = (listas, u) => listas.every(l => cumple(l, u.sel[l.id]))
+  const satisfecha = (u, l) => cumple(l, u.sel[l.id])
+  // Índice del primer grupo de opciones que aún no está bien para esa unidad (-1 si ya está completa).
+  const primeraPendiente = (listas, u, desde = 0) => {
+    for (let k = 0; k < listas.length; k++) { const i = (desde + k) % listas.length; if (!satisfecha(u, listas[i])) return i }
+    return -1
+  }
   const cambiarCantidad = dq => setPrevia(v => {
     const n = Math.min(30, Math.max(1, v.unidades.length + dq))
     const unidades = n > v.unidades.length ? [...v.unidades, ...Array.from({ length: n - v.unidades.length }, nuevaUnidad)] : v.unidades.slice(0, n)
-    return { ...v, unidades, foco: Math.min(v.foco, n - 1) }
+    const foco = Math.min(v.foco, n - 1)
+    return { ...v, unidades, foco, li: Math.max(0, primeraPendiente(v.listas, unidades[foco], v.li)) }
   })
-  // Toca una opción: actúa sobre la unidad en foco; si con eso queda completa, el foco pasa a la siguiente incompleta.
+  // Toca una opción: actúa sobre la unidad en foco y sobre EL grupo que se está editando.
+  // Cuando ese grupo queda bien, salta al siguiente pendiente; si era el último, pasa a la siguiente unidad.
   const tocarOpcion = (lista, o) => setPrevia(v => {
     const unidades = v.unidades.map((u, i) => {
       if (i !== v.foco) return u
@@ -414,17 +449,32 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
       return { ...u, sel: { ...u.sel, [lista.id]: nuevo } }
     })
     let foco = v.foco
-    const saturada = l => { const n = (unidades[foco].sel[l.id] || []).length; return maxDe(l) !== Infinity ? n >= maxDe(l) : (!l.obligatoria || n >= 1) }
-    if (v.listas.every(saturada)) {
-      const sig = unidades.findIndex((u, i) => i > foco && !unidadCompleta(v.listas, u))
-      if (sig >= 0) foco = sig
+    let li = v.li
+    if (satisfecha(unidades[foco], lista)) {
+      const sig = primeraPendiente(v.listas, unidades[foco], v.li + 1)
+      if (sig >= 0) li = sig
+      else {
+        const sigU = unidades.findIndex((u, i) => i !== foco && !unidadCompleta(v.listas, u))
+        if (sigU >= 0) { foco = sigU; li = Math.max(0, primeraPendiente(v.listas, unidades[foco])) }
+      }
     }
-    return { ...v, unidades, foco }
+    return { ...v, unidades, foco, li }
   })
 
   const quitarAgotado = id => d({ t: 'cfg~', cambios: { agotados: conMarca(s.config, id, null) } })
-  const agotadosEnSeccion = s.productos.filter(p => p.seccionId === secActiva && agotados[p.id])
+  const q = busca.trim().toLowerCase()
+  const enCarta = s.productos.filter(p => p.activo
+    && (q ? (p.nombre || '').toLowerCase().includes(q) : secActiva === TODOS || p.seccionId === secActiva))
+  const agotadosEnSeccion = enCarta.filter(p => agotados[p.id])
   const previaLista = previa ? previa.unidades.every(u => unidadCompleta(previa.listas, u)) : false
+  const liActivo = previa ? Math.min(Math.max(0, previa.li || 0), previa.listas.length - 1) : 0
+  const listaActiva = previa ? previa.listas[liActivo] : null
+  const elegidoActo = previa
+    ? previa.listas.map(l => {
+      const sel = (previa.unidades[previa.foco] || previa.unidades[0])?.sel[l.id] || []
+      return sel.length ? (l.legacy ? '' : l.nombre + ': ') + sel.join(', ') : ''
+    }).filter(Boolean).join(' · ')
+    : ''
   const confirmarPrevia = () => {
     if (!previaLista) return
     // Una unidad = un ítem con su nota; las iguales se juntan solas («2× Carne — Medio»).
@@ -444,31 +494,40 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
       <div className="fila pm-cab">
         <h3 className="pm-titulo">{titulo}</h3>
         <span className={'tag ' + c.estado}>{estadoVisto}</span>
-        <span className="pm-pasos" title={tOr('pedido.pasosAyuda', 'Prep → tomando pedido · Parcial/Listo → cocina · Cuenta → pre-cuenta · Pagada → cobrada')}>
-          {PASOS.map(p => <em key={p} data-paso={p} className={'pm-paso' + (p === listo ? ' on' : '')}>{tOr('paso.' + p, PASOS_TXT[p])}</em>)}
-        </span>
-        {enCobro && puede(rol, 'abrir_mesa') && (
-          <button type="button" className="ghost pm-cobro-editar" onClick={onEdicion} title={tOr('caja.editarMesaTitle', 'Ver la mesa como mesero: tomar pedido, mover o eliminar ítems')}>✎ {tOr('caja.editarMesa', 'Editar mesa')}</button>
-        )}
-        {hayMenu && (
-          <div className="pm-mas">
-            <button type="button" className="pm-mas-btn" aria-haspopup="menu" aria-expanded={menu} title={t('pedido.masOpciones')} aria-label={t('pedido.masOpciones')} onClick={() => setMenu(v => !v)}>⋯</button>
-            {menu && (
-              <>
-                <div className="pm-mas-fondo" onClick={() => setMenu(false)} />
-                <ul className="pm-mas-menu" role="menu">
-                  {vivos.length > 0 && <li><button type="button" className="peligro" role="menuitem" onClick={() => abrirModo('eliminar')}>🗑 {t('pedido.menuEliminar')}</button></li>}
-                  {puedeMover && vivos.length > 0 && <li><button type="button" role="menuitem" onClick={() => abrirModo('mover')}>↔ {t('pedido.menuMover')}</button></li>}
-                  {puedeUnir && c.tipo === 'mesa' && hermanas.length < 8 && <li><button type="button" role="menuitem" onClick={dividir}>✂ {t('pedido.menuDividir')}</button></li>}
-                  {puedeUnir && c.tipo === 'mesa' && c.mesaIds.length < s.mesas.length && <li><button type="button" role="menuitem" onClick={() => { setMenu(false); setUniendo(true) }}>🔗 {t('pedido.menuUnir')}</button></li>}
-                  {puedeUnir && c.mesaIds.length > 1 && c.mesaIds.map(id => (
-                    <li key={id}><button type="button" role="menuitem" onClick={() => { setMenu(false); d({ t: 'separar', cuentaId: c.id, mesaId: id, usuario }) }}>⛓ {t('pedido.menuSeparar', { mesa: nombreMesa(id) })}</button></li>
-                  ))}
-                </ul>
-              </>
+        {/* Las acciones van juntas a la derecha y los pasos en su propia línea: así ningún botón
+            «se come» el recuadro cuando el nombre de la mesa es largo. */}
+        {(enCobro && puede(rol, 'abrir_mesa') || hayMenu) && (
+          <span className="pm-cab-acc">
+            {enCobro && puede(rol, 'abrir_mesa') && (
+              <button type="button" className="ghost pm-cobro-editar" onClick={onEdicion} title={tOr('caja.editarMesaTitle', 'Ver la mesa como mesero: tomar pedido, mover o eliminar ítems')}>✎ {tOr('caja.editarMesa', 'Editar mesa')}</button>
             )}
-          </div>
+            {hayMenu && (
+              <div className="pm-mas">
+                <button type="button" className="pm-mas-btn" aria-haspopup="menu" aria-expanded={menu} title={t('pedido.masOpciones')} aria-label={t('pedido.masOpciones')} onClick={() => setMenu(v => !v)}>⋯</button>
+                {menu && (
+                  <>
+                    <div className="pm-mas-fondo" onClick={() => setMenu(false)} />
+                    <ul className="pm-mas-menu" role="menu">
+                      {vivos.length > 0 && <li><button type="button" className="peligro" role="menuitem" onClick={() => abrirModo('eliminar')}>🗑 {t('pedido.menuEliminar')}</button></li>}
+                      {puedeMover && vivos.length > 0 && <li><button type="button" role="menuitem" onClick={() => abrirModo('mover')}>↔ {t('pedido.menuMover')}</button></li>}
+                      {puedeUnir && c.tipo === 'mesa' && hermanas.length < 8 && <li><button type="button" role="menuitem" onClick={dividir}>✂ {t('pedido.menuDividir')}</button></li>}
+                      {puedeUnir && c.tipo === 'mesa' && (c.mesaIds.length < s.mesas.length || hermanasOtras.length > 0) && <li><button type="button" role="menuitem" onClick={() => { setMenu(false); setAUnir([]); setAUnirCtas([]); setUniendo(true) }}>🔗 {t('pedido.menuUnir')}</button></li>}
+                      {puedeUnir && c.mesaIds.length > 1 && c.mesaIds.map(id => (
+                        <li key={id}><button type="button" role="menuitem" onClick={() => { setMenu(false); d({ t: 'separar', cuentaId: c.id, mesaId: id, usuario }) }}>⛓ {t('pedido.menuSeparar', { mesa: nombreMesa(id) })}</button></li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
+          </span>
         )}
+        <span className="pm-pasos" role="status" title={tOr('pedido.pasosAyuda', 'Prep → tomando pedido · Parcial/Listo → cocina · Cuenta → pre-cuenta · Pagada → cobrada')}>
+          {PASOS.map((p, k) => (
+            <em key={p} data-paso={p} aria-current={k === iPaso ? 'step' : undefined}
+              className={'pm-paso' + (k === iPaso ? ' on' : k < iPaso ? ' hecho' : '')}>{k < iPaso ? '✓' : ''}{tOr('paso.' + p, PASOS_TXT[p])}</em>
+          ))}
+        </span>
       </div>
       <p className="pm-ayuda">{enCobro
         ? tOr('caja.modoCobroAyuda', 'Vista de cobro: la cuenta con lo que falta pagar. «✎ Editar mesa» abre la vista del mesero.')
@@ -515,7 +574,22 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
       {uniendo && (
         <div className="pm-caja">
           <b style={{ fontSize: '.85rem' }}>{t('pedido.unirNota')}</b>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 140, overflowY: 'auto' }}>
+          {hermanasOtras.length > 0 && (
+            <>
+              <b className="pm-unir-grupo">{tOr('pedido.unirHermanas', 'Otras cuentas de esta mesa')}</b>
+              <div className="pm-unir-opts">
+                {hermanasOtras.map(x => (
+                  <label key={x.id} className={'pm-opcion' + (aUnirCtas.includes(x.id) ? ' on' : '')}>
+                    <input name="unir-cuenta" type="checkbox" checked={aUnirCtas.includes(x.id)} style={{ width: 16, height: 16 }}
+                      onChange={() => setAUnirCtas(a => a.includes(x.id) ? a.filter(y => y !== x.id) : [...a, x.id])} />
+                    {nombreDeCuenta(x)} · {money(totalCuenta(x))}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+          <b className="pm-unir-grupo">{tOr('pedido.unirOtras', 'Otras mesas')}</b>
+          <div className="pm-unir-opts">
             {s.mesas.filter(m => !c.mesaIds.includes(m.id)).map(m => {
               const mc = cuentaActiva(s, m.id)
               return (
@@ -528,8 +602,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
             })}
           </div>
           <div className="barra">
-            <button className="violet" disabled={!aUnir.length} onClick={() => { d({ t: 'unir', cuentaId: c.id, mesaIds: aUnir }); setUniendo(false); setAUnir([]) }}>{t('pedido.unirN', { n: aUnir.length })}</button>
-            <button className="danger" onClick={() => { setUniendo(false); setAUnir([]) }}>{t('comun.cancelar')}</button>
+            <button className="violet" disabled={!aUnir.length && !aUnirCtas.length} onClick={unirAhora}>{t('pedido.unirN', { n: aUnir.length + aUnirCtas.length })}</button>
+            <button className="danger" onClick={cerrarUnir}>{t('comun.cancelar')}</button>
           </div>
         </div>
       )}
@@ -537,7 +611,17 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
       <div className={'pm-cols' + (editable ? ' dos' : '')}>
         {editable && (
           <section className="pm-carta">
-            <div className="barra pm-tabs">{secciones.map(x => <button key={x.id} className={x.id === secActiva ? 'tab on' : 'tab'} onClick={() => setSec(x.id)}>{x.nombre}</button>)}</div>
+            <div className="pm-busca-fila">
+              <input name="buscar-producto" type="search" inputMode="search" autoComplete="off" value={busca}
+                aria-label={tOr('pedido.buscarProducto', 'Buscar producto')} placeholder={tOr('pedido.buscarProducto', 'Buscar producto…')}
+                onChange={e => setBusca(e.target.value)} />
+              {busca && <button type="button" className="ghost pm-busca-x" onClick={() => setBusca('')} aria-label={t('comun.cancelar')}>✕</button>}
+            </div>
+            {/* Los grupos corren hacia los lados: con diez secciones la carta quedaba empujada fuera de la pantalla. */}
+            <div className="barra pm-tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={secActiva === TODOS} className={secActiva === TODOS ? 'tab on' : 'tab'} onClick={() => { setSec(TODOS); setBusca('') }}>{tOr('pedido.todas', 'Todos')}</button>
+              {secciones.map(x => <button key={x.id} type="button" role="tab" aria-selected={x.id === secActiva} className={x.id === secActiva ? 'tab on' : 'tab'} onClick={() => { setSec(x.id); setBusca('') }}>{x.nombre}</button>)}
+            </div>
             {agotadosEnSeccion.length > 0 && (
               <div className="pm-agotados">
                 {agotadosEnSeccion.map(p => (
@@ -548,15 +632,16 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                 ))}
               </div>
             )}
-            <div className="grid">
-              {s.productos.filter(p => p.activo && p.seccionId === secActiva).map(p => (
+            <div className="grid pm-productos">
+              {enCarta.map(p => (
                 <button key={p.id} className={'prod' + (agotados[p.id] ? ' agotado' : '')} onClick={() => agregarProd(p)}
                   title={agotados[p.id] ? t('agotado.bloqueado', { nombre: p.nombre, motivo: agotados[p.id].motivo ? t('agotado.motivoSep', { motivo: agotados[p.id].motivo }) : '' }) : undefined}>
                   <Thumb producto={p} />
-                  {p.nombre}<small>{money(p.precio)}</small>
+                  <span className="pm-prod-nombre">{p.nombre}</span><small>{money(p.precio)}</small>
                   {agotados[p.id] && <small className="prod-agotado">{t('agotado.badge')}</small>}
                 </button>
               ))}
+              {!enCarta.length && <p className="pm-sin-busca">{tOr('pedido.sinProducto', 'Ningún producto coincide con la búsqueda.')}</p>}
             </div>
           </section>
         )}
@@ -654,8 +739,15 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                   {destinos.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
                 </select>
               </label>
+              {unico && cantMax > 1 && (
+                <label className="pm-campo">{`${tOr('pedido.moverCantidad', 'Unidades a mover')} (1–${cantMax})` }
+                  <input name="mover-cantidad" type="text" inputMode="numeric" autoComplete="off"
+                    value={cantidad === '' ? String(cant) : cantidad}
+                    onChange={e => setCantidad(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))} />
+                </label>
+              )}
               <div className="barra" style={{ margin: 0 }}>
-                <button className="teal" disabled={!destino || !marcados.length} onClick={mover}>{t('pedido.moverN', { n: marcados.length })}</button>
+                <button className="teal" disabled={!destino || !marcados.length} onClick={mover}>{t('pedido.moverN', { n: unico ? cant : marcados.length })}</button>
               </div>
               {destino && marcados.length === 1 && (
                 itemsDestino.length ? (
@@ -804,8 +896,9 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
               {puede(rol, 'marcar_listo') && editable && listo === 'listo' && (
                 <button className="slate" onClick={() => d({ t: 'listo', cuentaId: c.id, lista: false, usuario })}>↺ {tOr('pedido.deshacerListo', 'Deshacer listo')}</button>
               )}
-              {editable && c.items.length > 0 && <button className="violet" onClick={() => d({ t: 'precuenta', cuentaId: c.id })}>{t('pedido.precuenta')}</button>}
-              {!enCobro && c.estado === 'precuenta' && <button className="warning" onClick={() => d({ t: 'reabrir', cuentaId: c.id })}>{t('pedido.reabrir')}</button>}
+              {/* La cuenta (pre-cuenta) también se saca desde Caja: el cajero la imprime sin volver a la vista del mesero. */}
+              {(editable || enCobro) && c.items.length > 0 && c.estado === 'abierta' && <button className="violet" onClick={() => d({ t: 'precuenta', cuentaId: c.id })}>{t('pedido.precuenta')}</button>}
+              {c.estado === 'precuenta' && <button className="warning" onClick={() => d({ t: 'reabrir', cuentaId: c.id })}>{t('pedido.reabrir')}</button>}
               {puede(rol, 'cobrar') && c.items.length > 0 && (
                 <button className="success" onClick={iniciarCobro}>💵 {t('pedido.cobrar')}</button>
               )}
@@ -839,31 +932,42 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, onClose, bloquea
                 {previa.unidades.map((u, i) => (
                   <button key={i} type="button" role="tab" aria-selected={previa.foco === i}
                     className={'tab' + (previa.foco === i ? ' on' : '') + (unidadCompleta(previa.listas, u) ? ' ok' : '')}
-                    onClick={() => setPrevia(v => ({ ...v, foco: i }))}>
+                    onClick={() => setPrevia(v => ({ ...v, foco: i, li: Math.max(0, primeraPendiente(v.listas, v.unidades[i])) }))}>
                     {i + 1}{unidadCompleta(previa.listas, u) ? ' ✓' : ''}
                   </button>
                 ))}
               </div>
             )}
-            {previa.listas.map(l => {
-              const act = previa.unidades[previa.foco].sel[l.id] || []
-              return (
-                <div key={l.id} className="pm-lista">
-                  {!l.legacy && (
-                    <small className="pm-lista-tit">
-                      {l.nombre}{l.obligatoria ? ' *' : ''}
-                      {maxDe(l) !== Infinity && maxDe(l) > 1 ? ` · ${t('indic.hasta', { n: maxDe(l) })}` : ''}
-                      {previa.unidades.length > 1 ? ` · ${t('indic.unidadN', { n: previa.foco + 1 })}` : ''}
-                    </small>
-                  )}
-                  <div className="pm-opciones">
-                    {l.opciones.map(o => (
-                      <button key={o} type="button" className={'tab' + (act.includes(o) ? ' on' : '')} onClick={() => tocarOpcion(l, o)}>{o}{extraDe(l, o) > 0 ? ` +${money(extraDe(l, o))}` : ''}</button>
-                    ))}
-                  </div>
+            {/* Un grupo de opciones cada vez: con tres o cuatro grupos a la vez no se sabía qué se estaba editando. */}
+            {previa.listas.length > 1 && (
+              <div className="pm-listas" role="tablist">
+                {previa.listas.map((l, k) => (
+                  <button key={l.id} type="button" role="tab" aria-selected={k === liActivo}
+                    className={'tab' + (k === liActivo ? ' on' : '') + (satisfecha(previa.unidades[previa.foco], l) ? ' ok' : '')}
+                    onClick={() => setPrevia(v => ({ ...v, li: k }))}>
+                    {l.legacy ? tOr('indic.opciones', 'Opciones') : l.nombre}{satisfecha(previa.unidades[previa.foco], l) ? ' ✓' : ''}{l.obligatoria ? ' *' : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+            {elegidoActo && <small className="pm-elegido">{tOr('indic.elegido', 'Elegido')}: {elegidoActo}</small>}
+            {listaActiva && (
+              <div className="pm-lista">
+                {!listaActiva.legacy && (
+                  <small className="pm-lista-tit">
+                    {listaActiva.nombre}{listaActiva.obligatoria ? ' *' : ''}
+                    {maxDe(listaActiva) !== Infinity && maxDe(listaActiva) > 1 ? ` · ${t('indic.hasta', { n: maxDe(listaActiva) })}` : ''}
+                    {previa.unidades.length > 1 ? ` · ${t('indic.unidadN', { n: previa.foco + 1 })}` : ''}
+                  </small>
+                )}
+                <div className="pm-opciones">
+                  {listaActiva.opciones.map(o => {
+                    const act = (previa.unidades[previa.foco] || previa.unidades[0]).sel[listaActiva.id] || []
+                    return <button key={o} type="button" className={'tab' + (act.includes(o) ? ' on' : '')} onClick={() => tocarOpcion(listaActiva, o)}>{o}{extraDe(listaActiva, o) > 0 ? ` +${money(extraDe(listaActiva, o))}` : ''}</button>
+                  })}
                 </div>
-              )
-            })}
+              </div>
+            )}
             <input name="nota-extra" value={previa.unidades[previa.foco].texto} maxLength={60} placeholder={t('pedido.notaExtra')}
               onChange={e => setPrevia(v => ({ ...v, unidades: v.unidades.map((u, i) => (i === v.foco ? { ...u, texto: e.target.value } : u)) }))} />
             {!previaLista && <small className="pm-falta">{t('indic.faltan')}</small>}

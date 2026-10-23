@@ -457,7 +457,7 @@ export default function MenuPage({ rol }) {
       }
       d({ t: 'margen-aplicar', productoIds: ids, margenPct })
       setVMasiva(null); setMargenTmp('')
-      setAviso({ tono: 'ok', msg: tOr('menu.margenAplicado', `Precios recalculados al ${margenPct} % de margen (${total} productos).`) })
+      setAviso({ tono: 'ok', msg: tOr('menu.margenAplicado', `Precios recalculados al ${margenPct} % de margen (${total} productos).`, { margenPct, total }) })
     } catch (err) {
       setAviso({ tono: 'danger', msg: err?.message || tOr('menu.errorAplicarMargen', 'No se pudieron aplicar los precios.') })
     } finally { setMasivaCarg(null) }
@@ -489,7 +489,7 @@ export default function MenuPage({ rol }) {
       await rpc('costos_desde_receta', { p_producto_ids: ids, p_aplicar: true })
       d({ t: 'receta-costo', productoIds: ids })
       setVMasiva(null)
-      setAviso({ tono: 'ok', msg: tOr('menu.recetaAplicado', `Costo teórico aplicado a ${total} productos.`) })
+      setAviso({ tono: 'ok', msg: tOr('menu.recetaAplicado', `Costo teórico aplicado a ${total} productos.`, { total }) })
     } catch (err) {
       setAviso({ tono: 'danger', msg: err?.message || tOr('menu.errorAplicarReceta', 'No se pudo aplicar el costo desde la receta.') })
     } finally { setMasivaCarg(null) }
@@ -1078,13 +1078,13 @@ export default function MenuPage({ rol }) {
       {vMasiva && (
         <Ventana
           titulo={vMasiva.tipo === 'margen'
-            ? tOr('menu.margenSimTitulo', `Simulación de margen al ${vMasiva.margenPct} %`)
+            ? tOr('menu.margenSimTitulo', `Simulación de margen al ${vMasiva.margenPct} %`, { margenPct: vMasiva.margenPct })
             : tOr('menu.recetaSimTitulo', 'Costo teórico desde receta')}
           onCerrar={() => setVMasiva(null)}
         >
           <p className="mn-masiva-res">
             {tOr('menu.margenTocaraN', `Se tocarán ${vMasiva.total} productos.`, { n: vMasiva.total })}
-            {vMasiva.sin_costo > 0 && <> · <span className="mn-mg mg-bjo">{tOr('menu.sinCostoN', `${vMasiva.sin_costo} productos quedan sin costo y se omiten.`)}</span></>}
+            {vMasiva.sin_costo > 0 && <> · <span className="mn-mg mg-bjo">{tOr('menu.sinCostoN', `${vMasiva.sin_costo} productos quedan sin costo y se omiten.`, { n: vMasiva.sin_costo })}</span></>}
           </p>
           <div className="mn-tabla-wrap">
             <table className="mn-tabla">
@@ -1116,7 +1116,7 @@ export default function MenuPage({ rol }) {
               </tbody>
             </table>
             {vMasiva.total > vMasiva.muestra.length && (
-              <p className="mn-tabla-mas">{tOr('menu.muestraParcial', `Se muestran solo ${vMasiva.muestra.length} filas de ejemplo.`)}</p>
+              <p className="mn-tabla-mas">{tOr('menu.muestraParcial', `Se muestran solo ${vMasiva.muestra.length} filas de ejemplo.`, { n: vMasiva.muestra.length })}</p>
             )}
           </div>
           <div className="mn-pie">

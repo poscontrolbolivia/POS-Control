@@ -4,6 +4,7 @@ import { puede } from '../../../services/permissions'
 import { round2 } from '../../../services/format.js'
 import { useMoneda } from '../../../services/money.js'
 import { useIdioma } from '../../../i18n/index.jsx'
+import { planZonaBorrar, accionesBorrarZona, SIN_SALON, BORRAR_MESAS } from '../../../services/salon.js'
 import OrderPanel from '../order/OrderPanel.jsx'
 import './HallPage.css'
 
@@ -48,6 +49,9 @@ const dentroDelLienzo = (x, y, w, h) => ({
 
 const limitarCapacidad = cap => Math.max(CAP_MIN, Math.min(CAP_MAX, cap))
 
+// Las mesas nuevas caen en cascada dentro del lienzo (no todas encima de la primera) sin salirse del mapa.
+const cascadar = k => dentroDelLienzo(30 + (k % 7) * 52, 30 + Math.floor(k / 7) * 46, 110, 110)
+
 const proximaMesaNombre = mesas => {
   const nums = mesas.map(m => Number(String(m.nombre).match(/(\d+)\s*$/)?.[1] || 0))
   return 'Mesa ' + (Math.max(0, ...nums) + 1)
@@ -64,7 +68,7 @@ const capacidadCuenta = (c, mesas) => {
   return ids.reduce((t, id) => t + (mesas.find(m => m.id === id)?.cap ?? 0), 0)
 }
 
-export default function HallPage({ rol, sesion, foco }) {
+export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   const { s, d, modo } = useStore()
   const { money } = useMoneda()
   const { t, tOr } = useIdioma()
@@ -92,8 +96,23 @@ export default function HallPage({ rol, sesion, foco }) {
   const avisoTimer = useRef(null)
 
   // Zoom del lienzo: escale de TODO el mapa (mesas, textos y rejilla) sin cambiar las coordenadas guardadas.
-  const [zoom, setZoom] = useState(1)
-  const aplicarZoom = z => setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100)))
+  // Se recuerda por negocio en este equipo, igual que la vista lista/mapa: si no, al salir de «Editar salón» volvía al 100 %.
+  const CLAVE_ZOOM = 'pos-salon-zoom'
+  const [zoom, setZoom] = useState(() => {
+    try {
+      const guardado = JSON.parse(localStorage.getItem(CLAVE_ZOOM) || 'null')
+      const z = guardado?.[s._empresaId]
+      return typeof z === 'number' && z >= ZOOM_MIN && z <= ZOOM_MAX ? z : 1
+    } catch { return 1 }
+  })
+  const aplicarZoom = z => setZoom(actual => {
+    const nuevo = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100))
+    try {
+      const prev = JSON.parse(localStorage.getItem(CLAVE_ZOOM) || '{}')
+      localStorage.setItem(CLAVE_ZOOM, JSON.stringify({ ...prev, [s._empresaId]: nuevo }))
+    } catch {  }
+    return nuevo
+  })
   const zoomAcercar = () => aplicarZoom(zoom + ZOOM_PASO)
   const zoomAlejar = () => aplicarZoom(zoom - ZOOM_PASO)
 
@@ -220,10 +239,25 @@ export default function HallPage({ rol, sesion, foco }) {
     cambios.forEach(c => d({ t: 'zona~', id: c.id, cambios: { orden: c.orden } }))
   }
   const borrarZona = z => {
-    if (nMesasZona(z.id) > 0) return
-    d({ t: 'zona-', id: z.id })
+    const plan = planZonaBorrar({ zona: z, mesas: s.mesas, cuentas: s.cuentas, zonas })
+    if (plan.modo === 'bloqueado') return avisar(t('salon.zonaMesasConCuenta', { mesa: plan.ocupadas.map(m => m.nombre).join(', ') }))
+    const destino = plan.modo === 'mover' ? (conf?.destino ?? SIN_SALON) : null
+    // Primero se vacía el salón (mesas movidas o eliminadas) y recién después se borra: al revés,
+    // la base deja las mesas sin zona y aparecen sueltas en «Todas».
+    accionesBorrarZona(plan, destino).forEach(a => d(a))
     setConf(null)
     if (activo === z.id) setZona(zonas.length > 1 ? (zonas.find(x => x.id !== z.id)?.id ?? TODAS) : TODAS)
+    const movidas = plan.mesas.length
+    avisar(destino === BORRAR_MESAS && movidas
+      ? t('salon.zonaEliminadaConMesas', { n: movidas })
+      : movidas ? t('salon.zonaEliminadaMesas', { n: movidas, destino: destino === SIN_SALON ? t('salon.zonaSinSalon') : (zonas.find(x => x.id === destino)?.nombre || '') })
+        : t('salon.zonaEliminada'))
+  }
+  const pedirBorrarZona = z => {
+    const plan = planZonaBorrar({ zona: z, mesas: s.mesas, cuentas: s.cuentas, zonas })
+    if (plan.modo === 'bloqueado') return avisar(t('salon.zonaMesasConCuenta', { mesa: plan.ocupadas.map(m => m.nombre).join(', ') }))
+    setRen(null)
+    setConf(plan.modo === 'mover' ? { id: z.id, destino: plan.otras[0]?.id ?? SIN_SALON } : { id: z.id, destino: SIN_SALON })
   }
 
   const crear = () => {
@@ -295,17 +329,25 @@ export default function HallPage({ rol, sesion, foco }) {
                       disabled={i === zonas.length - 1} onClick={() => moverZona(i, 1)}>▼</button>
                     <button className="ico" title={t('salon.renombrar')} aria-label={t('salon.renombrar')}
                       onClick={() => { setConf(null); setRen({ id: z.id, nombre: z.nombre }) }}>✎</button>
-                    {conf === z.id ? (
+                    {conf?.id === z.id ? (
                       <span className="zconf">
-                        <span className="zconf-txt">{t('salon.confirmarEliminarZona')}</span>
+                        <span className="zconf-txt">{nMesasZona(z.id) ? t('salon.zonaMesasTitulo', { n: nMesasZona(z.id) }) : t('salon.confirmarEliminarZona')}</span>
+                        {nMesasZona(z.id) > 0 && (
+                          <select name="destino-mesas" className="zconf-sel" aria-label={t('salon.zonaMoverA')} value={conf.destino}
+                            onChange={e => setConf({ ...conf, destino: e.target.value })}>
+                            {zonas.filter(x => x.id !== z.id).map(x => <option key={x.id} value={x.id}>{t('salon.zonaMoverA')} «{x.nombre}»</option>)}
+                            <option value={SIN_SALON}>{t('salon.zonaSinSalon')}</option>
+                            <option value={BORRAR_MESAS}>{t('salon.zonaEliminarMesas')}</option>
+                          </select>
+                        )}
                         <button className="ico danger" title={t('comun.confirmar')} aria-label={t('comun.confirmar')}
                           onClick={() => borrarZona(z)}>✓</button>
                         <button className="ico" title={t('comun.cancelar')} aria-label={t('comun.cancelar')}
                           onClick={() => setConf(null)}>✕</button>
                       </span>
                     ) : (
-                      <button className="ico" title={nMesasZona(z.id) ? t('salon.zonaConMesas', { n: nMesasZona(z.id) }) : t('salon.eliminarZona')}
-                        aria-label={t('salon.eliminarZona')} disabled={nMesasZona(z.id) > 0} onClick={() => setConf(z.id)}>🗑</button>
+                      <button className="ico" title={t('salon.eliminarZona')}
+                        aria-label={t('salon.eliminarZona')} onClick={() => pedirBorrarZona(z)}>🗑</button>
                     )}
                   </span>
                 )}
@@ -323,7 +365,7 @@ export default function HallPage({ rol, sesion, foco }) {
           </div>
           {admin && (
             <button className={edit ? 'primary' : 'ghost'} disabled={enLlevar} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
-              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { if (edit) setZoom(1); setEdit(!edit); setSel(null); setNueva(null); setRen(null); setConf(null) }}>
+              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { setEdit(!edit); setSel(null); setNueva(null); setRen(null); setConf(null) }}>
               <span aria-hidden="true">{edit ? '✓' : '✎'}</span><span className="txt">{edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}</span>
             </button>
           )}
@@ -478,7 +520,7 @@ export default function HallPage({ rol, sesion, foco }) {
           {edit && admin && (
             <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
               <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
-              <button type="button" className="zoom-pct" onClick={() => setZoom(1)} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
+              <button type="button" className="zoom-pct" onClick={() => aplicarZoom(1)} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
               <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
             </div>
           )}
@@ -547,7 +589,12 @@ export default function HallPage({ rol, sesion, foco }) {
       </section>
       <OrderPanel rol={rol} sesion={sesion} mesa={enLlevar ? undefined : mesaSel} cuenta={enLlevar ? llevarSel : undefined}
         cobro={cobro} onEdicion={() => setCobro(false)}
-        onClose={() => { setCobro(false); setSel(null); setLlevarSelId(null) }} bloqueado={edit} />
+        onClose={() => {
+          // Venía de Caja a cobrar: se cierra la vista de cobro y vuelve a Caja, no se queda suelto en el Salón.
+          const eraCobro = cobro
+          setCobro(false); setSel(null); setLlevarSelId(null)
+          if (eraCobro) onVolverCaja?.()
+        }} bloqueado={edit} />
     </div>
   )
 }

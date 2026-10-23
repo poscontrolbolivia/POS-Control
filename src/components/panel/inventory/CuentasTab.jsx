@@ -102,7 +102,7 @@ export default function CuentasTab({ filtroProveedor, onFiltro }) {
     const saldo = num(de?.saldo)
     const monto = numMonto(abono.monto)
     if (!(monto > 0)) { setAbonoErr(tOr('inventario.abonoInvalido', 'El abono debe ser un número mayor que 0.')); return }
-    if (monto > saldo + 0.005) { setAbonoErr(tOr('inventario.abonoExcede', `El abono no puede superar el saldo (${money(saldo)}).`)); return }
+    if (monto > saldo + 0.005) { setAbonoErr(tOr('inventario.abonoExcede', `El abono no puede superar el saldo (${money(saldo)}).`, { saldo: money(saldo) })); return }
     setAbonoErr('')
     d({ t: 'deuda-abono', id: abono.id, monto: round2(monto), nota: abono.nota.trim() })
     cerrarAbono()

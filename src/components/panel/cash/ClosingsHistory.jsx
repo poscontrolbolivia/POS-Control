@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { rpc, mensajeError } from '../../../services/supabaseClient.js'
+import { rpc, mensajeError, sb } from '../../../services/supabaseClient.js'
 import { useIdioma } from '../../../i18n/index.jsx'
+import { useStore } from '../../../context/StoreContext.jsx'
 import { round2 as r2 } from '../../../services/format.js'
 import { formatearMonto } from '../../../services/money.js'
+import { detalleCierre } from '../../../services/db.js'
+import { calcularResumen } from './calcularResumen.js'
+import { armarReporte, descargarPdfCierre } from '../../../services/reporteCierre.js'
 
 const pad = n => String(n).padStart(2, '0')
 const aFecha = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -11,14 +15,45 @@ const hace = dias => { const d = new Date(); d.setDate(d.getDate() - dias); retu
 
 export default function ClosingsHistory({ moneda = 'Bs' }) {
   const { t } = useIdioma()
+  const { s } = useStore()
   const [desde, setDesde] = useState(hace(6))
   const [hasta, setHasta] = useState(hoy())
   const [turnos, setTurnos] = useState(null)
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
+  const [pdf, setPdf] = useState('')
+  const [fallo, setFallo] = useState({ id: '', msg: '' })
   const [abiertos, setAbiertos] = useState({})
   const m = n => formatearMonto(n, moneda)
   const fh = iso => new Date(iso).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+
+  const nombreMesa = id => s.mesas.find(x => x.id === id)?.nombre || ''
+  const etiquetaCuenta = c => c.numero ?? ((c.mesaIds || []).map(nombreMesa).filter(Boolean).join(' + ') || c.clienteNombre || c.etiqueta || '—')
+
+  // El PDF se arma con el mismo generador del cierre en curso: se leen las cuentas de la
+  // ventana del turno desde la base (la RLS deja leer el histórico de la empresa).
+  const generarPdf = async x => {
+    setPdf(x.id)
+    setFallo({ id: '', msg: '' })
+    try {
+      const { turno, cuentas, devoluciones } = await detalleCierre(x.id)
+      const reporte = armarReporte({
+        turno,
+        resumen: calcularResumen(turno, cuentas),
+        config: s.config,
+        productos: s.productos,
+        devoluciones,
+        contado: x.contado == null ? null : Number(x.contado),
+        cerradoPor: x.cerrado_por || '',
+        etiquetaCuenta,
+      })
+      await descargarPdfCierre(reporte, { t, m, sb })
+    } catch (e) {
+      setFallo({ id: x.id, msg: mensajeError(e) })
+    } finally {
+      setPdf('')
+    }
+  }
 
   const buscar = useCallback(async (d = desde, h = hasta) => {
     setCargando(true); setError('')
@@ -115,8 +150,14 @@ export default function ClosingsHistory({ moneda = 'Bs' }) {
                     <span className="sp" />
                     <span>{m(x.cobrado)}</span>
                     {x.cerrado_en && dif(x.diferencia)}
+                    {x.cerrado_en && (
+                      <button type="button" className="teal" disabled={pdf === x.id} onClick={() => generarPdf(x)}>
+                        {pdf === x.id ? t('cierres.pdfCargando') : t('cierres.pdf')}
+                      </button>
+                    )}
                     <button type="button" className="ghost" onClick={() => setAbiertos(a => ({ ...a, [x.id]: !a[x.id] }))}>{ab ? t('cierres.ocultar') : t('cierres.detalle')}</button>
                   </div>
+                  {fallo.id === x.id && <p className="caja-aviso" role="alert">{fallo.msg}</p>}
                   {ab && (
                     <div className="cierres-detalle">
                       <span>{t('cierres.abrio', { quien: x.abierto_por || '—' })}</span>

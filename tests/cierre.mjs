@@ -33,6 +33,25 @@ try {
   ok(r.diferencia === -5, 'diferencia = contado 140 − esperado 145')
   ok(r.comprobantes.length === 1, 'un comprobante QR listado')
   ok(r.porCajero === false, 'modo compartida → cierre del día')
+
+  // El PDF de un turno ya cerrado (Cierres de caja) reusa calcularResumen sobre la ventana
+  // del turno: lo de afuera no puede entrar y un abono de una cuenta abierta sí.
+  const C = await server.ssrLoadModule('/src/components/panel/cash/calcularResumen.js')
+  const fila = (id, extra) => ({
+    id, tipo: 'mesa', estado: 'cerrada', comensales: 1, descuento: 0, propina: 0, items: [], pagos: [], ...extra,
+  })
+  const hist = [
+    fila('en', { cerradaEn: 2000, cerradaPor: 'Ana', items: [{ nombre: 'P', precio: 10, qty: 1, estado: 'enviado' }], pagos: [{ metodo: 'efectivo', monto: 10, en: 2000 }] }),
+    fila('fuera', { cerradaEn: 9000, cerradaPor: 'Ana', items: [{ nombre: 'Q', precio: 99, qty: 1, estado: 'enviado' }], pagos: [{ metodo: 'efectivo', monto: 99, en: 9000 }] }),
+    { ...fila('abierta'), estado: 'abierta', cerradaEn: undefined, items: [{ nombre: 'R', precio: 30, qty: 1, estado: 'enviado' }], pagos: [{ metodo: 'qr', monto: 30, en: 1500 }] },
+  ]
+  const ventana = { abiertoEn: 1000, cerradoEn: 3000, abiertoPor: 'Ana', modo: 'compartida', fondo: 50, movimientos: [{ t: 'egreso', monto: 20 }] }
+  const res = C.calcularResumen(ventana, hist)
+  ok(res.tickets.length === 1 && res.tickets[0].id === 'en', 'la ventana del turno deja fuera lo cerrado después')
+  ok(res.ventas.efectivo === 10 && res.ventas.qr === 30, 'el abono de una cuenta abierta dentro del turno entra en la caja')
+  ok(res.esperado === 40, 'esperado = fondo 50 + efectivo 10 − egreso 20')
+  const porCajero = C.calcularResumen({ ...ventana, modo: 'por_cajero', abiertoPor: 'Bea' }, hist)
+  ok(porCajero.tickets.length === 0 && porCajero.ventas.efectivo === 0 && porCajero.ventas.qr === 0, 'turno por cajero: lo de otra cajera no cuenta')
   const t = (k, p) => (p ? `${k}${JSON.stringify(p)}` : k)
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cierre-'))
   const previo = process.cwd(); process.chdir(dir)

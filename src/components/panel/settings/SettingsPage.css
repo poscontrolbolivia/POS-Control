@@ -1,8 +1,48 @@
 .adm-config{display:flex;flex-direction:column;gap:14px}
-.cfg-collapsed{gap:8px}
-.cfg-collapsed .eq-toggle{margin-right:0}
-.cfg-bloque > .adm-config{width:100%}
-.cfg-bloque .adm-card-cab .eq-toggle{flex:0 0 auto}
+
+/* ── NIVEL 1 · Bloques de Configuración: la píldora es a la vez el menú y el título del bloque,
+   así que no existe un segundo menú. Verde de marca cuando está abierto (el verde se reserva para
+   lo que manda: el bloque activo), azul solo en el nivel 2 y gris plano en el nivel 3.
+   El abierto se pega bajo la barra superior mientras se recorre su contenido. ── */
+.cfg-bloque{display:flex;flex-direction:column;gap:8px}
+.cfg-cab{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:10px 16px;text-align:left;
+  border:1.5px solid var(--line-fuerte);border-radius:var(--r-pill);background:var(--card-2);color:var(--ink);
+  font-weight:650;box-shadow:var(--sh-1)}
+.cfg-cab:hover:not(:disabled){background:var(--card);border-color:color-mix(in srgb,var(--logo-green) 55%,var(--line))}
+.cfg-cab-icono{flex:0 0 auto;font-size:1.1rem;line-height:1}
+.cfg-cab-titulo{flex:1 1 auto;min-width:0}
+.cfg-cab-chip{flex:0 0 auto}
+.cfg-cab-flecha{flex:0 0 auto;margin-left:auto;color:var(--logo-green);font-size:1rem;line-height:1}
+.cfg-bloque.abierto > .cfg-cab{position:sticky;top:var(--topbar-h,0px);z-index:120;
+  border-color:var(--logo-green);background:color-mix(in srgb,var(--logo-green) 12%,var(--card))}
+.cfg-bloque.abierto > .cfg-cab:hover:not(:disabled){background:color-mix(in srgb,var(--logo-green) 18%,var(--card))}
+.cfg-cuerpo{display:flex;flex-direction:column;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:16px;box-shadow:var(--sh-1)}
+.cfg-cuerpo > .adm-config{width:100%}
+/* Impresoras trae sus propios submenús con tarjeta: el cuerpo del bloque va al ras, sin caja doble. */
+.cfg-cuerpo-plano{border:0;padding:0;background:transparent;box-shadow:none;gap:10px}
+
+/* ── NIVEL 2 · Submenús (Impresoras): misma píldora pero en AZUL, que es el color de estado.
+   Así un subgroup se ve distinto de su grupo: verde arriba, azul adentro. ── */
+.adm-panel .imp-sub-cab{border-color:var(--line);background:var(--card);box-shadow:none;min-height:46px}
+.adm-panel .imp-sub.abierto > .imp-sub-cab{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,var(--card))}
+
+/* ── NIVEL 3 · Tarjetas planas y grises (grupos, papeles, salidas): sin píldora ni color. ── */
+
+/* ── «Equipo» (UsersPage es archivo ajeno): se iguala aquí sin tocarlo. Cerrado es la misma
+   píldora de nivel 1 con ▸; abierto se ve como un bloque de nivel 1 (verde de marca) y su botón
+   pasa a ser una píldora chica, porque el título grande ya lo firma la tarjeta. ── */
+.adm-panel button.ghost.eq-toggle{display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:10px 16px;
+  border:1.5px solid var(--line-fuerte);border-radius:var(--r-pill);background:var(--card-2);color:var(--ink);
+  font-weight:650;text-shadow:none;box-shadow:var(--sh-1)}
+.adm-panel button.ghost.eq-toggle:hover:not(:disabled){background:var(--card);filter:none;transform:none}
+.adm-panel button.ghost.eq-toggle::after{content:'▸';margin-left:auto;color:var(--logo-green);font-size:1rem}
+.adm-panel > .adm-fila > button.ghost.eq-toggle{flex:1 1 auto;min-width:0}
+.adm-panel .adm-equipo{border:1.5px solid var(--logo-green);border-radius:var(--r-md);background:var(--card);box-shadow:var(--sh-1)}
+.adm-panel .adm-equipo > .adm-card-cab{background:color-mix(in srgb,var(--logo-green) 12%,var(--card));border-radius:calc(var(--r-md) - 4px)}
+.adm-panel .adm-equipo button.ghost.eq-toggle{min-height:38px;padding:6px 14px;border-radius:var(--r-pill);
+  background:var(--card-2);font-size:.88rem;box-shadow:none}
+.adm-panel .adm-equipo button.ghost.eq-toggle::after{content:''}
 
 /* Subidas de logo y QR de pago dentro de «Datos del negocio» */
 .cfg-imagenes{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px}

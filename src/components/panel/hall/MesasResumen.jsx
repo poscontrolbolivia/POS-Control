@@ -60,11 +60,10 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
         </div>
       </div>
 
-      <p className="caja-nota mr-ayuda">{tOr('caja.mesasAyuda', 'Lee el saldo de cada mesa y toca una para cobrarla. Los pedidos se toman en Salón.')}</p>
-
-      {zonasOrden.length > 1 && (
+      {/* El salón se elige arriba y siempre: en la vista mapa el selector quedaba debajo de la ayuda y no se veía. */}
+      {zonasOrden.length >= 1 && (
         <div className="zonas-scroll mr-zonas" role="group" aria-label={t('salon.salones')}>
-          <button type="button" className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS} onClick={() => setZona(TODAS)}>
+          <button type="button" className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS} onClick={() => setZona(TODAS)} title={t('salon.todasTitle')}>
             <span aria-hidden="true">▦</span> {t('salon.todas')}
           </button>
           {zonasOrden.map(z => (
@@ -72,6 +71,8 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
           ))}
         </div>
       )}
+
+      <p className="caja-nota mr-ayuda">{tOr('caja.mesasAyuda', 'Lee el saldo de cada mesa y toca una para cobrarla. Los pedidos se toman en Salón.')}</p>
 
       {mesasZona.length === 0 ? (
         <p className="caja-nota mr-vacio">{t('salon.sinMesasZona')}</p>

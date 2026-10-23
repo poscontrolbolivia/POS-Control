@@ -21,7 +21,11 @@
   background:var(--libre);border:1px solid var(--line);border-radius:12px;
 }
 .auth-bloque-titulo{margin:0;font-weight:700;font-size:.92rem}
+/* Barra superior SIEMPRE visible: se pega arriba aunque se baje (el scroll es de la ventana).
+   Fondo opaco + borde inferior; el z-index queda por debajo de los modales (.modal-fondo 200 y
+   .mn-overlay 1000) para que un modal nunca se vea tapado por la barra. */
 .topbar{
+  position:sticky;top:0;z-index:150;
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   padding:8px 14px;background:var(--card);border-bottom:1px solid var(--line);box-shadow:var(--sh-1);
 }

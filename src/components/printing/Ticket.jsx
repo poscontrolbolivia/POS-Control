@@ -1,6 +1,7 @@
 import { MONEDA, VERSION } from '../../services/config'
 import { totalCuenta, totalFinal, pagadoCuenta } from '../../context/StoreContext.jsx'
 import { gruposDe, grupoTickets, repartirPorGrupo, areasDelItem, opcionesDeGrupo } from '../../services/printing.js'
+import { lineasComanda } from '../../services/comanda.js'
 import { despachar } from '../../services/printDispatch.js'
 import { tGlobal, existeClave } from '../../i18n/index.jsx'
 import { round2 } from '../../services/format.js'
@@ -71,20 +72,17 @@ export function lineasPlanas({ cuenta, config = {}, titulo, comanda = false, anc
   }
 
   if (comanda) {
-    const fecha = fechaDe(cuenta.abiertaEn || Date.now())
-    suelta((titulo || config?.nombre || 'POS Control').toUpperCase(), Math.floor(ancho / 2), { negrita: true, centrado: true, tam: 2 })
-    suelta(fecha, ancho, { centrado: true })
-    suelta(tGlobal('ticket.mesaValor', { mesa: cuenta.mesaTexto || (cuenta.mesaIds || []).join(', ') || '—' }))
-    if (cuenta.abiertaPor) suelta(tGlobal('ticket.atendioValor', { usuario: cuenta.abiertaPor }))
-    L.push(sep)
     const cocina = (cuenta.items || []).filter(i => i.estado === 'pendiente' || i.estado === 'enviado')
-    if (!cocina.length) L.push({ texto: tGlobal('ticket.sinPedidos'), centrado: true })
-    cocina.forEach(i => {
-      suelta(`${prefijoAreas(i, config)}${i.qty} x ${i.nombre}`, ancho, { negrita: true })
-      if (i.nota) suelta(`    ** ${i.nota} **`, ancho, { negrita: true })
-    })
-    L.push(sep)
-    suelta(tGlobal('ticket.emitidoValor', { fecha }))
+    lineasComanda({
+      items: cocina.map(i => ({ qty: i.qty, nombre: `${prefijoAreas(i, config)}${i.nombre}`, nota: i.nota })),
+      areaNombre: datos.areaNombre || '',
+      salon: datos.salon || '',
+      mesa: cuenta.mesaTexto || datos.mesa || (cuenta.mesaIds || []).join(', ')
+        || (cuenta.canal === 'mostrador' ? tGlobal('venta.mostrador') : '—'),
+      enviadoPor: cuenta.abiertaPor || '',
+      en: cuenta.abiertaEn || Date.now(),
+      tr: tGlobal, ancho,
+    }).forEach(l => (l.guion ? L.push(sep) : suelta(l.texto, ancho, { negrita: l.negrita, centrado: l.centrado })))
     return L
   }
 
@@ -241,7 +239,7 @@ export async function imprimirCuenta({ cuenta, config = {}, titulo, comanda = fa
   return resultado
 }
 
-export async function imprimirComandas({ cuenta, items, productos = [], config = {}, titulo }) {
+export async function imprimirComandas({ cuenta, items, productos = [], config = {}, titulo, datos = {} }) {
 
   const itemsAreas = items.map(i => {
     const a = areasDelItem(i, productos)
@@ -251,6 +249,7 @@ export async function imprimirComandas({ cuenta, items, productos = [], config =
   const resultados = await despachar(reparto.map(({ grupo, items: its }) => trabajoDe({
     cuenta: { ...cuenta, items: its }, config, titulo: `${titulo} · ${grupo.nombre}`, comanda: true,
     grupoId: grupo.id, cols: Number(grupo.ancho) || Number(config?.impresoraAncho) || 32,
+    datos: { ...datos, areaNombre: grupo.nombre },
   })), config)
   return reparto.map(({ grupo, items: its }, i) => ({ grupo, resultado: resultados[i], n: its.length }))
 }

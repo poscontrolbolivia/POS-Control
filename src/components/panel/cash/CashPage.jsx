@@ -51,29 +51,33 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
   // Sin esta lista la única forma de cobrarlo era pasarlo a una mesa, que no tiene sentido.
   const llevar = s.cuentas.filter(c => c.canal === 'llevar' && c.estado !== 'cerrada')
     .sort((a, b) => (a.numero || 0) - (b.numero || 0))
+  const estadoLlevar = c => (c.estado === 'precuenta' ? 'porcobrar' : (c.items || []).some(i => i.estado === 'enviado') ? 'enviada' : 'ocupada')
+  // Mismo formato que la lista de mesas: dos tarjetas iguales, una por pedido, para no aprender dos vistas.
   const SeccionLlevar = ({ filas, onCobrar }) => (
-    <section className="caja-card caja-llevar">
-      <div className="caja-head">
-        <h2>{tOr('caja.llevarTitulo', 'Pedidos para llevar')}</h2>
+    <section className="caja-card mr-bloque" aria-label={tOr('caja.llevarTitulo', 'Pedidos para llevar')}>
+      <div className="caja-head mr-cab">
+        <h2>🥡 {tOr('caja.llevarTitulo', 'Pedidos para llevar')}</h2>
         <span className="caja-hora">{filas.length}</span>
         <span className="sp" />
         <b>{m(filas.reduce((a, c) => a + saldoCuenta(c), 0))}</b>
       </div>
-      <p className="caja-nota">{tOr('caja.llevarAyuda', 'Aquí se cobran, sin pasarlos por una mesa. Toca uno para cobrarlo.')}</p>
-      <ul className="caja-lista">
-        {filas.map(c => (
-          <li key={c.id}>
-            <button type="button" className="caja-llevar-abrir" onClick={() => onCobrar(c)}>
-              <b>{nombreCorto(c)}</b>
-              <span className="caja-hora">{tOr('estado.' + c.estado, c.estado)}</span>
-              <span className="sp" />
-              <b>{m(saldoCuenta(c))}</b>
-              <span className="caja-llevar-ir">{tOr('caja.llevarCobrar', 'Cobrar ›')}</span>
-            </button>
-          </li>
-        ))}
-        {!filas.length && <li className="caja-vacio">{tOr('caja.llevarVacio', 'No hay pedidos para llevar abiertos; se toman en Salón → 🥡 Para llevar.')}</li>}
-      </ul>
+      <p className="caja-nota mr-ayuda">{tOr('caja.llevarAyuda', 'Aquí se cobran, sin pasarlos por una mesa. Toca uno para cobrarlo.')}</p>
+      {filas.length ? (
+        <div className="mr-lista">
+          {filas.map(c => {
+            const pagado = pagadoCuenta(c)
+            return (
+              <button type="button" key={c.id} className={'mr-item ' + estadoLlevar(c)} onClick={() => onCobrar(c)}>
+                <b className="mr-nombre">{nombreCorto(c)}</b>
+                <span className="mr-est">{tOr('estado.' + c.estado, c.estado)}</span>
+                <small className="mr-importe">{m(saldoCuenta(c))}{pagado > 0.009 && <em className="abonado" title={tOr('salon.totalAbonado', 'Abonado')}>✓ {m(pagado)}</em>}</small>
+                <small className="mr-quien">{t('caja.abrevItems', { n: (c.items || []).filter(i => i.estado !== 'anulado').reduce((a, i) => a + i.qty, 0) })}</small>
+                <span className="mr-zona">{tOr('caja.llevarCobrar', 'Cobrar ›')}</span>
+              </button>
+            )
+          })}
+        </div>
+      ) : <p className="caja-nota mr-vacio">{tOr('caja.llevarVacio', 'No hay pedidos para llevar abiertos; se toman en Salón → 🥡 Para llevar.')}</p>}
     </section>
   )
 
@@ -95,6 +99,22 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
   const abiertas = s.cuentas.filter(c => c.estado !== 'cerrada')
   const heredadas = (turno?.heredadas || []).filter(id => abiertas.some(c => c.id === id)).length
   const resumen = useMemo(() => (turno ? calcularResumen(turno, s.cuentas) : null), [turno, s.cuentas])
+
+  // Mesas y Para llevar son dos menús: antes salían apilados y, con la lista de llevar debajo,
+  // el selector de salón del mapa quedaba fuera de la pantalla.
+  const [panel, setPanel] = useState(() => { try { return localStorage.getItem('pos-caja-panel') === 'llevar' ? 'llevar' : 'mesas' } catch { return 'mesas' } })
+  const cambiarPanel = p => { setPanel(p); try { localStorage.setItem('pos-caja-panel', p) } catch { /* noop */ } }
+  const paneles = (
+    <>
+      <div className="caja-pan" role="tablist" aria-label={tOr('caja.paneles', 'Qué se está cobrando')}>
+        <button type="button" role="tab" aria-selected={panel === 'mesas'} className={'tab' + (panel === 'mesas' ? ' on' : '')} onClick={() => cambiarPanel('mesas')}>🪑 {tOr('caja.mesasTitulo', 'Mesas')}</button>
+        <button type="button" role="tab" aria-selected={panel === 'llevar'} className={'tab' + (panel === 'llevar' ? ' on' : '')} onClick={() => cambiarPanel('llevar')}>🥡 {tOr('caja.llevarTab', 'Para llevar')} <b>{llevar.length}</b></button>
+      </div>
+      {panel === 'mesas'
+        ? <MesasResumen mesas={s.mesas} zonas={s.zonas} cuentas={s.cuentas} onOpen={irSalon} />
+        : <SeccionLlevar filas={llevar} onCobrar={irLlevar} />}
+    </>
+  )
 
   const msgCierre = contado => {
     const dif = round2(contado - resumen.esperado)
@@ -169,8 +189,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
     return (
       <div className="caja">
         {aviso && <div className="caja-aviso" role="status">{aviso}<button type="button" className="caja-aviso-x" onClick={() => setAviso('')} aria-label={t('comun.cancelar')}>✕</button></div>}
-        <MesasResumen mesas={s.mesas} zonas={s.zonas} cuentas={s.cuentas} onOpen={irSalon} />
-        <SeccionLlevar filas={llevar} onCobrar={irLlevar} />
+        {paneles}
         <section className="caja-card">
           <div className="caja-head"><h2>{t('caja.titulo')}</h2><span className="caja-num cerrado">{t('caja.cerrado')}</span></div>
           {puede(rol, 'abrir_turno') ? (
@@ -198,8 +217,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
       {s.caja.otros?.length > 0 && (
         <p className="caja-nota">{t('caja.otrosTurnos', { lista: s.caja.otros.map(x => `${x.abiertoPor} (${new Date(x.abiertoEn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`).join(', ') })}</p>
       )}
-      <MesasResumen mesas={s.mesas} zonas={s.zonas} cuentas={s.cuentas} onOpen={irSalon} />
-      <SeccionLlevar filas={llevar} onCobrar={irLlevar} />
+      {paneles}
       <section className="caja-card caja-turno">
         <div className="caja-head">
           <h2>{t('caja.turnoNumero', { n: numeroActual })}</h2>

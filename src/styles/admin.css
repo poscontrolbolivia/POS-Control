@@ -154,3 +154,29 @@
 .adm-caja-modo{border:1.5px solid var(--line-fuerte);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .adm-caja-modo legend{font-weight:700;padding:0 6px}
 .adm-caja-modo .adm-check.on{outline:2px solid var(--logo-orange);outline-offset:2px;border-radius:10px}
+
+/* ── Impresoras reestructurada: submenús minimizables propios (reglas NUEVAS, al final).
+   Cada submenú es una píldora horizontal (icono + nombre + flecha a la derecha) igual que los
+   bloques de Configuración, y al abrirse muestra su cuerpo con una línea de explicación. ── */
+.imp-submenu-lista{display:flex;flex-direction:column;gap:10px;min-width:0}
+.imp-sub{display:flex;flex-direction:column;gap:8px;min-width:0}
+.imp-sub-cab{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:10px 16px;text-align:left;
+  border:1.5px solid var(--line-fuerte);border-radius:var(--r-pill);background:var(--card-2);color:var(--ink);
+  font-weight:650;box-shadow:var(--sh-1)}
+.imp-sub-cab:hover:not(:disabled){background:var(--card);border-color:color-mix(in srgb,var(--ac) 55%,var(--line))}
+.imp-sub-icono{flex:0 0 auto;font-size:1.1rem;line-height:1}
+.imp-sub-titulo{flex:1 1 auto;min-width:0}
+.imp-sub-flecha{flex:0 0 auto;margin-left:auto;color:var(--ac);font-size:1rem;line-height:1}
+/* Azul = estado (cuál está abierto); el verde se deja solo para los botones de acción. */
+.imp-sub.abierto > .imp-sub-cab{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,var(--card))}
+.imp-sub.abierto > .imp-sub-cab:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 16%,var(--card))}
+.imp-sub-cuerpo{display:flex;flex-direction:column;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:14px;box-shadow:var(--sh-1)}
+.imp-sub-ayuda{margin:0;color:var(--mut);font-size:.88rem}
+.imp-sub-acciones{gap:8px}
+.imp-papeles,.imp-salidas{display:flex;flex-direction:column;gap:10px;min-width:0}
+.imp-papel,.imp-salida-grupo{display:flex;flex-direction:column;gap:8px;background:var(--card-2);
+  border:1.5px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;min-width:0}
+.imp-papel-nombre{font-size:.95rem}
+.imp-papel .adm-campo select,.imp-papel .adm-campo input,
+.imp-salida-grupo select,.imp-salida-grupo input:not([type=checkbox]):not([type=radio]){width:100%;max-width:100%;min-width:0}

@@ -289,6 +289,38 @@ function reducer(s, a) {
         : c.id === destino.id ? { ...c, items: [...c.items, ...moverItems] } : c) }
     }
 
+    // Mover solo parte de un ítem (2 de 3 iguales): nace una fila nueva con el mismo estado y precio.
+    case 'mover-parcial': {
+      const n = Math.max(1, Math.floor(Number(a.cantidad) || 1))
+      const it = s.cuentas.find(x => x.id === a.cuentaId)?.items.find(x => x.id === a.itemId)
+      if (!it || n >= it.qty) return reducer(s, { ...a, t: 'mover', itemIds: [a.itemId] })
+      let destino = a.cuentaDestinoId ? s.cuentas.find(x => x.id === a.cuentaDestinoId)
+        : s.cuentas.find(x => x.mesaIds.includes(a.mesaDestino) && x.estado !== 'cerrada')
+      let cuentas = s.cuentas
+      if (!destino) {
+        if (!a.mesaDestino) return s
+        destino = nuevaCuenta({ tipo: 'mesa', mesaIds: [a.mesaDestino], abiertaPor: a.usuario })
+        cuentas = [...cuentas, destino]
+      }
+      const parte = { ...it, id: uid(), qty: n }
+      return { ...s, cuentas: cuentas.map(x => x.id === a.cuentaId ? { ...x, items: x.items.map(y => (y.id === it.id ? { ...y, qty: y.qty - n } : y)) }
+        : x.id === destino.id ? { ...x, items: [...x.items, parte] } : x) }
+    }
+
+    // Unir subcuentas hermanas (2A + 2B): unir_mesas trabaja por mesa y aquí ambas comparten la misma.
+    case 'unir-sub': {
+      const absorb = s.cuentas.filter(x => x.id !== a.cuentaId && (a.cuentaIds || []).includes(x.id) && x.estado !== 'cerrada')
+      if (!absorb.length) return s
+      const com = absorb.reduce((t2, x) => t2 + (x.comensales || 1), 0)
+      return { ...s, cuentas: s.cuentas.map(x => x.id === a.cuentaId
+        ? { ...x,
+            mesaIds: [...new Set([...x.mesaIds, ...absorb.flatMap(y => y.mesaIds)])],
+            items: [...x.items, ...absorb.flatMap(y => y.items)],
+            pagos: [...(x.pagos || []), ...absorb.flatMap(y => y.pagos || [])],
+            comensales: Math.min(99, (x.comensales || 1) + com) }
+        : absorb.some(y => y.id === x.id) ? { ...x, estado: 'cerrada', cerradaEn: Date.now(), nota: 'unida a otra cuenta' } : x) }
+    }
+
     case 'intercambiar': {
       const A = s.cuentas.find(c => c.id === a.cuentaA), B = s.cuentas.find(c => c.id === a.cuentaB)
       const iA = A?.items.find(i => i.id === a.itemA && i.estado !== 'anulado'), iB = B?.items.find(i => i.id === a.itemB && i.estado !== 'anulado')

@@ -43,6 +43,10 @@ input, select, textarea{border:1.5px solid var(--line-fuerte);background:var(--c
 input:focus, select:focus, textarea:focus{border-color:var(--ac);box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 22%,transparent)}
 input::placeholder{color:var(--mut);opacity:.8}
 input[type=checkbox], input[type=radio]{min-height:0;accent-color:var(--ac)}
+/* iOS Safari pinta el valor de las fechas centrado y apilado contra el borde, así que «Desde» y «Hasta»
+   se pisaban visualmente. Alineado a la izquierda y con altura propia, el valor cabe dentro del campo. */
+input[type=date], input[type=time], input[type=month]{-webkit-appearance:none;appearance:none;text-align:left;line-height:1.35;padding:10px 12px}
+input[type=date]::-webkit-date-and-time-value, input[type=time]::-webkit-date-and-time-value{text-align:left;margin:0;min-height:1.4em}
 html{touch-action:manipulation}
 input, select, textarea{font-size:max(16px,1em)}
 .top{display:flex;gap:12px;align-items:center;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}

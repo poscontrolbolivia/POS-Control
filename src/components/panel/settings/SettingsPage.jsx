@@ -18,6 +18,24 @@ import '../../../styles/admin.css'
 import '../cash/CashPage.css'
 import './SettingsPage.css'
 
+// Tecla única del acordeón de Configuración (antes había una por bloque: pos-cfg-<id>).
+const CLAVE_ABIERTO = 'pos-cfg-abierto'
+const IDS_BLOQUES = ['preferencias', 'negocio', 'impresoras', 'equipo', 'cierres', 'plan']
+
+// Cuál viene abierto: la tecla nueva; si no existe, la preferencia vieja por bloque (migración).
+function leerAbierto() {
+  try {
+    if (typeof window !== 'undefined' && window.location?.hash === '#estacion') return 'impresoras'
+    const nuevo = localStorage.getItem(CLAVE_ABIERTO)
+    if (nuevo !== null) return IDS_BLOQUES.includes(nuevo) ? nuevo : null
+    // Impresoras manda en la migración porque es el destino del enlace viejo #estacion.
+    const abiertaAntes = ['impresoras', ...IDS_BLOQUES].find(id => localStorage.getItem('pos-cfg-' + id) === '1')
+    if (abiertaAntes) return abiertaAntes
+    if (localStorage.getItem('pos-admin-equipo-abierto') === '1') return 'equipo'
+  } catch { /* noop */ }
+  return null
+}
+
 export default function SettingsPage({ rol, sesion }) {
   const { s, d, modo } = useStore()
   const { t, tOr } = useIdioma()
@@ -36,14 +54,24 @@ export default function SettingsPage({ rol, sesion }) {
   })
   const [msg, setMsg] = useState('')
 
-  const [verEquipo, setVerEquipo] = useState(() => {
-    try { return localStorage.getItem('pos-admin-equipo-abierto') === '1' } catch { return false }
-  })
-  const alternarEquipo = () => {
-    const nuevo = !verEquipo
-    setVerEquipo(nuevo)
-    try { localStorage.setItem('pos-admin-equipo-abierto', nuevo ? '1' : '0') } catch {  }
-  }
+  // Acordeón EXCLUSIVO: un solo bloque abierto. La preferencia vieja era una tecla por bloque
+  // (pos-cfg-<id>) y se migra a la tecla única pos-cfg-abierto, conservando lo que ya había.
+  const idsRef = useRef([])
+  const [abierto, setAbierto] = useState(() => leerAbierto())
+  const alternar = id => setAbierto(v => (v === id ? null : id))
+  const props = id => ({ abierto: abierto === id, onToggle: () => alternar(id) })
+  useEffect(() => {
+    try {
+      localStorage.setItem(CLAVE_ABIERTO, abierto ?? '')
+      idsRef.current.forEach(id => { localStorage.setItem('pos-cfg-' + id, abierto === id ? '1' : '0') })
+    } catch { /* noop */ }
+  }, [abierto])
+  // El enlace viejo «#estacion» (PC de impresión) sigue aterrizando en Impresoras ya desplegado.
+  useEffect(() => {
+    const alCambiar = () => { if (window.location.hash === '#estacion') setAbierto('impresoras') }
+    window.addEventListener('hashchange', alCambiar)
+    return () => window.removeEventListener('hashchange', alCambiar)
+  }, [])
 
   const cuerpoPreferencias = (
     <div className="pref-fila">
@@ -53,13 +81,15 @@ export default function SettingsPage({ rol, sesion }) {
   )
 
   if (rol !== 'admin') {
+    const conImpresoras = rol === 'cajero' && sesion?.supabase
+    idsRef.current = ['preferencias', ...(conImpresoras ? ['impresoras'] : [])]
     return (
       <div className="adm-panel">
         <div className="adm-cab"><h2>{t('config.titulo')}</h2></div>
-      <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, cierres y plan. Cada bloque se pliega con ▾.')}</p>
-        <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')}>{cuerpoPreferencias}</Bloque>
-        {rol === 'cajero' && sesion?.supabase && (
-          <Bloque id="impresoras" icono="🖨️" titulo={t('config.impresoras')}>
+      <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, equipo, cierres y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.')}</p>
+        <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')} {...props('preferencias')}>{cuerpoPreferencias}</Bloque>
+        {conImpresoras && (
+          <Bloque id="impresoras" icono="🖨️" titulo={t('config.impresoras')} {...props('impresoras')}>
             <Suspense fallback={null}><StationPage embebida rol={rol} sesion={sesion} /></Suspense>
           </Bloque>
         )}
@@ -98,14 +128,16 @@ export default function SettingsPage({ rol, sesion }) {
 
   const moneda = s.config?.moneda || MONEDA
 
+  idsRef.current = IDS_BLOQUES
+
   return (
     <div className="adm-panel">
       <div className="adm-cab"><h2>{t('config.titulo')}</h2></div>
-      <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, cierres y plan. Cada bloque se pliega con ▾.')}</p>
+      <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, equipo, cierres y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.')}</p>
 
-      <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')}>{cuerpoPreferencias}</Bloque>
+      <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')} {...props('preferencias')}>{cuerpoPreferencias}</Bloque>
 
-      <Bloque id="negocio" icono="🏪" titulo={tOr('config.datosNegocio', 'Datos del negocio')}>
+      <Bloque id="negocio" icono="🏪" titulo={tOr('config.datosNegocio', 'Datos del negocio')} {...props('negocio')}>
         <form className="adm-config" onSubmit={guardar}>
           {sesion && <p className="adm-sub">{t('config.sesionLabel')} <b>{sesion.nombre}</b> ({tOr('rol.' + sesion.rol, sesion.rol)}) · {sesion.empresa}</p>}
           <label className="adm-campo">
@@ -213,57 +245,45 @@ export default function SettingsPage({ rol, sesion }) {
         icono="🖨️"
         titulo={t('config.impresoras')}
         chip={s.config?.impresion === 'silenciosa' ? <span className="adm-chip">{t('config.modoSilenciosoActivo')}</span> : null}
+        {...props('impresoras')}
+        cuerpoClase="cfg-cuerpo-plano"
       >
+        {/* PrintersCard arma sus submenús y carga la estación solo cuando toca: así el estado del
+            agente y la salida de cada grupo se muestran una sola vez. */}
         <PrintersCard rol={rol} sesion={sesion} />
-        {sesion?.supabase && (rol === 'admin' || rol === 'cajero') && (
-          <Suspense fallback={null}><StationPage embebida rol={rol} sesion={sesion} /></Suspense>
-        )}
       </Bloque>
 
       {(sesion ? sesion.rol === 'admin' : rol === 'admin') && (
-        <UsersPage rol={rol} sesion={sesion} abierto={verEquipo} onToggleAbierto={alternarEquipo} />
+        <UsersPage rol={rol} sesion={sesion} abierto={abierto === 'equipo'} onToggleAbierto={() => alternar('equipo')} />
       )}
 
-      <Bloque id="cierres" icono="🧾" titulo={t('cierres.titulo')}>
+      <Bloque id="cierres" icono="💰" titulo={t('cierres.titulo')} {...props('cierres')}>
         {sesion?.supabase
           ? <ClosingsHistory moneda={moneda} />
           : <CierresDemo historial={s.caja?.historial || []} cuentas={s.cuentas} moneda={moneda} />}
       </Bloque>
 
       {USAR_SUPABASE && sesion?.supabase && (
-        <Bloque id="plan" icono="📦" titulo={t('plan.titulo')}><PlanCard sesion={sesion} /></Bloque>
+        <Bloque id="plan" icono="📦" titulo={t('plan.titulo')} {...props('plan')}><PlanCard sesion={sesion} /></Bloque>
       )}
     </div>
   )
 }
 
-// Bloque colapsado: arranca cerrado y se abre al tocar (mismo patrón que el equipo).
-function Bloque({ id, icono, titulo, chip = null, children }) {
-  const [abierto, setAbierto] = useState(() => {
-    try { return localStorage.getItem('pos-cfg-' + id) === '1' } catch { return false }
-  })
-  const alternar = () => setAbierto(v => {
-    const n = !v
-    try { localStorage.setItem('pos-cfg-' + id, n ? '1' : '0') } catch { /* noop */ }
-    return n
-  })
-  if (!abierto) {
-    return (
-      <div className="adm-fila cfg-collapsed">
-        <button type="button" className="ghost eq-toggle" aria-expanded="false" onClick={alternar}>▸ {icono} {titulo}</button>
-        {chip}
-      </div>
-    )
-  }
+// Bloque de Configuración (nivel 1): es el MENÚ y el contenido a la vez — la misma píldora
+// siempre, abierta o cerrada, y el abierto se queda pegado bajo la barra mientras se baja.
+// El acordeón es exclusivo: quién está abierto vive en SettingsPage, así que abrir uno cierra los demás.
+function Bloque({ id, icono, titulo, chip = null, abierto = false, onToggle, cuerpoClase = '', children }) {
   return (
-    <div className="adm-card cfg-bloque">
-      <div className="adm-card-cab">
-        <button type="button" className="ghost eq-toggle" aria-expanded="true" aria-label={titulo} onClick={alternar}>▾</button>
-        <h3>{icono} {titulo}</h3>
-        {chip}
-      </div>
-      {children}
-    </div>
+    <section className={'cfg-bloque' + (abierto ? ' abierto' : '')}>
+      <button type="button" className="cfg-cab" onClick={onToggle} aria-expanded={abierto} aria-controls={'cfg-cuerpo-' + id}>
+        <span className="cfg-cab-icono" aria-hidden="true">{icono}</span>
+        <span className="cfg-cab-titulo">{titulo}</span>
+        {chip && <span className="cfg-cab-chip">{chip}</span>}
+        <span className="cfg-cab-flecha" aria-hidden="true">{abierto ? '▾' : '▸'}</span>
+      </button>
+      {abierto && <div className={'cfg-cuerpo' + (cuerpoClase ? ' ' + cuerpoClase : '')} id={'cfg-cuerpo-' + id}>{children}</div>}
+    </section>
   )
 }
 

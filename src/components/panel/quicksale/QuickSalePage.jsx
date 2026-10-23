@@ -5,7 +5,7 @@ import { MONEDA } from '../../../services/config'
 import { LADO_VISUAL_PX, urlImagenProducto, urlImagenNegocio } from '../../../services/imageUpload.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
-import { imprimirCuenta, precalcularCambio } from '../../printing/Ticket.jsx'
+import { imprimirCuenta, imprimirComandas, precalcularCambio } from '../../printing/Ticket.jsx'
 import ComprobanteQr from '../pago/ComprobanteQr.jsx'
 import PagoQrCard from '../pago/PagoQrCard.jsx'
 import '../pago/ComprobanteQr.css'
@@ -88,7 +88,7 @@ export default function QuickSalePage({ rol, sesion }) {
 
   const abrirCobro = () => {
     if (!puede(rol, 'cobrar')) return setAviso(t('venta.sinPermisoCobrar'))
-    setCobro({ lineas: [{ metodo: 'efectivo', monto: '' }], imprimir: true })
+    setCobro({ lineas: [{ metodo: 'efectivo', monto: '' }], imprimir: true, comanda: true })
   }
   const setLinea = (i, cambios) => setCobro(c => ({ ...c, lineas: c.lineas.map((l, j) => (j === i ? { ...l, ...cambios } : l)) }))
   const agregarLinea = () => setCobro(c => {
@@ -104,7 +104,7 @@ export default function QuickSalePage({ rol, sesion }) {
     if (!pagos.length) return setAviso(t('venta.sinPago'))
     const numero = s.caja.siguienteTurno
     d({ t: 'abrir-directa', usuario })
-    setPendiente({ numero, lineas: carrito.map(l => ({ p: l.p, qty: l.qty, nota: l.nota })), fase: 0, pagos, imprimir: cobro.imprimir, usuario })
+    setPendiente({ numero, lineas: carrito.map(l => ({ p: l.p, qty: l.qty, nota: l.nota })), fase: 0, pagos, imprimir: cobro.imprimir, comanda: cobro.comanda, usuario })
   }
 
   useEffect(() => {
@@ -131,7 +131,18 @@ export default function QuickSalePage({ rol, sesion }) {
       return
     }
 
-    const { pagos, imprimir, usuario: usr } = pendiente
+    const { pagos, imprimir, comanda, usuario: usr } = pendiente
+    // La comanda se envía antes de cobrar: al cerrarse la cuenta el área ya no la devuelve, pero
+    // Despacho la sigue mostrando como «por entregar» hasta que el producto sale.
+    const porEnviar = (c.items || []).filter(i => i.estado === 'pendiente')
+    if (porEnviar.length) d({ t: 'enviar', cuentaId: c.id })
+    if (comanda && porEnviar.length) {
+      imprimirComandas({
+        cuenta: c, items: porEnviar, productos: s.productos, config: s.config,
+        titulo: t('pedido.comandaTitulo', { titulo: t('venta.mostrador') }),
+        datos: { salon: t('venta.mostrador'), mesa: `#${c.numero}` },
+      }).catch(() => { })
+    }
     d({ t: 'cobrar', cuentaId: c.id, pagos, usuario: usr })
     const cambio = round2(pagos.reduce((acc, p) => acc + (p.cambio || 0), 0))
     const base = t('venta.cobrada', { n: c.numero }) + (cambio > 0 ? t('venta.cambioSuffix', { monto: m(cambio) }) : '')
@@ -244,6 +255,10 @@ export default function QuickSalePage({ rol, sesion }) {
             <label className="vd-check">
               <input name="imprimir" type="checkbox" checked={cobro.imprimir} onChange={e => setCobro({ ...cobro, imprimir: e.target.checked })} />
               {t('venta.imprimirTicket')}
+            </label>
+            <label className="vd-check">
+              <input name="comanda" type="checkbox" checked={cobro.comanda} onChange={e => setCobro({ ...cobro, comanda: e.target.checked })} />
+              <span className="vd-check-cuerpo">{t('venta.comandaCheckbox')}<small>{t('venta.comandaAyuda')}</small></span>
             </label>
           </div>
         )}

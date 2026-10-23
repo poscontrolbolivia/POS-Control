@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { rpc, mensajeError, sb, obtenerEmpresaActiva } from '../../../services/supabaseClient.js'
 import { useStore } from '../../../context/StoreContext.jsx'
-import { gruposDeComanda, repartirPorGrupo, SIN_AREA } from '../../../services/printing.js'
+import { gruposDeComanda, repartirPorGrupo, SIN_AREA, GRUPO_DIRECTA } from '../../../services/printing.js'
+import { pendientesPorGrupo, mostradorPendientes, badgeDirecta } from '../../../services/despacho.js'
+import { camposComanda } from '../../../services/comanda.js'
 import './KitchenPage.css'
 import { hora } from '../../../services/format.js'
 
@@ -154,9 +156,17 @@ export default function KitchenPage({ rol, sesion }) {
     setCargando(true)
     try {
       const areas = areasRef.current
-      const res = conectado
+      const crudo = conectado
         ? await Promise.all(areas.map(a => rpc('cola_de_area', a === SIN_AREA ? { p_area: a, p_validas: idsGrupos } : { p_area: a }).then(fila => [a, Array.isArray(fila) ? fila : []])))
         : areas.map(a => [a, colaDemo(sRef.current, a)])
+      // «Venta directa» además recibe lo cobrado en el mostrador: la cuenta ya está cerrada y el
+      // servidor no la devuelve, pero el producto falta entregarlo. Sin duplicar lo que ya traiga.
+      const mostrador = mostradorPendientes(sRef.current.cuentas)
+      const res = crudo.map(([a, lista]) => {
+        if (a !== GRUPO_DIRECTA || !mostrador.length) return [a, lista]
+        const ya = new Set(lista.flatMap(c => (c.items || []).map(i => i.id)))
+        return [a, [...lista, ...mostrador.map(f => ({ ...f, items: f.items.filter(i => !ya.has(i.id)) })).filter(f => f.items.length)]]
+      })
       const nuevoRecien = {}
       const sig = { ...colasRef.current }
       res.forEach(([a, lista]) => {
@@ -251,13 +261,14 @@ export default function KitchenPage({ rol, sesion }) {
   const pedirAnulacion = () => {
     const item = anulando
     const txt = motivo.trim()
-    if (!item || !txt) return
+    if (!item || !txt || ocupado) return
     setOcupado(item.id)
     cerrarAnular()
     if (!conectado) {
-      d({ t: 'cocina-anular', cuentaId: item.cuentaId, itemId: item.id, motivo: txt, usuario })
-      cargarRef.current?.()
-      setOcupado('')
+      try {
+        d({ t: 'cocina-anular', cuentaId: item.cuentaId, itemId: item.id, motivo: txt, usuario })
+        cargarRef.current?.()
+      } catch (e) { avisar(mensajeError(e)) } finally { setOcupado('') }
       return
     }
     rpc('pedir_anulacion', { p_item_id: item.id, p_motivo: txt })
@@ -292,17 +303,35 @@ export default function KitchenPage({ rol, sesion }) {
   }, [colas, areasMostradas])
   const totalSacadas = areasMostradas.reduce((n, a) => n + (filas[a]?.sacadas.length || 0), 0)
 
+  // Cuántos ítems quedan por sacar en cada área: el contador rojo del botón, como en las
+  // notificaciones de una app. Se lee del store, no de la cola, para poder contar los otros.
+  const pendientes = useMemo(() => pendientesPorGrupo(s.cuentas, s.productos, s.config), [s.cuentas, s.productos, s.config])
+  const porEntregar = useMemo(() => badgeDirecta(s.cuentas, s.productos, s.config), [s.cuentas, s.productos, s.config])
+
   if (!permitido) return <div className="cocina adm-panel"><div className="auth-aviso">{tOr('cocina.sinPermiso', 'Esta pantalla no está habilitada para tu rol.')}</div></div>
 
   const nombreArea = a => (a === SIN_AREA ? tOr('cocina.sinArea', 'Sin área') : (grupos.find(g => g.id === a)?.nombre || tOr('cocina.area.' + a, a)))
-  const icono = a => (a === SIN_AREA ? '⚠️' : a === 'cocina' ? '🍳' : a === 'barra' ? '🍹' : '🍽️')
+  const icono = a => (a === SIN_AREA ? '⚠️' : a === 'cocina' ? '🍳' : a === 'barra' ? '🍹' : a === GRUPO_DIRECTA ? '🛒' : '🍽️')
   const tabs = [...idsVisibles, ...(verSinArea && ((colas[SIN_AREA] || []).length > 0 || vista === SIN_AREA) ? [SIN_AREA] : [])]
+  const badge = v => (v === GRUPO_DIRECTA ? porEntregar : pendientes[v] || 0)
   const nivel = desde => {
     if (!desde) return ''
     const min = (ahora - desde) / 60000
     return min >= URGENTE_MIN ? ' rojo' : min >= AMARILLO_MIN ? ' ambar' : ''
   }
   const tituloMesa = c => `${c.mesa || tOr('cocina.mostrador', 'Mostrador')}${c.etiqueta || ''}`
+  // Los cuatro datos que se leen en la comanda, en texto plano y sin distintivos de color:
+  // salón (o canal, si no es mesa), mesa, quién envió y la hora. Igual que en el papel.
+  const datosCuenta = c => {
+    const enStore = (s.cuentas || []).find(x => x.id === c.cuenta_id)
+    const ids = enStore?.mesaIds || []
+    const canal = enStore?.canal || c.canal || (c.mesa ? '' : 'mostrador')
+    const zonaId = (s.mesas || []).find(x => ids.includes(x.id))?.zona
+    const salon = canal === 'llevar' ? t('cocina.canalLlevar')
+      : canal === 'mostrador' ? t('cocina.canalMostrador')
+        : ((s.zonas || []).find(z => z.id === zonaId)?.nombre || '')
+    return { canal, salon, mesero: enStore?.abiertaPor || c.abiertaPor || '' }
+  }
 
   const renderItem = (it, c) => {
     const area = c.area
@@ -321,15 +350,15 @@ export default function KitchenPage({ rol, sesion }) {
           </div>
           <div className="ck-item-acc">
             {!anulacion && !listo && (
-              <button type="button" className="ck-check" disabled={!!ocupado} onClick={() => marcarSalio(it, c)}
+              <button type="button" className="ck-check" disabled={!!ocupado && ocupado !== it.id} onClick={() => marcarSalio(it, c)}
                 title={tOr('cocina.yaSalio', 'Ya salió')} aria-label={`${tOr('cocina.yaSalio', 'Ya salió')}: ${it.nombre}`}>✓</button>
             )}
             {listo && (
-              <button type="button" className="ck-mini ghost" disabled={!!ocupado} onClick={() => deshacer(it, c)}
+              <button type="button" className="ck-mini ghost" disabled={!!ocupado && ocupado !== it.id} onClick={() => deshacer(it, c)}
                 title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button>
             )}
             {!anulacion && !listo && (
-              <button type="button" className="ck-mini danger" disabled={!!ocupado} onClick={() => abrirAnular(it, c)}
+              <button type="button" className="ck-mini danger" disabled={!!ocupado && ocupado !== it.id} onClick={() => abrirAnular(it, c)}
                 title={tOr('cocina.anular', 'Anular')} aria-label={`${tOr('cocina.anular', 'Anular')}: ${it.nombre}`}>⊘</button>
             )}
           </div>
@@ -340,8 +369,8 @@ export default function KitchenPage({ rol, sesion }) {
             <b>⛔ {tOr('cocina.quiereAnular', 'Quiere anular')}: {it.anulacion_motivo || tOr('cocina.sinMotivo', 'sin motivo')}</b>
             {puedeAutorizar ? (
               <div className="ck-anul-acc">
-                <button type="button" className="cocina-btn success" disabled={!!ocupado} onClick={() => resolver(it, c, true)}>✓ {tOr('cocina.aprobar', 'Aprobar')}</button>
-                <button type="button" className="cocina-btn danger" disabled={!!ocupado} onClick={() => resolver(it, c, false)}>✕ {tOr('cocina.rechazar', 'Rechazar')}</button>
+                <button type="button" className="cocina-btn success" disabled={!!ocupado && ocupado !== it.id} onClick={() => resolver(it, c, true)}>✓ {tOr('cocina.aprobar', 'Aprobar')}</button>
+                <button type="button" className="cocina-btn danger" disabled={!!ocupado && ocupado !== it.id} onClick={() => resolver(it, c, false)}>✕ {tOr('cocina.rechazar', 'Rechazar')}</button>
               </div>
             ) : <small className="ck-espera">⏳ {tOr('cocina.esperandoCaja', 'Esperando autorización de caja')}</small>}
           </div>
@@ -359,7 +388,7 @@ export default function KitchenPage({ rol, sesion }) {
               onChange={e => setMotivo(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') pedirAnulacion(); if (e.key === 'Escape') cerrarAnular() }} />
             <div className="ck-anul-acc">
-              <button type="button" className="cocina-btn danger" disabled={!motivo.trim() || !!ocupado} onClick={pedirAnulacion}>{tOr('cocina.pedirAnulacion', 'Pedir anulación')}</button>
+              <button type="button" className="cocina-btn danger" disabled={!motivo.trim() || (!!ocupado && ocupado !== it.id)} onClick={pedirAnulacion}>{tOr('cocina.pedirAnulacion', 'Pedir anulación')}</button>
               <button type="button" className="cocina-btn ghost" onClick={cerrarAnular}>{tOr('comun.cancelar', 'Cancelar')}</button>
             </div>
           </div>
@@ -372,10 +401,14 @@ export default function KitchenPage({ rol, sesion }) {
     const clave = claveComanda(c)
     const pendientes = (c.items || []).filter(i => i.estado === 'enviado').length
     const nueva = recien[clave] && ahora - recien[clave] < 8000
+    const { salon, mesero } = datosCuenta(c)
+    const campos = camposComanda({ salon, mesa: tituloMesa(c), enviadoPor: mesero, en: c.desde || ms(c.enviada_en) })
     return (
       <article key={clave} className={'ck-card' + nivel(c.desde) + (nueva ? ' nueva' : '')}>
         <header className="ck-cab">
-          <b className="ck-mesa">{tituloMesa(c)}</b>
+          {campos.map(x => (
+            <span key={x.clave} className={'ck-dato' + (x.clave === 'comanda.mesa' ? ' ck-dato-fuerte' : '')}>{t(x.clave, x.params)}</span>
+          ))}
           {Number(c.comensales) > 0 && <span className="ck-tag" title={tOr('cocina.comensales', 'Comensales')}>👥 {c.comensales}</span>}
           <span className="ck-sp" />
           <span className={'ck-timer' + nivel(c.desde)} title={c.desde ? `${tOr('cocina.entro', 'Entró a las')} ${hora(c.desde)}` : ''}>⏱ {cronometro(c.desde, ahora)}</span>
@@ -394,8 +427,10 @@ export default function KitchenPage({ rol, sesion }) {
       <div className="ck-barra">
         <div className="ck-tabs" role="tablist" aria-label={tOr('cocina.areas', 'Áreas')}>
           {tabs.map(v => (
-            <button key={v} type="button" role="tab" aria-selected={vista === v} className={'ck-tab' + (vista === v ? ' on' : '')} onClick={() => cambiarVista(v)}>
+            <button key={v} type="button" role="tab" aria-selected={vista === v} className={'ck-tab' + (vista === v ? ' on' : '')} onClick={() => cambiarVista(v)}
+              aria-label={`${t('cocina.vistaDe', { area: nombreArea(v) })}${badge(v) ? ` · ${badge(v)}` : ''}`}>
               {icono(v)} {t('cocina.vistaDe', { area: nombreArea(v) })}
+              {badge(v) > 0 && <span className="ck-n" aria-hidden="true">{badge(v) > 99 ? '99+' : badge(v)}</span>}
             </button>
           ))}
         </div>
@@ -437,7 +472,7 @@ export default function KitchenPage({ rol, sesion }) {
                     <ul>
                       {(c.items || []).map(it => (
                         <li key={it.id}><span>{it.qty}× {it.nombre}{it.nota ? ` · ${it.nota}` : ''}</span>
-                          <button type="button" className="ck-mini ghost" disabled={!!ocupado} onClick={() => deshacer(it, c)} title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button></li>
+                          <button type="button" className="ck-mini ghost" disabled={!!ocupado && ocupado !== it.id} onClick={() => deshacer(it, c)} title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button></li>
                       ))}
                     </ul>
                   </li>

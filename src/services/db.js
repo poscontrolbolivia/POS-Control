@@ -106,18 +106,20 @@ async function fetchCaja(empresaId) {
   return { abierto: mio, otros: abiertos.filter(x => x !== mio), historial }
 }
 
+const mapDev = (r, nombres) => ({
+  id: r.id, cuentaId: r.cuenta_id, itemId: r.item_id, area: r.area, nombre: r.nombre, qty: N(r.qty), monto: N(r.monto),
+  mesa: r.mesa || '', motivo: r.motivo, turnoId: r.turno_id || null,
+  pedidaPor: nombres[r.pedida_por] || '', pedidaEn: ts(r.pedida_en),
+  confirmadaPor: r.confirmada_por ? (nombres[r.confirmada_por] || '') : '', confirmadaEn: r.confirmada_en ? ts(r.confirmada_en) : null,
+  nota: r.nota_confirmacion || '',
+})
+
 async function fetchDevoluciones(empresaId, cajaT, nombres) {
   try {
     const aperturas = [cajaT?.abierto?.abierto_en, ...((cajaT?.historial) || []).map(t => t.abierto_en)].filter(Boolean).map(x => new Date(x).getTime())
     const desde = new Date(aperturas.length ? Math.min(...aperturas) : new Date(hoyISO()).getTime()).toISOString()
     const rows = await selectAll(sb.from('devoluciones_item').select('*').eq('empresa_id', empresaId).gte('pedida_en', desde).order('pedida_en'))
-    return rows.map(r => ({
-      id: r.id, cuentaId: r.cuenta_id, itemId: r.item_id, area: r.area, nombre: r.nombre, qty: N(r.qty), monto: N(r.monto),
-      mesa: r.mesa || '', motivo: r.motivo, turnoId: r.turno_id || null,
-      pedidaPor: nombres[r.pedida_por] || '', pedidaEn: ts(r.pedida_en),
-      confirmadaPor: r.confirmada_por ? (nombres[r.confirmada_por] || '') : '', confirmadaEn: r.confirmada_en ? ts(r.confirmada_en) : null,
-      nota: r.nota_confirmacion || '',
-    }))
+    return rows.map(r => mapDev(r, nombres))
   } catch { return [] }
 }
 
@@ -192,6 +194,39 @@ const armarCaja = (abierto, historial, nombres, siguienteTurno, cajaPrev, otros 
 
   siguienteTurno: siguienteTurno ?? cajaPrev?.siguienteTurno ?? 1,
 })
+
+// PDF de un turno cerrado. La RLS deja seleccionar el histórico de la empresa, así que basta con
+// traer la ventana del turno: no hace falta ninguna función nueva en la base.
+// Van también las cuentas todavía abiertas porque un abono cobrado dentro del turno entra en la
+// caja de ese turno (mismo criterio que calcularResumen y cerrar_turno).
+export async function detalleCierre(turnoId) {
+  const { data: fila, error } = await sb.from('turnos_caja').select('*').eq('id', turnoId).maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!fila) throw new Error('No se encontró el turno')
+  const finIso = fila.cerrado_en || new Date().toISOString()
+  const [nombres, cerradas, abiertas, devs] = await Promise.all([
+    fetchNombres(),
+    selectAll(sb.from('cuentas').select('*').eq('empresa_id', fila.empresa_id).eq('estado', 'cerrada')
+      .gte('cerrada_en', fila.abierto_en).lte('cerrada_en', finIso)),
+    // Las abiertas también van: un abono de una cuenta que sigue abierta dentro del turno
+    // computa en la caja de ese turno (calcularResumen lo filtra por fecha de pago).
+    selectAll(sb.from('cuentas').select('*').eq('empresa_id', fila.empresa_id).neq('estado', 'cerrada')),
+    selectAll(sb.from('devoluciones_item').select('*').eq('empresa_id', fila.empresa_id)
+      .gte('pedida_en', fila.abierto_en).lte('pedida_en', finIso).order('pedida_en')).catch(() => []),
+  ])
+  const cuentasRaw = [...cerradas, ...abiertas]
+  const ids = cuentasRaw.map(c => c.id)
+  const [items, pagos, cms] = ids.length ? await Promise.all([
+    selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', ids).order('creada_en')),
+    selectAll(sb.from('pagos').select('*').in('cuenta_id', ids).order('creada_en')),
+    selectAll(sb.from('cuenta_mesas').select('*').in('cuenta_id', ids)),
+  ]) : [[], [], []]
+  return {
+    turno: mapTurno({ ...fila, cerrado_en: finIso }, nombres),
+    cuentas: armarCuentas(cuentasRaw, items, pagos, cms, nombres),
+    devoluciones: devs.map(r => mapDev(r, nombres)),
+  }
+}
 
 export async function cargarEstadoInicial(empresaId) {
   if (!sb) throw new Error('Supabase no está configurado')
@@ -408,6 +443,22 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       const dbId = await rpc('separar_mesa', { p_cuenta_id: rid(mapa, a.cuentaId), p_mesa_id: a.mesaId })
       const locId = (a._nuevos?.cuentas || [])[0]
       if (locId && locId !== dbId) mapa.set(locId, dbId)
+      return refrescarNegocio(E)
+    }
+    case 'unir-sub':
+      await rpc('unir_subcuentas', { p_cuenta_id: rid(mapa, a.cuentaId), p_cuenta_ids: (a.cuentaIds || []).map(x => rid(mapa, x)) })
+      return refrescarNegocio(E)
+    case 'mover-parcial': {
+      const dbDest = await rpc('mover_item_parcial', {
+        p_item_id: rid(mapa, a.itemId),
+        p_cantidad: a.cantidad,
+        ...(a.cuentaDestinoId ? { p_cuenta_destino_id: rid(mapa, a.cuentaDestinoId) } : {}),
+        ...(a.mesaDestino ? { p_mesa_destino: a.mesaDestino } : {}),
+      })
+      if (a.mesaDestino && dbDest !== rid(mapa, a.cuentaId)) {
+        const locId = (a._nuevos?.cuentas || [])[0]
+        if (locId && locId !== dbDest) mapa.set(locId, dbDest)
+      }
       return refrescarNegocio(E)
     }
     case 'mover': {

@@ -8,11 +8,12 @@
 
 /* Listado compacto de mesas (solo lectura) */
 .mr-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.mr-item{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;padding:10px 16px;border-radius:999px;border:2px solid var(--line-fuerte);text-align:left;background:var(--card);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer}
-.mr-item .mr-nombre{font-size:1.02rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+/* Era una píldora (999px) de 84 px de alto: las esquinas se comían el número de mesa y el texto salía cortado. */
+.mr-item{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;padding:10px 12px;border-radius:14px;border:2px solid var(--line-fuerte);text-align:left;background:var(--card);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer;overflow-wrap:anywhere}
+.mr-item .mr-nombre{font-size:1.02rem;font-weight:700;line-height:1.2;max-width:100%}
 .mr-item .mr-est{font-size:.8rem;font-weight:600;opacity:.85}
 .mr-item .mr-importe{font-weight:700}
-.mr-item .mr-quien{font-size:.78rem;font-weight:600;opacity:.9;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mr-item .mr-quien{font-size:.78rem;font-weight:600;opacity:.9;max-width:100%}
 .mr-item .mr-quien.alerta{color:var(--danger);font-weight:700}
 .mr-item .mr-zona{font-size:.72rem;opacity:.75}
 .mr-item.libre{background:var(--libre-bg);border-color:var(--libre-bd);color:var(--libre-ink)}

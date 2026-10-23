@@ -1,11 +1,19 @@
+export const GRUPO_DIRECTA = 'directa'
+
 const GRUPOS_BASE = [
   { id: 'cocina', nombre: 'Cocina', ancho: 32, baud: 9600 },
   { id: 'barra', nombre: 'Barra', ancho: 32, baud: 9600 },
+  { id: GRUPO_DIRECTA, nombre: 'Venta directa', ancho: 32, baud: 9600 },
   { id: 'caja', nombre: 'Caja (tickets)', ancho: 32, baud: 9600, tickets: true },
 ]
 
+// Un negocio ya tiene sus grupos guardados en config, así que «Venta directa» se añade al final
+// cuando falta. Nunca al principio: una sección sin asignación tiene que seguir cayendo en Cocina.
+const conDirecta = lista => (lista.some(g => g.id === GRUPO_DIRECTA) ? lista
+  : [...lista.filter(g => !g.tickets), { id: GRUPO_DIRECTA, nombre: 'Venta directa', ancho: 32, baud: 9600 }, ...lista.filter(g => g.tickets)])
+
 export const gruposDe = config => (
-  Array.isArray(config?.gruposImpresion) && config.gruposImpresion.length ? config.gruposImpresion : GRUPOS_BASE
+  Array.isArray(config?.gruposImpresion) && config.gruposImpresion.length ? conDirecta(config.gruposImpresion) : GRUPOS_BASE
 )
 export const gruposDeComanda = config => gruposDe(config).filter(g => !g.tickets)
 export const grupoTickets = config => gruposDe(config).find(g => g.tickets) || null

@@ -50,6 +50,8 @@
 .vd-nota-ayuda{color:var(--mut)}
 .vd-check{display:flex;gap:8px;align-items:center;font-size:.9rem;color:var(--mut)}
 .vd-check input{width:auto;min-height:0}
+.vd-check-cuerpo{display:flex;flex-direction:column;gap:2px;min-width:0}
+.vd-check-cuerpo small{font-weight:400;font-size:.78rem;line-height:1.35;opacity:.8}
 .vd-acciones{display:flex;flex-direction:column;gap:8px}
 .vd-aviso{margin:0;padding:8px 10px;border-radius:10px;background:var(--libre);color:var(--ac);font-weight:600;font-size:.9rem}
 
