@@ -8,7 +8,8 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
 
   const [abierto, setAbierto] = useState(() => typeof window === 'undefined' || window.innerWidth > 850)
   // La barra va pegada arriba (sticky) y mide su propio alto para que los menús que se pegan
-  // debajo (Configuración) no queden tapados: --topbar-h lo consume SettingsPage.css.
+  // debajo (Configuración) no queden tapados: --topbar-h lo consume SettingsPage.css. El alto ya
+  // trae la franja segura del teléfono (auth.css), que es lo que deja el ☰ siempre a la vista.
   const barra = useRef(null)
   useEffect(() => {
     const el = barra.current
@@ -19,6 +20,15 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
     ro?.observe(el)
     window.addEventListener('resize', publicar)
     return () => { ro?.disconnect(); window.removeEventListener('resize', publicar) }
+  }, [])
+  // El umbral del desplegable es el mismo de la CSS (850 px): al girar el teléfono el menú deja de
+  // apilar filas dentro de la barra y pasa a abrirse con el ☰, que es el que siempre se ve.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined
+    const estrecha = window.matchMedia('(max-width:850px)')
+    const alCruzar = e => setAbierto(!e.matches)
+    estrecha.addEventListener('change', alCruzar)
+    return () => estrecha.removeEventListener('change', alCruzar)
   }, [])
   const elegir = id => { onModulo?.(id); if (typeof window !== 'undefined' && window.innerWidth <= 850) setAbierto(false) }
   // El módulo «Menú» se muestra como «Ítems» para no chocar con la impresión (única en Configuración).

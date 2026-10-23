@@ -32,6 +32,25 @@ const legible = ts => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
 }
 
+// En iPhone la rueda nativa de fecha y el área del teclado tapan el campo enfocado, así que al
+// recibir el foco centramos el input en el viewport visible. Usamos visualViewport (el alto real
+// que queda por encima del teclado) y caemos a scrollIntoView cuando el navegador no lo expone.
+function traerFechaALaVista(ev) {
+  const el = ev.currentTarget
+  const centrar = () => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null
+    if (!vv) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); return }
+    const caja = el.getBoundingClientRect()
+    const centro = caja.top + caja.height / 2
+    // Solo movemos si el campo quedó fuera del 20–80 % del área visible (bajo el teclado).
+    if (centro < vv.height * 0.2 || centro > vv.height * 0.8) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+  }
+  // Esperamos a que iOS termine de desplegar la rueda/picker nativa antes de recalcular.
+  setTimeout(centrar, 320)
+}
+
 export default function ReportsPage({ rol, sesion }) {
   const { s, error, modo } = useStore()
   const { t, tOr } = useIdioma()
@@ -291,11 +310,11 @@ export default function ReportsPage({ rol, sesion }) {
           ))}
           <label className="rp-fecha">
             <span>{tOr('reportes.desde', 'Desde')}</span>
-            <input name="desde-txt" type="date" value={desdeTxt} onChange={e => setDesdeTxt(e.target.value)} />
+            <input name="desde-txt" type="date" value={desdeTxt} onFocus={traerFechaALaVista} onChange={e => setDesdeTxt(e.target.value)} />
           </label>
           <label className="rp-fecha">
             <span>{tOr('reportes.hasta', 'Hasta')}</span>
-            <input name="hasta-txt" type="date" value={hastaTxt} onChange={e => setHastaTxt(e.target.value)} />
+            <input name="hasta-txt" type="date" value={hastaTxt} onFocus={traerFechaALaVista} onChange={e => setHastaTxt(e.target.value)} />
           </label>
           <button type="button" className="ghost" onClick={aplicar}>{tOr('reportes.aplicar', 'Aplicar')}</button>
         </div>

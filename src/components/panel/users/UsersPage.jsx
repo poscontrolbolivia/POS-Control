@@ -242,6 +242,7 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
             <div className="eq-lista">
               <div className="eq-cab">
                 <span>{tOr('equipo.colPersona', 'Persona')}</span>
+                <span>{tOr('equipo.colCorreo', 'Correo')}</span>
                 <span>{tOr('equipo.colRol', 'Rol')}</span>
                 <span>{tOr('equipo.colAlta', 'Alta')}</span>
                 <span className="eq-cab-acciones">{tOr('equipo.colAcciones', 'Acciones')}</span>
@@ -254,7 +255,6 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
                     <div className="eq-cab-movil">{tOr('equipo.colPersona', 'Persona')}</div>
                     <div className="eq-persona">
                       <span className="eq-nombre">{m.nombre || tOr('equipo.sinNombre', 'sin nombre')}</span>
-                      <span className="eq-correo">{m.correo}</span>
                       {(m.rol === 'cocina' || m.rol === 'barra') && gruposC.length > 0 && (
                         <div className="eq-areas" role="group" aria-label={tOr('equipo.areas.titulo', 'Áreas que ve')}>
                           {gruposC.map(g => {
@@ -264,6 +264,10 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
                           {!(Array.isArray(m.areas) && m.areas.length) && <small className="eq-areas-todas">{tOr('equipo.areas.todas', 'Todas las áreas')}</small>}
                         </div>
                       )}
+                    </div>
+                    <div className="eq-celda">
+                      <span className="eq-cab-movil">{tOr('equipo.colCorreo', 'Correo')}</span>
+                      <span className="eq-correo">{m.correo}</span>
                     </div>
                     <div className="eq-celda">
                       <span className="eq-cab-movil">{tOr('equipo.colRol', 'Rol')}</span>
@@ -424,7 +428,8 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
       <div className="eq-lista">
         {usuarios.map(u => (
           <div key={u.usuario} className="eq-fila">
-            <div className="eq-persona"><span className="eq-nombre">{u.nombre}</span><span className="eq-correo">{u.usuario}</span></div>
+            <div className="eq-persona"><span className="eq-nombre">{u.nombre}</span></div>
+            <div className="eq-celda"><span className="eq-correo">{u.usuario}</span></div>
             <div className="eq-celda"><span className={'eq-rol eq-rol-' + u.rol} style={ROL_INLINE[u.rol]}>{rolEtiqueta(u.rol, tOr)}</span></div>
             <div className="eq-celda" />
             <div className="eq-acciones">

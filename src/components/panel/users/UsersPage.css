@@ -18,21 +18,21 @@
   color:var(--mut);font-size:.72rem;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
 }
 .eq-cab{
-  display:grid;grid-template-columns:minmax(0,1.7fr) auto auto minmax(0,auto);
+  display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) auto auto minmax(0,auto);
   gap:8px 12px;align-items:center;padding:10px 0 6px;border-bottom:1px solid var(--line);
 }
 .eq-cab-movil{display:none}
 .eq-cab-acciones{text-align:right}
 
 .eq-fila{
-  display:grid;grid-template-columns:minmax(0,1.7fr) auto auto minmax(0,auto);
+  display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) auto auto minmax(0,auto);
   gap:8px 12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);
 }
 .eq-fila:last-child{border-bottom:none}
 
 .eq-persona{display:flex;flex-direction:column;gap:2px;min-width:0}
-.eq-nombre{font-weight:700;overflow-wrap:anywhere}
-.eq-correo{color:var(--mut);font-size:.85rem;overflow-wrap:anywhere}
+.eq-nombre{font-weight:700;overflow-wrap:anywhere;min-width:0}
+.eq-correo{color:var(--mut);font-size:.85rem;overflow-wrap:anywhere;min-width:0}
 .eq-celda{display:flex;align-items:center;gap:6px;min-width:0}
 .eq-alta{color:var(--mut);font-size:.85rem;white-space:nowrap;font-variant-numeric:tabular-nums}
 
@@ -67,7 +67,7 @@
 
 /* El formulario de invitación vive dentro de la ventana (Ventana.jsx), así que ya no necesita filete propio. */
 .eq-invitar{display:flex;flex-direction:column;gap:10px;min-width:0}
-.eq-campos{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.eq-campos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 12px}
 .eq-bloque .adm-campo select{min-height:46px;font-size:1rem;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 10px}
 
 @media (max-width:600px){
@@ -78,7 +78,7 @@
   .eq-celda{gap:8px}
   .eq-acciones{width:100%;justify-content:flex-start;margin-top:6px}
   .eq-acciones button{flex:1;min-width:44px;min-height:44px}
-  .eq-campos{grid-template-columns:1fr}
+  .eq-campos{grid-template-columns:minmax(0,1fr)}
   .eq-clave-fila input{min-width:0;flex:1 1 100%}
   .eq-clave-fila button{flex:1}
 }

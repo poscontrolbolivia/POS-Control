@@ -122,6 +122,14 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
     </>
   )
 
+  // Con el turno cerrado la vista de cobro también tiene que abrirse: si no, tocar una mesa o un
+  // pedido para llevar no hacía nada y el cajero no llegaba ni a la cuenta ni al aviso de abrir el turno.
+  const vistaCobro = cobrando && (
+    <OrderPanel rol={rol} sesion={sesion} mesa={mesaCobro} cuenta={cuentaCobro} cuentaInicial={subCobro} cobro
+      onEdicion={() => { const f = cobrando; setCobrando(null); onAbrirMesa?.(f) }}
+      onClose={() => setCobrando(null)} />
+  )
+
   const msgCierre = contado => {
     const dif = round2(contado - resumen.esperado)
     const base = Math.abs(dif) < 0.005
@@ -196,6 +204,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
       <div className="caja">
         {aviso && <div className="caja-aviso" role="status">{aviso}<button type="button" className="caja-aviso-x" onClick={() => setAviso('')} aria-label={t('comun.cancelar')}>✕</button></div>}
         {paneles}
+        {vistaCobro}
         <section className="caja-card">
           <div className="caja-head"><h2>{t('caja.titulo')}</h2><span className="caja-num cerrado">{t('caja.cerrado')}</span></div>
           {puede(rol, 'abrir_turno') ? (
@@ -224,11 +233,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
         <p className="caja-nota">{t('caja.otrosTurnos', { lista: s.caja.otros.map(x => `${x.abiertoPor} (${new Date(x.abiertoEn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`).join(', ') })}</p>
       )}
       {paneles}
-      {cobrando && (
-        <OrderPanel rol={rol} sesion={sesion} mesa={mesaCobro} cuenta={cuentaCobro} cuentaInicial={subCobro} cobro
-          onEdicion={() => { const f = cobrando; setCobrando(null); onAbrirMesa?.(f) }}
-          onClose={() => setCobrando(null)} />
-      )}
+      {vistaCobro}
       <section className="caja-card caja-turno">
         <div className="caja-head">
           <h2>{t('caja.turnoNumero', { n: numeroActual })}</h2>

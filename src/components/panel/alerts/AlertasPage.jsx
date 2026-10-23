@@ -22,6 +22,16 @@ const AVISO_MS = 4000
 const URGENTE = 2
 const BAJA = 8
 
+// «Descartar» una sugerencia es decirle a la app que no la muestre más: la clave vive en
+// localStorage porque la sugerencia no es una fila de la base (no se puede marcar como resuelta).
+const CLAVE_DESCARTADAS = 'pos-alertas-descartadas'
+export const leerDescartadas = () => {
+  try { const v = JSON.parse(localStorage.getItem(CLAVE_DESCARTADAS) || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+const escribirDescartadas = lista => {
+  try { localStorage.setItem(CLAVE_DESCARTADAS, JSON.stringify(lista)) } catch { /* noop */ }
+}
+
 const etiquetaTipo = (tipo, tOr) => tOr('alertas.tipo.' + tipo, ETIQUETA_TIPO[tipo] || ETIQUETA_TIPO.general)
 const prioridadValida = p => (Number.isFinite(Number(p)) ? Math.min(9, Math.max(1, Math.round(Number(p)))) : 5)
 const etiquetaPrio = (p, tOr) => (p <= URGENTE ? tOr('alertas.prioUrgente', ETIQUETA_PRIO[1])
@@ -55,6 +65,8 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
   const [formErr, setFormErr] = useState('')
   const [aviso, setAviso] = useState('')
   const [convertidas, setConvertidas] = useState(() => [])
+  const [descartadas, setDescartadas] = useState(leerDescartadas)
+  const [moviendo, setMoviendo] = useState(null)
 
   const seq = useRef(0)
   const timerAviso = useRef(null)
@@ -107,7 +119,15 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
     return m
   }, [s.alertas])
 
-  const base = useMemo(() => conNombres(enBase ? (frescas ?? s.alertas ?? []) : (s.alertas ?? []), nombres), [enBase, frescas, s.alertas, nombres])
+  // Manda la lista del sondeo sobre lo que ya está igual en el store; el store aporta las alertas
+  // recién creadas, que todavía no llegan en la consulta, para que se vean al levantarlas.
+  const base = useMemo(() => {
+    const local = s.alertas || []
+    if (!enBase) return conNombres(local, nombres)
+    const delServidor = frescas || []
+    const ids = new Set(delServidor.map(a => a.id))
+    return conNombres([...delServidor, ...local.filter(a => a && !ids.has(a.id))], nombres)
+  }, [enBase, frescas, s.alertas, nombres])
 
   const nombreMesa = id => (s.mesas || []).find(m => m.id === id)?.nombre || ''
   const etiquetaCuenta = c => {
@@ -139,12 +159,44 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
   // se repite el aviso que PwaBridge ya notifica ni la que el equipo levantó a mano.
   const sugerencias = useMemo(() => {
     const yaCubiertas = new Set(pendientes.map(claveSugerencia))
+    const guardadas = new Set(descartadas)
     return alertasAutomaticas({ cuentas: s.cuentas, mesas: s.mesas, insumos: s.insumos, ahora })
       .filter(a => !yaCubiertas.has(claveSugerencia(a)))
+      .filter(a => !guardadas.has(claveSugerencia(a)))
       .filter(a => filtroTipo === 'todas' || a.tipo === filtroTipo)
-  }, [s.cuentas, s.mesas, s.insumos, ahora, pendientes, filtroTipo])
+  }, [s.cuentas, s.mesas, s.insumos, ahora, pendientes, filtroTipo, descartadas])
 
-  const resolver = (a, resuelta) => d({ t: 'alerta-resolver', id: a.id, resuelta })
+  // La lista que se pinta viene del sondeo (frescas) y tarda REFRESCAR_MS; el cambio ya se escribió,
+  // así que se aplica también ahí para que el toque se vea de una vez.
+  const tocarFrescas = (id, cambios) => { if (enBase) setFrescas(prev => (prev || []).map(a => (a.id === id ? { ...a, ...cambios } : a))) }
+
+  const resolver = (a, resuelta) => {
+    d({ t: 'alerta-resolver', id: a.id, resuelta })
+    tocarFrescas(a.id, { resueltaEn: resuelta ? Date.now() : null })
+  }
+
+  // Descartar una sugerencia por su clave: vuelve a aparecer solo si se rehace la lista.
+  const descartar = a => {
+    const k = claveSugerencia(a)
+    const siguiente = [...new Set([...descartadas, k])]
+    setDescartadas(siguiente)
+    escribirDescartadas(siguiente)
+    avisar(tOr('alertas.auto.descartada', 'Sugerencia descartada en este dispositivo.'))
+  }
+  const mostrarDescartadas = () => {
+    setDescartadas([])
+    escribirDescartadas([])
+    avisar(tOr('alertas.auto.mostradas', 'Volvieron las sugerencias descartadas.'))
+  }
+
+  // Mover la alerta a otra mesa: el vínculo cambia, el texto queda igual.
+  const mover = (a, mesaId) => {
+    const cuenta = mesaId && cuentasAbiertas.find(c => (c.mesaIds || []).includes(mesaId))
+    d({ t: 'alerta-mover', id: a.id, mesaId: mesaId || null, cuentaId: cuenta?.id ?? null })
+    tocarFrescas(a.id, { mesaId: mesaId || null, cuentaId: cuenta?.id ?? null })
+    setMoviendo(null)
+    avisar(mesaId ? tOr('alertas.movida', 'Alerta movida a otra mesa.') : tOr('alertas.sinMesa', 'Alerta desligada de la mesa.'))
+  }
 
   const abrir = a => {
     onAbrirCuenta?.({ cuentaId: a.cuentaId, mesaId: a.mesaId, tipo: a.tipo })
@@ -245,7 +297,23 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
           {a.cuentaId && (
             <button type="button" className="ghost" onClick={() => abrir(a)}>↗ {tOr('alertas.abrirCuenta', 'Abrir cuenta')}</button>
           )}
+          {!resuelta && (s.mesas || []).length > 1 && (
+            <button type="button" className="ghost" onClick={() => setMoviendo(moviendo === a.id ? null : a.id)}>
+              ↪ {moviendo === a.id ? tOr('comun.cerrar', 'Cerrar') : tOr('alertas.mover', 'Mover')}
+            </button>
+          )}
         </div>
+        {moviendo === a.id && !resuelta && (
+          <div className="ala-mover">
+            <label className="ala-mover-campo">
+              <span>{tOr('alertas.moverA', 'Mover a la mesa')}</span>
+              <select value={a.mesaId || ''} onChange={e => mover(a, e.target.value)}>
+                <option value="">{tOr('alertas.moverNinguna', 'Sin mesa')}</option>
+                {(s.mesas || []).map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
       </article>
     )
   }
@@ -381,6 +449,11 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
           <div className="ala-bloque-cab">
             <h3>💡 {tOr('alertas.auto.titulo', 'Sugerencias automáticas')}</h3>
             <span className="ala-badge">{sugerencias.length}</span>
+            {descartadas.length > 0 && (
+              <button type="button" className="ghost ala-descartadas" onClick={mostrarDescartadas}>
+                ↺ {tOr('alertas.auto.descartadasN', `${descartadas.length} descartadas`, { n: descartadas.length })}
+              </button>
+            )}
           </div>
           <p className="ala-pista">{tOr('alertas.auto.desc', 'Calculadas del estado actual; no se guardan hasta que las conviertas en alerta.')}</p>
           {sugerencias.length === 0 ? (
@@ -410,6 +483,7 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
                         {hecha ? tOr('alertas.auto.yaConvertida', 'Ya la levantaste') : `＋ ${tOr('alertas.auto.convertir', 'Convertir en alerta')}`}
                       </button>
                       {a.cuentaId && <button type="button" className="ghost" onClick={() => abrir(a)}>↗ {tOr('alertas.abrirCuenta', 'Abrir cuenta')}</button>}
+                      <button type="button" className="peligro" onClick={() => descartar(a)}>✕ {tOr('alertas.auto.descartar', 'Descartar')}</button>
                     </div>
                   </div>
                 )

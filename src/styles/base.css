@@ -118,16 +118,19 @@ button{transition:none}}
 [class*="-aviso"] button.ico{background:var(--rojo-bg);border:1.5px solid var(--rojo-bd);color:var(--rojo-txt)}
 [class*="-aviso"] button.ico:hover:not(:disabled){background:var(--rojo-hover);border-color:color-mix(in srgb,var(--rojo) 45%,var(--rojo-bd));color:var(--rojo-txt)}
 
+/* Táctiles de la barra: 44 px de alto real (regla de la casa) y flex:0 0 auto para que el ☰ nunca
+   se encoja ni salga volando de la fila cuando el nombre del negocio es largo. El ☰ es círculo:
+   min-width = min-height. */
 .topbar-salir, .topbar-menu{
-  display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:6px 14px;border:0;border-radius:var(--r-pill);color:var(--on-btn);font-weight:650;
+  display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;min-height:44px;padding:6px 14px;border:0;border-radius:var(--r-pill);color:var(--on-btn);font-weight:650;
   text-shadow:0 1px 1px rgba(0,0,0,.25);background:var(--gloss),var(--pc);box-shadow:var(--sh-btn) color-mix(in srgb,var(--pc) 38%,transparent)}
 .topbar-salir{--pc:var(--rojo)}
-.topbar-menu{--pc:var(--btn-yellow);color:var(--on-warning);text-shadow:none;font-size:1.15rem;line-height:1;padding:6px 13px}
+.topbar-menu{--pc:var(--btn-yellow);color:var(--on-warning);text-shadow:none;font-size:1.15rem;line-height:1;padding:6px 13px;min-width:44px}
 .topbar-salir:hover:not(:disabled), .topbar-menu:hover:not(:disabled){filter:brightness(.95);transform:translateY(-1px);background:var(--gloss),var(--pc)}
 .topbar-acc{display:flex;align-items:center;gap:8px;margin-left:auto}
 .topbar-mods.cerrado{display:none}
 @media(max-width:640px){.topbar-salir-txt{display:none}
-.topbar-salir{padding:6px 12px;min-width:38px}}
+.topbar-salir{padding:6px 12px;min-width:44px}}
 .pref-fila{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
 .pref-fila .lg-tema{display:flex;align-items:center;gap:8px}
 

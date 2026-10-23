@@ -23,39 +23,48 @@
 .auth-bloque-titulo{margin:0;font-weight:700;font-size:.92rem}
 /* Barra superior SIEMPRE visible: se pega arriba aunque se baje (el scroll es de la ventana).
    Fondo opaco + borde inferior; el z-index queda por debajo de los modales (.modal-fondo 200 y
-   .mn-overlay 1000) para que un modal nunca se vea tapado por la barra. */
+   .mn-overlay 1000) para que un modal nunca se vea tapado por la barra.
+   El relleno de arriba y de los costados suma la franja segura (env(safe-area-inset-*)): la app se
+   usa instalada como PWA (display:standalone + viewport-fit=cover), así que sin esa suma el ☰ queda
+   dibujado debajo del reloj/muesca del teléfono y "desaparece" apenas se entra desde la pantalla de inicio.
+   --topbar-h (Topbar.jsx) mide la barra ya con ese relleno, así que los títulos fijos de Configuración
+   siguen pegándose justo debajo. */
 .topbar{
   position:sticky;top:0;z-index:150;
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  padding:8px 14px;background:var(--card);border-bottom:1px solid var(--line);box-shadow:var(--sh-1);
+  padding:8px 14px;
+  padding:calc(8px + env(safe-area-inset-top,0px)) calc(14px + env(safe-area-inset-right,0px)) 8px calc(14px + env(safe-area-inset-left,0px));
+  background:var(--card);border-bottom:1px solid var(--line);box-shadow:var(--sh-1);
 }
-.topbar-izq{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 0}
-.topbar-acc{flex:none}
-.topbar-empresa{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+/* La izquierda se corta a su propio ancho (min-width:0 + recorte) para que un nombre largo o las
+   plaquitas nunca empujen el ☰ fuera de la pantalla; los botones de la derecha van en su propia capa. */
+.topbar-izq{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 0;flex-wrap:nowrap;overflow:hidden}
+.topbar-acc{flex:none;position:relative;z-index:2}
+.topbar-empresa{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;min-width:0}
 .topbar-rol{
   text-transform:lowercase;font-size:.75rem;font-weight:700;padding:3px 10px;
-  border-radius:999px;color:var(--on-btn);background:var(--mut);white-space:nowrap;
+  border-radius:999px;color:var(--on-btn);background:var(--mut);white-space:nowrap;flex:0 0 auto;
 }
 .topbar-rol-admin{background:var(--rol-admin)}
 .topbar-rol-cajero{background:var(--rol-cajero);color:var(--rol-cajero-ink)}
 .topbar-rol-mesero{background:var(--rol-mesero);color:var(--rol-mesero-ink)}
-.topbar-user{color:var(--mut);font-size:.85rem;white-space:nowrap}
+.topbar-user{color:var(--mut);font-size:.85rem;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
 .topbar-mods{display:flex;gap:6px;flex-wrap:wrap;order:3;width:100%;justify-content:flex-start;padding-top:2px}
 .topbar-tab{border-radius:var(--r-pill);min-height:38px;padding:6px 14px;font-size:.9rem;font-weight:600;border-color:var(--chip-bd);background:var(--chip-bg);color:var(--chip-ink)}
 .topbar-tab:hover:not(:disabled):not(.on){background:var(--chip-hover);border-color:color-mix(in srgb,var(--sel) 55%,transparent)}
 .topbar-n{font-style:normal;font-size:.7rem;font-weight:800;border-radius:999px;padding:1px 6px;margin-left:6px;background:var(--danger);color:var(--on-btn);display:inline-block;min-width:18px;text-align:center}
 .topbar-n-menu{position:absolute;top:-2px;right:-4px;margin:0}
 .topbar-menu{position:relative}
-.topbar-actual{font-weight:700;font-size:.85rem;padding:3px 12px;border-radius:var(--r-pill);color:var(--on-btn);background:var(--gloss),var(--sel);white-space:nowrap}
+.topbar-actual{font-weight:700;font-size:.85rem;padding:3px 12px;border-radius:var(--r-pill);color:var(--on-btn);background:var(--gloss),var(--sel);white-space:nowrap;flex:0 0 auto}
 @media(min-width:851px){.topbar-actual{display:none}}
-@media(max-width:640px){.topbar-izq{flex-wrap:nowrap;overflow:hidden}
+@media(max-width:640px){
 .topbar-empresa{max-width:96px;flex:0 1 auto}
-.topbar-actual{flex:none}
 .topbar-izq>.topbar-rol:last-child{display:none}}
-@media (max-width:640px){.topbar{gap:6px;padding:8px 10px}
+@media (max-width:640px){.topbar{gap:6px;padding:8px 10px;
+padding:calc(8px + env(safe-area-inset-top,0px)) calc(10px + env(safe-area-inset-right,0px)) 8px calc(10px + env(safe-area-inset-left,0px))}
 .topbar-user{display:none}
 .topbar-mods{order:3;width:100%;justify-content:flex-start}}
 /* Móvil: el menú de módulos se despliega SOBRE el contenido (no agranda la barra fija). */
 @media(max-width:850px){
-  .topbar-mods:not(.cerrado){position:absolute;top:100%;left:0;right:0;z-index:151;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--line);box-shadow:var(--sh-2);max-height:calc(100dvh - var(--topbar-h,56px));overflow-y:auto}
+  .topbar-mods:not(.cerrado){position:absolute;top:100%;left:0;right:0;z-index:151;padding:10px calc(12px + env(safe-area-inset-right,0px)) 10px calc(12px + env(safe-area-inset-left,0px));background:var(--card);border-bottom:1px solid var(--line);box-shadow:var(--sh-2);max-height:calc(100dvh - var(--topbar-h,56px));overflow-y:auto}
 }

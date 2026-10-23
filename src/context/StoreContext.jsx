@@ -717,6 +717,10 @@ function reducer(s, a) {
       ? { ...x, resueltaEn: a.resuelta ? Date.now() : null, resueltaPor: a.resuelta ? (a.usuario || 'demo') : undefined }
       : x)) }
 
+    case 'alerta-mover': return { ...s, alertas: (s.alertas || []).map(x => (x.id === a.id
+      ? { ...x, mesaId: a.mesaId ?? null, cuentaId: a.cuentaId === undefined ? x.cuentaId : a.cuentaId }
+      : x)) }
+
     case 'reset': return inicial
     default: return s
   }
@@ -850,8 +854,6 @@ const BITACORA = {
   'alerta+': (p, n, a) => ['alerta_creado', 'alerta', a.alerta?.titulo || a.alerta?.tipo || '', { tipo: a.alerta?.tipo, prioridad: a.alerta?.prioridad }],
   'alerta-resolver': (p, n, a) => ['alerta_resuelta', 'alerta', alertaDe(p, a.id), { resuelta: Boolean(a.resuelta) }],
   'alerta-mover': (p, n, a) => ['alerta_movida', 'alerta', alertaDe(p, a.id), { mesa: nombreMesa(n, a.mesaId) }],
-  'alerta-pausa': (p, n, a) => ['alerta_pausada', 'alerta', alertaDe(p, a.id), { pausada: Boolean(a.pausada) }],
-  'alerta-convertir': (p, n, a) => ['alerta_convertida', 'alerta', alertaDe(p, a.id), { pedido: etiquetaCuenta(n, nuevoDe(p, n, 'cuentas')[0]) }],
 
   'reset': () => ['demo_reinicio', 'config', 'Negocio de demostración', {}],
 }

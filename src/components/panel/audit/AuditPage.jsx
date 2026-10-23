@@ -7,11 +7,9 @@ import './AuditPage.css'
 
 const ACCIONES = {
   alerta_baja: "Alerta eliminada",
-  alerta_convertida: "Alerta convertida en pedido",
   alerta_creado: "Alerta creada",
   alerta_edicion: "Alerta editada",
   alerta_movida: "Alerta movida a otra mesa",
-  alerta_pausada: "Alerta pausada o reactivada",
   alerta_resuelta: "Alerta resuelta o reabierta",
   alta_empresa: "Alta de una empresa nueva",
   area_retirada: "Se borró un área de comanda",

@@ -131,19 +131,22 @@ async function fetchNombres() {
   } catch { return {} }
 }
 
-// Costos, proveedores, deudas y alertas. Las cuatro las lee la misma RLS: quien no
+// Costos, proveedores, deudas, alertas, insumos y recetas. Las seis las lee la misma RLS: quien no
 // tiene permiso recibe filas cero en lugar de un error, así la pantalla no se cae.
 async function fetchExtras(empresaId, nombres) {
   const suave = async (query, vacío) => {
     try { return await selectAll(query) } catch { return vacío }
   }
-  const [costos, proveedores, deudas, alertas, insumos] = await Promise.all([
+  const [costos, proveedores, deudas, alertas, insumos, recetas] = await Promise.all([
     suave(sb.from('costos_producto').select('producto_id, costo, proveedor_id').eq('empresa_id', empresaId), []),
     suave(sb.from('proveedores').select('*').eq('empresa_id', empresaId).order('nombre'), []),
     suave(sb.from('cuentas_por_pagar').select('*').eq('empresa_id', empresaId).order('fecha', { ascending: false }).limit(500), []),
     suave(sb.from('alertas').select('*').eq('empresa_id', empresaId).order('creada_en', { ascending: false }).limit(300), []),
-    // Solo para las alertas automáticas de stock; la tabla es de admin, así que en otro rol viene vacía.
-    suave(sb.from('insumos').select('id, nombre, stock, stock_min, unidad, activo').eq('empresa_id', empresaId), []),
+    // `costo` entra porque el costo de una receta se calcula con el costo de cada insumo.
+    suave(sb.from('insumos').select('id, nombre, stock, stock_min, unidad, costo, activo').eq('empresa_id', empresaId), []),
+    // Sin las recetas el editor del plato no sabe si el costo lo manda la receta o el peso, y el margen
+    // sale con el costo escrito a mano aunque el negocio tenga la receta cargada.
+    suave(sb.from('recetas').select('producto_id, insumo_id, cantidad').eq('empresa_id', empresaId), []),
   ])
   return {
     costos: costos.map(mapCosto),
@@ -151,6 +154,8 @@ async function fetchExtras(empresaId, nombres) {
     deudas: deudas.map(mapDeuda),
     alertas: alertas.map(a => mapAlerta(a, nombres)),
     insumos,
+    // La forma del store es { productoId, insumo_id, cantidad }, igual que en el modo demo.
+    recetas: recetas.map(r => ({ productoId: r.producto_id, insumo_id: r.insumo_id, cantidad: r.cantidad })),
   }
 }
 
@@ -683,12 +688,30 @@ export async function despacharSupabase(estado, a, ctx = {}) {
         prioridad: Number(a.alerta.prioridad) || 5,
       }).select('id').single()
       if (error) throw new Error(error.message)
-      if (locId && data?.id) mapa.set(locId, data.id)
+      if (locId && data?.id) {
+        mapa.set(locId, data.id)
+        // El store se quedó con el id local; hay que reemplazarlo por el de la base o el siguiente
+        // toque (resolver, mover) buscaría una fila que ya no existe y el cambio no se vería.
+        return { ...E, alertas: (E.alertas || []).map(x => (x.id === locId ? { ...x, id: data.id } : x)) }
+      }
       return E
     }
     case 'alerta-resolver': {
       const { error } = await sb.from('alertas')
         .update({ resuelta_en: a.resuelta ? new Date().toISOString() : null, resuelta_por: null })
+        .eq('id', rid(mapa, a.id)).eq('empresa_id', empresaId)
+      if (error) throw new Error(error.message)
+      return E
+    }
+
+    case 'alerta-mover': {
+      // Mover la alerta a otra mesa: cambian los dos vínculos (mesa y cuenta), el texto queda igual
+      // para que la bitácora y la pantalla no pierdan de qué se estaba hablando.
+      const { error } = await sb.from('alertas')
+        .update({
+          mesa_id: a.mesaId ? rid(mapa, a.mesaId) : null,
+          cuenta_id: a.cuentaId ? rid(mapa, a.cuentaId) : null,
+        })
         .eq('id', rid(mapa, a.id)).eq('empresa_id', empresaId)
       if (error) throw new Error(error.message)
       return E

@@ -83,7 +83,11 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const [sec, setSec] = useState(TODOS)
   const [busca, setBusca] = useState('')
 
-  const secActiva = sec === TODOS || secciones.some(x => x.id === sec) ? sec : secciones[0]?.id
+  const secActiva = sec === TODOS || secciones.some(x => x.id === sec) ? sec : TODOS
+  // La barra de la carta se queda donde el mesero la dejó; al filtrar eso deja los platos nuevos fuera por
+  // la izquierda, así que cada cambio de grupo o de búsqueda la vuelve a arrancar.
+  const tira = useRef(null)
+  useEffect(() => { if (tira.current) tira.current.scrollLeft = 0 }, [secActiva, busca])
   const [marcados, setMarcados] = useState([])
   const [destino, setDestino] = useState('')
   const [canje, setCanje] = useState('')
@@ -600,7 +604,9 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
                 ))}
               </div>
             )}
-            <div className="grid pm-productos">
+            {/* La carta entra por una tira que se desliza hacia la izquierda con su barra, como en el
+                mostrador: con «Todos» hay decenas de platos y un recuadro dejaba el resto sin alcanzar. */}
+            {!!enCarta.length && <div className="grid pm-productos" ref={tira}>
               {enCarta.map(p => (
                 <button key={p.id} className={'prod' + (agotados[p.id] ? ' agotado' : '')} onClick={() => agregarProd(p)}
                   title={agotados[p.id] ? t('agotado.bloqueado', { nombre: p.nombre, motivo: agotados[p.id].motivo ? t('agotado.motivoSep', { motivo: agotados[p.id].motivo }) : '' }) : undefined}>
@@ -609,8 +615,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
                   {agotados[p.id] && <small className="prod-agotado">{t('agotado.badge')}</small>}
                 </button>
               ))}
-              {!enCarta.length && <p className="pm-sin-busca">{tOr('pedido.sinProducto', 'Ningún producto coincide con la búsqueda.')}</p>}
-            </div>
+            </div>}
+            {!enCarta.length && <p className="pm-sin-busca">{tOr('pedido.sinProducto', 'Ningún producto coincide con la búsqueda.')}</p>}
           </section>
         )}
 

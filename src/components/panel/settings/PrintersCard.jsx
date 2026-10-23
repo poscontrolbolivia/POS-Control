@@ -35,18 +35,58 @@ function Sub({ id, icono, titulo, ayuda, chip = null, abierto = false, oculto = 
   )
 }
 
+// Nivel 2 (submenús de Impresoras): la tecla propia vive bajo el mismo prefijo que el acordeón de
+// Configuración (pos-cfg-abierto guarda el bloque de nivel 1; acá se guarda el submenú de nivel 2).
+const CLAVE_SUB = 'pos-cfg-impresoras-sub'
+const SUBS = ['grupos', 'contenido', 'papel', 'donde', 'sonido']
+// Hashes que son rutas de la app: nunca un id de grupo, aunque el grupo se llame igual (#caja, #cocina).
+const HASH_DE_RUTA = ['salon', 'cocina', 'caja', 'venta', 'menu', 'config', 'auditoria', 'inventario', 'reportes', 'alertas', 'estacion']
+
+// Qué submenú pide el enlace profundo: #estacion es «dónde se imprime»; #grupo-<id> (o el id del
+// grupo a secas) es «Grupos de comanda»; #donde, #grupos, #papel, #contenido y #sonido van directos.
+// Devuelve null cuando el hash no habla de impresión (ruta de otra pantalla, o sin hash).
+function subDesdeHash(idsGrupos) {
+  const bruto = typeof window !== 'undefined' ? String(window.location?.hash || '') : ''
+  const h = bruto.replace(/^#/, '')
+  if (!h) return null
+  if (h === 'estacion') return 'donde'
+  if (SUBS.includes(h)) return h
+  const id = h.replace(/^grupo-/, '')
+  return !HASH_DE_RUTA.includes(id) && idsGrupos.includes(id) ? 'grupos' : null
+}
+
+// Estado inicial ANTES del primer render (el enlace profundo no puede parpadear cerrado):
+// manda el hash; si no trae nada de impresión, vale lo guardado la última vez; y sin nada guardado
+// se entra con «Grupos de comanda» abierto, porque si todos vienen cerrados el botón de ＋ grupo
+// queda invisible y parece que no se puede crear nada.
+function leerSubInicial(idsGrupos) {
+  const delHash = subDesdeHash(idsGrupos)
+  if (delHash) return delHash
+  try {
+    const guardado = localStorage.getItem(CLAVE_SUB)
+    if (guardado === '') return null // la última vez se minimizó todo
+    if (SUBS.includes(guardado)) return guardado
+  } catch { /* noop */ }
+  return 'grupos'
+}
+
 export default function PrintersCard({ rol, sesion }) {
   const { s, d } = useStore()
   const { t, tOr } = useIdioma()
   const cfg = s.config || {}
   const grupos = gruposDe(cfg)
+  const idsGrupos = grupos.map(g => g.id)
   const [, refrescar] = useReducer(x => x + 1, 0)
   const [nuevo, setNuevo] = useState(null)
   const [conf, setConf] = useState(null)
-  // Se entra con «Grupos de comanda» abierto: si todos los submenús arrancan cerrados, el botón de ＋ grupo
-  // queda invisible y parece que no se puede crear nada.
-  const [sub, setSub] = useState('grupos')
-  const sp = id => ({ abierto: sub === id, oculto: Boolean(sub) && sub !== id, onToggle: () => { setConf(null); setNuevo(null); setSub(v => (v === id ? null : id)) } })
+  const [sub, setSub] = useState(() => leerSubInicial(idsGrupos))
+  // Se guarda al tocar (nunca en el primer render): así un enlace profundo no pisa la preferencia
+  // que el usuario ya tenía guardada cuando sólo venía a mirar una cosa.
+  const cambiarSub = siguiente => {
+    setSub(siguiente)
+    try { localStorage.setItem(CLAVE_SUB, siguiente ?? '') } catch { /* noop */ }
+  }
+  const sp = id => ({ abierto: sub === id, oculto: Boolean(sub) && sub !== id, onToggle: () => { setConf(null); setNuevo(null); cambiarSub(sub === id ? null : id) } })
   const soportado = soporteSerial()
 
   const claveGrupos = grupos.map(g => `${g.id}:${g.baud}`).join('|')
@@ -57,6 +97,17 @@ export default function PrintersCard({ rol, sesion }) {
     const unsub = suscribirImpresora(() => { if (vivo) refrescar() })
     const poll = setInterval(() => { if (vivo) refrescar() }, 3000)
     return () => { vivo = false; unsub(); clearInterval(poll) }
+  }, [claveGrupos])
+
+  // Cambiar de pantalla no recarga Configuración: si el hash nuevo habla de impresión, se abre ese submenú.
+  // La escucha se rearma con los grupos, que es cuando cambia idsGrupos (claveGrupos) y cambiarSub.
+  useEffect(() => {
+    const alCambiar = () => {
+      const pedido = subDesdeHash(idsGrupos)
+      if (pedido) cambiarSub(pedido)
+    }
+    window.addEventListener('hashchange', alCambiar)
+    return () => window.removeEventListener('hashchange', alCambiar)
   }, [claveGrupos])
 
   if (rol !== 'admin') {
@@ -126,10 +177,10 @@ export default function PrintersCard({ rol, sesion }) {
 
       {/* Alta siempre a la vista: sin esta barra había que adivinar qué submenú escondía el botón de crear. */}
       <div className="adm-fila imp-alta-barra">
-        <button type="button" className="success" onClick={() => { setConf(null); setSub('grupos'); setNuevo('') }}>
+        <button type="button" className="success" onClick={() => { setConf(null); cambiarSub('grupos'); setNuevo('') }}>
           ＋ {tOr('impresoras.altaGrupo', 'Grupo de comanda')}
         </button>
-        <button type="button" className="primary" onClick={() => { setConf(null); setNuevo(null); setSub('donde') }}>
+        <button type="button" className="primary" onClick={() => { setConf(null); setNuevo(null); cambiarSub('donde') }}>
           ＋ {tOr('impresoras.altaImpresora', 'Conectar impresora')}
         </button>
         <span className="sp" />

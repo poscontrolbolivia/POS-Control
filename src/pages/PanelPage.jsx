@@ -23,6 +23,11 @@ const SuperPage = lazy(() => import('../components/panel/super/SuperPage.jsx'))
 
 const VISTAS = { '#salon': 'salon', '#cocina': 'cocina', '#caja': 'caja', '#estacion': 'config', '#venta': 'venta', '#menu': 'menu', '#config': 'config', '#auditoria': 'auditoria', '#inventario': 'inventario', '#reportes': 'reportes', '#alertas': 'alertas' }
 
+// Enlaces profundos de impresión: #estacion (la PC de la estación), #grupo-<id> y los nombres de
+// submenú de Impresoras. Todos aterrizan en Configuración; PrintersCard lee el mismo hash para saber
+// qué submenú venir abierto.
+const HASH_IMPRESION = /^#(estacion|grupo-[a-z0-9-]+|grupos|contenido|papel|donde|sonido)$/
+
 const EN_PANTALLA = ['cocina', 'barra']
 
 export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
@@ -75,10 +80,14 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   const permitidos = modulos.map(m => m.id).join(',')
   useEffect(() => {
     const aplicar = hash => {
-      const destino = VISTAS[hash]
-      // El enlace viejo de la PC de impresión (#estacion) ahora abre Configuración con Impresoras desplegado.
-      if (hash === '#estacion') { try { localStorage.setItem('pos-cfg-impresoras', '1') } catch { /* noop */ } }
-      if (destino && permitidos.split(',').includes(destino)) setModulo(destino)
+      const deImpresion = HASH_IMPRESION.test(hash)
+      const destino = deImpresion ? 'config' : VISTAS[hash]
+      if (destino && permitidos.split(',').includes(destino)) {
+        // Configuración trae el bloque abierto según pos-cfg-abierto (la tecla que lee SettingsPage):
+        // sin este aviso el enlace profundo caería en Configuración con todo minimizado.
+        if (deImpresion) { try { localStorage.setItem('pos-cfg-abierto', 'impresoras') } catch { /* noop */ } }
+        setModulo(destino)
+      }
     }
     aplicar(window.location.hash)
 
