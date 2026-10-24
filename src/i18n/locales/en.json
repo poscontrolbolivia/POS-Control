@@ -149,6 +149,7 @@
   "salon.forma": "Shape",
   "salon.alertUnida": "The table is joined to an open bill; separate it first from the panel",
   "salon.alertAbierta": "The table has an open bill",
+  "salon.cobradaOtroDispositivo": "The bill for {mesa} was already paid from another device",
   "salon.libre": "Free",
   "salon.ocupada": "Occupied",
   "salon.enviada": "Sent to kitchen",

@@ -4,13 +4,22 @@
  *  - Sólo se cachea la "shell" (HTML, manifest, iconos y assets compilados /assets/*).
  *  - En desarrollo (Vite) NUNCA se cachea: se detectan las rutas que sirve Vite
  *    (/src/, /node_modules/, /@vite, /@id/, .jsx…) y se dejan pasar a la red.
+ *  - Las FOTOS del menú, el logo y el QR (Supabase Storage) se guardan en una caché propia que NO se
+ *    borra al actualizar la app: se descargan una sola vez por dispositivo y después salen del teléfono
+ *    (se revisan en segundo plano como máximo cada hora con una consulta que casi no gasta datos).
  *  - Las notificaciones se muestran en español (lang/dir/tag) y al pulsarlas abren
  *    la vista indicada en data.url (#salon, #cocina, #caja).
  */
 
-const VERSION = 'v4'
+const VERSION = 'v5'
 const CACHE_SHELL = 'pos-control-shell-' + VERSION
 const CACHE_RECURSOS = 'pos-control-recursos-' + VERSION
+// Sin versión a propósito: las fotos sobreviven a las actualizaciones de la app (si no, cada versión
+// nueva obligaría a bajarlas todas otra vez y se gastarían megas).
+const CACHE_IMAGENES = 'pos-control-imagenes-v1'
+const IMG_MAX_ENTRADAS = 600
+const IMG_REVISAR_MS = 60 * 60 * 1000
+const esImagenStorage = (url) => url.pathname.startsWith('/storage/v1/object/public/pos-imagenes/')
 
 const SHELL = [
   '/',
@@ -27,6 +36,45 @@ const SHELL = [
 
 // Patrones que nunca deben pasar por caché (dev de Vite / módulos fuente).
 const PROHIBIDO = ['/node_modules/', '/@vite', '/@id/', '/@react-refresh', '/src/', '.jsx', '.tsx', '.css.map', '.js.map']
+
+// Mantiene la caché de fotos acotada: si se pasa del tope borra las más antiguas.
+async function podarImagenes(cache) {
+  try {
+    const claves = await cache.keys()
+    for (const k of claves.slice(0, Math.max(0, claves.length - IMG_MAX_ENTRADAS))) await cache.delete(k)
+  } catch { /* no es crítico */ }
+}
+
+// Foto: sale de la caché al instante; si tiene más de una hora se revisa en segundo plano con una
+// petición condicional (si no cambió, el servidor contesta 304 y casi no se gastan datos).
+async function imagenConCache(e) {
+  const clave = e.request.url.split('#')[0]
+  const cache = await caches.open(CACHE_IMAGENES)
+  const guardada = await cache.match(clave)
+  const edad = guardada ? Date.now() - Number(guardada.headers.get('x-sw-guardada') || 0) : Infinity
+
+  const traer = async () => {
+    const res = await fetch(clave, { mode: 'cors', credentials: 'omit', cache: 'no-cache' })
+    if (res.status === 404) { await cache.delete(clave); return res }
+    if (res.status !== 200) return res
+    const cuerpo = await res.blob()
+    const h = new Headers(res.headers)
+    h.set('x-sw-guardada', String(Date.now()))
+    await cache.put(clave, new Response(cuerpo, { status: 200, headers: h }))
+    podarImagenes(cache)
+    return new Response(cuerpo, { status: 200, headers: res.headers })
+  }
+
+  if (guardada) {
+    if (edad > IMG_REVISAR_MS) e.waitUntil(traer().catch(() => {}))
+    return guardada
+  }
+  try {
+    return await traer()
+  } catch {
+    return fetch(e.request) // sin CORS o sin red: la petición original (no se guarda)
+  }
+}
 
 const esDev = (url) => PROHIBIDO.some((p) => url.pathname.includes(p))
 const esShellEstatica = (url) => SHELL.some((s) => url.pathname === s)
@@ -47,7 +95,7 @@ self.addEventListener('activate', (e) => {
       const claves = await caches.keys()
       // Se borran las cachés de versiones anteriores (si no, el icono viejo sobrevive a
       // la actualización y la PWA instalada sigue mostrando la marca antigua).
-      await Promise.all(claves.filter((k) => k.startsWith('pos-control-') && k !== CACHE_SHELL && k !== CACHE_RECURSOS).map((k) => caches.delete(k)))
+      await Promise.all(claves.filter((k) => k.startsWith('pos-control-') && k !== CACHE_SHELL && k !== CACHE_RECURSOS && k !== CACHE_IMAGENES).map((k) => caches.delete(k)))
       await self.clients.claim()
     })()
   )
@@ -58,6 +106,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return
 
   const url = new URL(req.url)
+  if (esImagenStorage(url)) { e.respondWith(imagenConCache(e)); return }
   if (url.origin !== self.location.origin) return // no tocar orígenes externos
   if (esDev(url)) return // en desarrollo: siempre red, sin caché
 

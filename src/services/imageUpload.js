@@ -31,6 +31,17 @@ function imagenPublica(path) {
   return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${path}`
 }
 
+// La foto de un artículo vive siempre en la misma ruta (se reemplaza con upsert). El service worker la
+// guarda en el teléfono: al cambiarla desde aquí se borra la copia vieja para ver la nueva de inmediato
+// (los demás dispositivos la actualizan solos en la próxima revisión de la hora).
+async function olvidarImagenEnCache(path) {
+  try {
+    if (!path || typeof caches === 'undefined') return
+    const cache = await caches.open('pos-control-imagenes-v1')
+    await cache.delete(imagenPublica(path))
+  } catch {  }
+}
+
 const cacheSesion = new Map()
 function registrarCacheImagen(productoId, url) {
   if (!productoId) return
@@ -153,6 +164,7 @@ export async function procesarYGuardarImagen({ sb, modo, empresaId, productoId, 
     if (!sb || !empresaId) throw new Error('No hay empresa activa para subir la foto.')
     const path = await subirImagen(sb, empresaId, productoId, blob, mime)
     await fijarImagenPath(sb, empresaId, productoId, path)
+    await olvidarImagenEnCache(path)
     const url = imagenPublica(path)
     registrarCacheImagen(productoId, url)
     return { imagen_path: path, imagen_dataurl: null }
@@ -165,7 +177,7 @@ export async function procesarYGuardarImagen({ sb, modo, empresaId, productoId, 
 
 export async function quitarImagenGuardada({ sb, modo, empresaId, productoId, imagen_path }) {
   if (modo === 'supabase') {
-    if (imagen_path) await borrarImagen(sb, imagen_path)
+    if (imagen_path) { await borrarImagen(sb, imagen_path); await olvidarImagenEnCache(imagen_path) }
     await fijarImagenPath(sb, empresaId, productoId, null)
   }
   registrarCacheImagen(productoId, null)
@@ -280,6 +292,7 @@ export async function procesarImagenNegocio({ sb, modo, empresaId, carpeta, file
     const path = rutaImagenNegocio(carpeta, empresaId, ext)
     const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: mime || 'image/webp', upsert: true })
     if (error) throw new Error('No se pudo subir la imagen: ' + (error.message || String(error)))
+    await olvidarImagenEnCache(path)
     return { path, dataUrl: null }
   }
 

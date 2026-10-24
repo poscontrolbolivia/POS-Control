@@ -7534,3 +7534,29 @@ begin
 end $fn$;
 revoke all on function public.poner_datos_fiscales(uuid, text, text, text, uuid) from public, anon;
 grant execute on function public.poner_datos_fiscales(uuid, text, text, text, uuid) to authenticated;
+
+-- ## Tiempo real de las cuentas (v0.50.2)
+-- Para que, al cobrar una mesa en un dispositivo, los demás lo vean en ~1 segundo.
+begin;
+
+do $do$
+declare
+  v_tabla text;
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    foreach v_tabla in array array['cuentas', 'cuenta_items', 'cuenta_mesas', 'pagos'] loop
+      if not exists (select 1 from pg_publication_tables
+                      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = v_tabla) then
+        execute format('alter publication supabase_realtime add table public.%I', v_tabla);
+      end if;
+    end loop;
+  end if;
+exception when others then
+  raise notice 'No se pudieron añadir las cuentas a supabase_realtime (%): la app usa el sondeo.', sqlerrm;
+end $do$;
+
+-- Para que los DELETE (separar/unir mesas, anular ítems) también lleguen filtrados por empresa.
+alter table public.cuenta_items replica identity full;
+alter table public.cuenta_mesas replica identity full;
+
+commit;

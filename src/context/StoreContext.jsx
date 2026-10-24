@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import { USAR_SUPABASE } from '../services/config.js'
-import { fijarEmpresa } from '../services/supabaseClient.js'
-import { cargarEstadoInicial, despacharSupabase } from '../services/db.js'
+import { fijarEmpresa, sb } from '../services/supabaseClient.js'
+import { cargarEstadoInicial, despacharSupabase, refrescarCuentas } from '../services/db.js'
 import { round2 } from '../services/format.js'
 import { round4, resolverCantidad, aplicarEntrada, MOTIVOS_MERMA } from '../services/inventario.js'
 import { repartirPorGrupo } from '../services/printing.js'
@@ -12,8 +12,24 @@ const uid = () => crypto.randomUUID()
 // La base puede avisar con «codigo: texto legible» (raise exception); al mesero le sirve la frase sola.
 const textoError = e => {
   const crudo = (e && (e.message || e.error_description || String(e))) || 'Error inesperado'
+  // La base rechaza tocar una cuenta que ya no está abierta: casi siempre la cobró otro dispositivo.
+  if (/la cuenta está en estado "(cerrada|precuenta)"/i.test(crudo)) {
+    return /cerrada/i.test(crudo)
+      ? 'Esta cuenta ya fue cobrada desde otro dispositivo. Se actualizó la pantalla.'
+      : 'Esta cuenta ya está en precuenta desde otro dispositivo. Se actualizó la pantalla.'
+  }
   const m = /^([a-z_]+):\s/.exec(crudo)
   return m ? crudo.slice(m[0].length) : crudo
+}
+
+// Cuentas que estaban abiertas aquí y que el servidor ya muestra cobradas (las cobró otro dispositivo).
+// La pantalla del Salón escucha este evento para cerrar el panel de esa mesa y avisar.
+const avisarCierresRemotos = (prev, fresco) => {
+  try {
+    const antes = new Map((prev?.cuentas || []).map(x => [x.id, x.estado]))
+    const ids = (fresco?.cuentas || []).filter(x => x.estado === 'cerrada' && antes.has(x.id) && antes.get(x.id) !== 'cerrada').map(x => x.id)
+    if (ids.length) window.dispatchEvent(new CustomEvent('pos-cuenta-cerrada-remota', { detail: { ids } }))
+  } catch {  }
 }
 
 const num = x => { const n = Number(x); return Number.isFinite(n) ? n : 0 }
@@ -950,6 +966,7 @@ function useSupabaseStore(empresaId) {
   const estadoRef = useRef(null)
   const colaRef = useRef(Promise.resolve())
   const mapaRef = useRef(new Map())
+  const versionRef = useRef(0)
   const avisa = useCallback(m => setError(textoError(typeof m === 'string' ? { message: m } : m)), [])
 
   useEffect(() => {
@@ -974,8 +991,10 @@ function useSupabaseStore(empresaId) {
       colaRef.current = colaRef.current.then(async () => {
         if (!vivo || !estadoRef.current) return
         try {
+          const prev = estadoRef.current
           const fresco = await cargarEstadoInicial(empresaId)
           if (!vivo) return
+          avisarCierresRemotos(prev, fresco)
           estadoRef.current = { ...fresco, _empresaId: empresaId }
           setS(estadoRef.current)
           setError('')
@@ -986,9 +1005,65 @@ function useSupabaseStore(empresaId) {
     return () => { vivo = false; window.removeEventListener('pos-reanudar', alReanudar) }
   }, [empresaId])
 
+  // TIEMPO REAL: cuando cualquier dispositivo abre, edita, envía o cobra una cuenta, los demás
+  // lo ven en ~1 segundo. Si el canal en vivo no está disponible, se sondea cada 12 s (y con él
+  // conectado, cada 90 s solo como red de seguridad). El refresco es liviano: solo cuentas y caja.
+  useEffect(() => {
+    if (!empresaId || !sb) return undefined
+    let vivo = true
+    let conectado = false
+    let timer = null
+    let tSeguro = null
+    let canal = null
+    const pedir = () => { clearTimeout(timer); timer = setTimeout(ligero, 350) }
+    function ligero() {
+      colaRef.current = colaRef.current.then(async () => {
+        if (!vivo || !estadoRef.current) return
+        const v0 = versionRef.current
+        try {
+          const prev = estadoRef.current
+          const fresco = await refrescarCuentas(prev)
+          if (!vivo) return
+          // Si el usuario hizo algo mientras tanto, manda su acción; se vuelve a pedir enseguida.
+          if (versionRef.current !== v0) { pedir(); return }
+          avisarCierresRemotos(prev, fresco)
+          estadoRef.current = { ...fresco, _empresaId: empresaId }
+          setS(estadoRef.current)
+        } catch {  }
+      })
+    }
+    try {
+      canal = sb.channel('cuentas-' + empresaId)
+      for (const tabla of ['cuentas', 'cuenta_items', 'cuenta_mesas', 'pagos']) {
+        canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla, filter: `empresa_id=eq.${empresaId}` }, pedir)
+      }
+      canal.subscribe(st => {
+        conectado = st === 'SUBSCRIBED'
+        if (conectado) pedir() // al (re)conectar se ponen al día los cambios que pudieron perderse
+      })
+    } catch { conectado = false }
+    const alVolver = () => { if (!document.hidden) pedir() }
+    document.addEventListener('visibilitychange', alVolver)
+    window.addEventListener('focus', alVolver)
+    window.addEventListener('online', pedir)
+    const programar = () => {
+      tSeguro = setTimeout(() => { if (vivo) { if (!document.hidden) pedir(); programar() } }, conectado ? 90000 : 12000)
+    }
+    programar()
+    return () => {
+      vivo = false
+      clearTimeout(timer); clearTimeout(tSeguro)
+      document.removeEventListener('visibilitychange', alVolver)
+      window.removeEventListener('focus', alVolver)
+      window.removeEventListener('online', pedir)
+      try { if (canal) sb.removeChannel(canal) } catch {  }
+    }
+  }, [empresaId])
+
   const d = useCallback(a => {
     if (!empresaId) return
     if (!estadoRef.current) { setError('Cargando datos de la empresa…'); return }
+    versionRef.current += 1
     const prev = estadoRef.current
     const nuevo = reducer(prev, a)
 

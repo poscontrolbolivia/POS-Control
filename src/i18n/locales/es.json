@@ -149,6 +149,7 @@
   "salon.forma": "Forma",
   "salon.alertUnida": "La mesa está unida a una cuenta activa; sepárala primero desde el panel",
   "salon.alertAbierta": "La mesa tiene una cuenta abierta",
+  "salon.cobradaOtroDispositivo": "La cuenta de {mesa} ya fue cobrada desde otro dispositivo",
   "salon.libre": "Libre",
   "salon.ocupada": "Ocupada",
   "salon.enviada": "Enviada a cocina",

@@ -196,6 +196,23 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
     return () => clearInterval(id)
   }, [enLlevar, modo])
   const cuentaSel = sel ? cuentaActiva(s, sel) : null
+  // Otro dispositivo cobró la cuenta que tengo abierta en pantalla: se avisa y se cierra el panel
+  // para que nadie siga pidiendo sobre una mesa que ya está pagada.
+  const abiertaRef = useRef({ mesaId: null, cuentaId: null, llevarId: null })
+  abiertaRef.current = { mesaId: sel, cuentaId: cuentaSel?.id || null, llevarId: llevarSelId }
+  useEffect(() => {
+    const alCerrarRemota = e => {
+      const ids = e?.detail?.ids || []
+      const a = abiertaRef.current
+      const vista = s.cuentas.find(c => ids.includes(c.id) && (c.id === a.cuentaId || c.id === a.llevarId))
+      if (!vista && !(a.mesaId && ids.length && s.cuentas.some(c => ids.includes(c.id) && c.mesaIds.includes(a.mesaId)))) return
+      const mesa = s.mesas.find(m => m.id === a.mesaId)
+      setCobro(false); setSel(null); setLlevarSelId(null); esperaLlevar.current = null
+      avisar(t('salon.cobradaOtroDispositivo', { mesa: mesa?.nombre || (vista?.clienteNombre || '') }))
+    }
+    window.addEventListener('pos-cuenta-cerrada-remota', alCerrarRemota)
+    return () => window.removeEventListener('pos-cuenta-cerrada-remota', alCerrarRemota)
+  })
   const comDe = c => (c ? c.comensales ?? 0 : 0)
   const heredadas = s.caja?.turno?.heredadas || []
   const avisar = m => {

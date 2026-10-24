@@ -295,6 +295,28 @@ async function refrescarNegocio(estado) {
   }
 }
 
+// Los nombres de usuario casi nunca cambian: se piden una vez cada 10 min y no en cada refresco.
+let nombresCache = { t: 0, v: {} }
+async function fetchNombresCache() {
+  if (Date.now() - nombresCache.t < 600000 && Object.keys(nombresCache.v).length) return nombresCache.v
+  const v = await fetchNombres()
+  nombresCache = { t: Date.now(), v }
+  return v
+}
+
+// Refresco LIVIANO para tiempo real: solo cuentas (con ítems, pagos y mesas) y caja.
+// No vuelve a bajar carta, zonas, mesas ni extras, así gasta pocos datos aunque se repita seguido.
+export async function refrescarCuentas(estado) {
+  const empresaId = estado._empresaId
+  const [nombres, cajaT] = await Promise.all([fetchNombresCache(), fetchCaja(empresaId)])
+  const data = await fetchCuentas(empresaId, estado.caja)
+  return {
+    ...estado,
+    cuentas: armarCuentas(data.cuentas, data.items, data.pagos, data.cms, nombres),
+    caja: armarCaja(cajaT.abierto, cajaT.historial, nombres, undefined, estado.caja, cajaT.otros),
+  }
+}
+
 // Después de tocar precios o costos conviene recargar también la carta: el mapa
 // producto ↔ costo la usa tanto el Menú como los reportes.
 async function refrescarCarta(estado) {
