@@ -1,21 +1,24 @@
 :root{
-  --pagina-max:1100px;--pagina-pad:16px;
+  --pagina-max:1100px;--pagina-pad:16px;--pagina-gap:16px;
   --overlay:rgba(8,14,28,.62);--borde-ventana:1.5px solid var(--line-fuerte);
-  --logo-navy:#0f4c91;--logo-blue:#1f6fd0;--logo-teal:#1686ba;
-  --logo-green:#238f41;--logo-orange:#f16f1b;--logo-yellow:#fbb633;
+  /* PALETA DEL LOGO (60 % azul · 30 % verde · 10 % naranja). Cambiar un color aquí lo cambia en toda la app. */
+  --logo-navy:#083D7C;--logo-blue:#0B5DA8;--logo-teal:#0B5DA8;
+  --logo-green:#248F3C;--logo-green-claro:#4CC248;--logo-orange:#F68B1F;--logo-yellow:#F7C63D;
+  --gris-claro:#F3F5F7;--gris-medio:#A0A8B0;--gris-oscuro:#444B52;
 
   --btn-blue:var(--logo-blue);--btn-green:var(--logo-green);--btn-orange:var(--logo-orange);
   --btn-yellow:var(--logo-yellow);--btn-teal:var(--logo-teal);
-  --btn-red:#e4002b;--btn-violet:#8a5cf6;--btn-pink:#d6338a;--btn-whatsapp:#25d366;--btn-slate:#64748b;
+  --btn-red:#e4002b;--btn-violet:var(--logo-navy);--btn-pink:#d6338a;--btn-whatsapp:#25d366;--btn-slate:var(--gris-oscuro);
 
   --sel:var(--btn-blue);
   --on-btn:#fff;
-  --on-warning:#2d2000;
+  --on-warning:#2d2000;--on-orange:#2b1500;
   --gloss:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,0));
 }
 
 :root{
-  --bg:#e8edf5;--card:#ffffff;--card-2:#f1f4fa;--ink:#141c2e;--mut:#4f5c74;--ac:#3867f4;
+  --bg:#e4e9ef;--card:#ffffff;--card-2:#F3F5F7;--ink:#1F2937;--mut:#4B5563;--ac:#0B5DA8;
+  --ghost-bd:#0B5DA8;--ghost-ink:#0B5DA8;
   --line:#b4bfd2;--line-fuerte:#7f8da6;--libre:#e3ebe6;
   --lienzo:#cfd9e8;--lienzo-punto:#9aaac4;
   --banner-bg:#1f2a3d;
@@ -46,7 +49,8 @@
 }
 
 [data-theme="night"]{
-  --bg:#0b1120;--card:#172033;--card-2:#1e2a40;--ink:#eef3fb;--mut:#aab8cf;--ac:#7ea0ff;
+  --bg:#0b1120;--card:#172033;--card-2:#1e2a40;--ink:#eef3fb;--mut:#aab8cf;--ac:#3C8FE0;
+  --ghost-bd:#5CAEF5;--ghost-ink:#a9d4fb;
   --line:#3a4a66;--line-fuerte:#7488a8;--libre:#22304a;
   --lienzo:#0e1626;--lienzo-punto:#3a4a66;
   --banner-bg:#0a1020;
@@ -69,7 +73,8 @@
 }
 
 [data-theme="forest"]{
-  --bg:#c9e1c9;--card:#f4fbf3;--card-2:#e3f1e2;--ink:#102c1a;--mut:#3f6249;--ac:#1f6fd0;
+  --bg:#c9e1c9;--card:#f4fbf3;--card-2:#e3f1e2;--ink:#102c1a;--mut:#3f6249;--ac:#0B5DA8;
+  --ghost-bd:#0B5DA8;--ghost-ink:#083D7C;
   --line:#8dbb90;--line-fuerte:#4f8558;--libre:#d4ead4;
   --lienzo:#a8cfab;--lienzo-punto:#6fa476;
   /* --ac (azul) y --sel no se re-definen aquí: el verde es la marca en los tres temas y el azul

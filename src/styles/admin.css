@@ -1,14 +1,9 @@
-.adm-panel{max-width:var(--pagina-max);margin:0 auto;padding:var(--pagina-pad);display:flex;flex-direction:column;gap:16px}
+.adm-panel{max-width:var(--pagina-max);margin:0 auto;padding:var(--pagina-pad);display:flex;flex-direction:column;gap:var(--pagina-gap)}
 .adm-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .adm-cab h2{margin:0;font-size:1.35rem}
 
 .adm-cab > form,.adm-cab > button,.adm-cab > .cab-acciones{margin-left:auto}
 .adm-sub{margin:0 0 6px;color:var(--mut);font-size:.9rem}
-.adm-aviso{
-  background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
-  padding:20px;text-align:center;color:var(--mut);font-size:1rem;
-}
-.adm-vacio{color:var(--mut);font-size:.9rem;padding:8px 0}
 
 .adm-card{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
@@ -183,3 +178,21 @@
 .imp-papel-nombre{font-size:.95rem}
 .imp-papel .adm-campo select,.imp-papel .adm-campo input,
 .imp-salida-grupo select,.imp-salida-grupo input:not([type=checkbox]):not([type=radio]){width:100%;max-width:100%;min-width:0}
+
+/* Cabecera común de los módulos de administración: título · datos · acción principal a la derecha. */
+.pg-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pg-cab-txt{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1 1 220px;min-width:0}
+.pg-cab-txt h2{margin:0;font-size:1.35rem}
+.pg-cab-acc{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+.pg-cab-sub{flex:1 1 100%;margin:0;color:var(--mut);font-size:.9rem}
+@media (max-width:640px){.pg-cab-acc{width:100%;margin-left:0}.pg-cab-acc>button{flex:1;min-width:0}}
+
+/* «Más…»: lo secundario escondido detrás de un solo botón. */
+.mas{position:relative;display:inline-block}
+.mas-btn{min-height:38px;padding:6px 12px;font-size:.85rem;display:inline-flex;align-items:center;gap:6px}
+.mas-fondo{position:fixed;inset:0;z-index:40;background:transparent}
+.mas-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:41;min-width:200px;max-width:86vw;margin:0;padding:6px;list-style:none;display:flex;flex-direction:column;gap:4px;background:var(--card);border:1px solid var(--line-fuerte);border-radius:var(--r-md);box-shadow:var(--sombra)}
+.mas-menu button{width:100%;justify-content:flex-start;text-align:left;min-height:42px;border-radius:var(--r-sm);border:0;background:transparent;color:var(--ink);box-shadow:none;font-weight:600}
+.mas-menu button:hover:not(:disabled){background:var(--libre);transform:none;filter:none}
+.mas-menu button.peligro{color:var(--rojo-txt)}
+.mas-menu button.peligro:hover:not(:disabled){background:var(--rojo-bg)}

@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
+import CabeceraPagina from '../../ui/CabeceraPagina.jsx'
 import LanguageSelect from '../../login/LanguageSelect.jsx'
 import ThemeSelect from '../../login/ThemeSelect.jsx'
 import PrintersCard from './PrintersCard.jsx'
@@ -89,7 +90,7 @@ export default function SettingsPage({ rol, sesion }) {
     idsRef.current = ['preferencias', ...(conImpresoras ? ['impresoras'] : [])]
     return (
       <div className="adm-panel">
-        <div className="adm-cab"><h2>{t('config.titulo')}</h2></div>
+        <CabeceraPagina titulo={t('config.titulo')} />
       <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, equipo, cierres y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.')}</p>
         <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')} {...props('preferencias')}>{cuerpoPreferencias}</Bloque>
         {conImpresoras && (
@@ -138,7 +139,7 @@ export default function SettingsPage({ rol, sesion }) {
 
   return (
     <div className="adm-panel">
-      <div className="adm-cab"><h2>{t('config.titulo')}</h2></div>
+      <CabeceraPagina titulo={t('config.titulo')} />
       <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, equipo, cierres y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.')}</p>
 
       <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')} {...props('preferencias')}>{cuerpoPreferencias}</Bloque>

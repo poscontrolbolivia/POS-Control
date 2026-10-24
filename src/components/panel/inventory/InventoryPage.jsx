@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
+import CabeceraPagina from '../../ui/CabeceraPagina.jsx'
+import MasMenu from '../../ui/MasMenu.jsx'
 import { useMoneda } from '../../../services/money.js'
 import { rpc, mensajeError } from '../../../services/supabaseClient.js'
 import { limpiarMonto, numMonto } from '../../../services/format.js'
@@ -561,19 +563,20 @@ export default function InventoryPage({ rol, sesion }) {
 
   return (
     <div className="inv-page">
-      <div className="inv-cab">
-        <h2>{tOr('inventario.titulo', 'Inventario')}</h2>
-        <span className="adm-chip">
-          {insumos.length} {tOr('inventario.chipInsumos', 'insumos')}
-          {nBajos > 0 && <> · {nBajos} {tOr('inventario.chipBajos', 'con stock bajo')}</>}
-        </span>
-        <span className="sp" />
-        {enBase && (
+      <CabeceraPagina
+        titulo={tOr('inventario.titulo', 'Inventario')}
+        datos={(
+          <span className="adm-chip">
+            {insumos.length} {tOr('inventario.chipInsumos', 'insumos')}
+            {nBajos > 0 && <> · {nBajos} {tOr('inventario.chipBajos', 'con stock bajo')}</>}
+          </span>
+        )}
+        acciones={enBase && (
           <button type="button" className="ghost" disabled={cargando || ocupado} onClick={() => cargar()}>
             {cargando ? tOr('inventario.cargando', 'Cargando…') : tOr('inventario.actualizar', 'Actualizar')}
           </button>
         )}
-      </div>
+      />
 
       <div className="inv-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={pestana === 'insumos'} className={'tab' + (pestana === 'insumos' ? ' on' : '')} onClick={() => setPestana('insumos')}>
@@ -655,19 +658,14 @@ export default function InventoryPage({ rol, sesion }) {
                         </div>
                         {puedeGestionar && <div className="inv-acciones">
                           <button type="button" className="success" disabled={ocupado} onClick={() => abrirMov(i, 'entrada')}>{tOr('inventario.entrada', 'Entrada')}</button>
-                          <button type="button" className="orange" disabled={ocupado} onClick={() => abrirMov(i, 'salida')}>{tOr('inventario.salida', 'Salida')}</button>
-                          <button type="button" className="danger" disabled={ocupado} onClick={() => abrirMov(i, 'merma')}>{tOr('inventario.registrarMerma', 'Registrar merma')}</button>
-                          <button type="button" className="ghost" disabled={ocupado} onClick={() => abrirMov(i, 'ajuste')}>{tOr('inventario.ajuste', 'Ajuste')}</button>
-                          <button type="button" className="ghost" disabled={ocupado} onClick={() => (enForm ? setForm(null) : abrirEditar(i))}>
-                            {enForm ? tOr('inventario.cerrar', 'Cerrar') : tOr('inventario.editar', 'Editar')}
-                          </button>
-                          <button type="button" className={'danger' + (preguntando ? ' solid' : '')} disabled={ocupado} onClick={() => pulsarBorrar(i)}>
-                            {borrandoId === i.id
-                              ? tOr('inventario.borrando', 'Borrando…')
-                              : preguntando
-                                ? tOr('inventario.seguro', '¿Seguro?')
-                                : tOr('inventario.borrar', 'Borrar')}
-                          </button>
+                          <button type="button" className="ghost" disabled={ocupado} onClick={() => abrirMov(i, 'salida')}>{tOr('inventario.salida', 'Salida')}</button>
+                          <MasMenu desactivado={ocupado} items={[
+                            { clave: 'merma', texto: tOr('inventario.registrarMerma', 'Registrar merma'), onClick: () => abrirMov(i, 'merma') },
+                            { clave: 'ajuste', texto: tOr('inventario.ajuste', 'Ajuste'), onClick: () => abrirMov(i, 'ajuste') },
+                            { clave: 'editar', texto: enForm ? tOr('inventario.cerrar', 'Cerrar') : tOr('inventario.editar', 'Editar'), onClick: () => (enForm ? setForm(null) : abrirEditar(i)) },
+                            { clave: 'borrar', peligro: true, mantener: !preguntando, desactivado: ocupado, onClick: () => pulsarBorrar(i),
+                              texto: borrandoId === i.id ? tOr('inventario.borrando', 'Borrando…') : preguntando ? tOr('inventario.seguro', '¿Seguro?') : tOr('inventario.borrar', 'Borrar') },
+                          ]} />
                         </div>}
 
                         {enMov && (() => {

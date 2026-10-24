@@ -178,7 +178,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
                   <button type="button" className="ghost" disabled={ocupadoCuota || !diasCustom} onClick={() => aplicarPlan('pago', diasCustom)}>{tOr('super.plan.sumar', 'Sumar días')}</button>
                 </span>
                 <button type="button" className="primary" disabled={ocupadoCuota} onClick={() => aplicarPlan('pago', null)}>{tOr('super.plan.premiumIndef', 'Premium indefinido')}</button>
-                <button type="button" className="orange" disabled={ocupadoCuota || cuota.plan !== 'pago'} onClick={() => aplicarPlan('gratis', null)}>{tOr('super.cuota.aBasico', 'Volver a Básico')}</button>
+                <button type="button" className="danger" disabled={ocupadoCuota || cuota.plan !== 'pago'} onClick={() => aplicarPlan('gratis', null)}>{tOr('super.cuota.aBasico', 'Volver a Básico')}</button>
               </div>
             </div>
           )}

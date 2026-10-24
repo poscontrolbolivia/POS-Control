@@ -1591,10 +1591,13 @@ begin
       raise exception 'método de pago inválido: %', v_metodo;
     end if;
     -- Cuenta por cobrar: siempre a nombre de una persona registrada en ESTA empresa.
-    if v_metodo = 'cxc' and not exists (
-         select 1 from public.membresias mm
-          where mm.empresa_id = v_emp
-            and mm.user_id::text = coalesce(v_pg->'detalle'->>'trabajador_id', '')) then
+    if v_metodo = 'cxc' and not (
+         exists (select 1 from public.membresias mm
+                  where mm.empresa_id = v_emp
+                    and mm.user_id::text = coalesce(v_pg->'detalle'->>'trabajador_id', ''))
+         or exists (select 1 from public.personal pe
+                     where pe.empresa_id = v_emp and pe.activo
+                       and pe.id::text = coalesce(v_pg->'detalle'->>'trabajador_id', ''))) then
       raise exception 'cuenta por cobrar: elige un trabajador registrado';
     end if;
     v_monto := coalesce(nullif(v_pg->>'monto','')::numeric, 0);
@@ -1766,10 +1769,13 @@ begin
       raise exception 'método de pago inválido: %', v_metodo;
     end if;
     -- Cuenta por cobrar: siempre a nombre de una persona registrada en ESTA empresa.
-    if v_metodo = 'cxc' and not exists (
-         select 1 from public.membresias mm
-          where mm.empresa_id = v_emp
-            and mm.user_id::text = coalesce(v_pg->'detalle'->>'trabajador_id', '')) then
+    if v_metodo = 'cxc' and not (
+         exists (select 1 from public.membresias mm
+                  where mm.empresa_id = v_emp
+                    and mm.user_id::text = coalesce(v_pg->'detalle'->>'trabajador_id', ''))
+         or exists (select 1 from public.personal pe
+                     where pe.empresa_id = v_emp and pe.activo
+                       and pe.id::text = coalesce(v_pg->'detalle'->>'trabajador_id', ''))) then
       raise exception 'cuenta por cobrar: elige un trabajador registrado';
     end if;
     v_monto := coalesce(nullif(v_pg->>'monto','')::numeric, 0);
@@ -7596,9 +7602,31 @@ alter table public.pagos drop constraint if exists pagos_metodo_check;
 alter table public.pagos add constraint pagos_metodo_check
   check (metodo in ('efectivo','qr','tarjeta','mixed','cheque','vale','cxc','otro'));
 
--- Quién puede ser el deudor de una cuenta por cobrar: las personas registradas en esta empresa.
-create or replace function public.trabajadores_cobro()
-returns table (usuario_id uuid, nombre text, rol text)
+
+commit;
+
+-- ## v0.52 · Personal sin acceso al sistema (limpieza, ayudantes…): pueden recibir cuentas por cobrar
+begin;
+
+-- Las personas con correo y clave son «membresías»; esta tabla es para quienes son parte de la empresa
+-- pero no usan la app. Solo se toca a través de las funciones de abajo (sin acceso directo).
+create table if not exists public.personal (
+  id         uuid primary key default gen_random_uuid(),
+  empresa_id uuid not null references public.empresas(id) on delete cascade,
+  nombre     text not null check (length(btrim(nombre)) between 1 and 80),
+  cargo      text not null default '' check (length(cargo) <= 60),
+  activo     boolean not null default true,
+  creada_en  timestamptz not null default now()
+);
+create index if not exists idx_personal_empresa on public.personal (empresa_id);
+alter table public.personal enable row level security;
+revoke all on public.personal from public, anon, authenticated;
+
+-- Antes se llamaba sin parámetros y la app siempre manda p_empresa_id: la llamada fallaba en silencio
+-- y la lista de «Cargar a» salía vacía. Ahora recibe la empresa y suma al personal sin acceso.
+drop function if exists public.trabajadores_cobro();
+create or replace function public.trabajadores_cobro(p_empresa_id uuid default null)
+returns table (usuario_id uuid, nombre text, rol text, acceso boolean)
 language plpgsql
 stable
 security definer
@@ -7607,17 +7635,86 @@ as $fn$
 declare
   v_emp uuid;
 begin
+  v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero']::text[]);
-  v_emp := private.empresa_activa();
   return query
-    select m.user_id, coalesce(nullif(p.display_name, ''), split_part(u.email::text, '@', 1)), m.rol
-      from public.membresias m
-      join auth.users u on u.id = m.user_id
-      left join public.perfiles p on p.user_id = m.user_id
-     where m.empresa_id = v_emp
-     order by coalesce(nullif(p.display_name, ''), split_part(u.email::text, '@', 1));
+    select x.usuario_id, x.nombre, x.rol, x.acceso
+      from (
+        select m.user_id as usuario_id,
+               coalesce(nullif(p.display_name, ''), split_part(u.email::text, '@', 1)) as nombre,
+               m.rol as rol, true as acceso
+          from public.membresias m
+          join auth.users u on u.id = m.user_id
+          left join public.perfiles p on p.user_id = m.user_id
+         where m.empresa_id = v_emp
+        union all
+        select pe.id, pe.nombre, coalesce(nullif(pe.cargo, ''), 'personal'), false
+          from public.personal pe
+         where pe.empresa_id = v_emp and pe.activo
+      ) x
+     order by x.acceso desc, lower(x.nombre);
 end $fn$;
-revoke all on function public.trabajadores_cobro() from public, anon;
-grant execute on function public.trabajadores_cobro() to authenticated;
+revoke all on function public.trabajadores_cobro(uuid) from public, anon;
+grant execute on function public.trabajadores_cobro(uuid) to authenticated;
+
+create or replace function public.personal_listar(p_empresa_id uuid default null)
+returns table (id uuid, nombre text, cargo text, creada_en timestamptz)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+  return query
+    select pe.id, pe.nombre, pe.cargo, pe.creada_en
+      from public.personal pe
+     where pe.empresa_id = v_emp and pe.activo
+     order by lower(pe.nombre);
+end $fn$;
+revoke all on function public.personal_listar(uuid) from public, anon;
+grant execute on function public.personal_listar(uuid) to authenticated;
+
+-- Alta (p_id nulo) o edición. Quitar a alguien lo oculta (activo = false) y así su historial de
+-- cuentas por cobrar sigue intacto.
+create or replace function public.personal_guardar(
+  p_nombre     text,
+  p_cargo      text default '',
+  p_id         uuid default null,
+  p_activo     boolean default true,
+  p_empresa_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_id  uuid;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin']::text[]);
+  if p_nombre is null or length(btrim(p_nombre)) = 0 or length(btrim(p_nombre)) > 80 then
+    raise exception 'Escribe el nombre de la persona (máximo 80 letras)';
+  end if;
+  if p_id is null then
+    insert into public.personal (empresa_id, nombre, cargo)
+    values (v_emp, btrim(p_nombre), left(btrim(coalesce(p_cargo, '')), 60))
+    returning id into v_id;
+  else
+    update public.personal
+       set nombre = btrim(p_nombre), cargo = left(btrim(coalesce(p_cargo, '')), 60), activo = coalesce(p_activo, true)
+     where id = p_id and empresa_id = v_emp
+    returning id into v_id;
+    if v_id is null then raise exception 'Esa persona no existe en tu empresa'; end if;
+  end if;
+  return v_id;
+end $fn$;
+revoke all on function public.personal_guardar(text, text, uuid, boolean, uuid) from public, anon;
+grant execute on function public.personal_guardar(text, text, uuid, boolean, uuid) to authenticated;
 
 commit;

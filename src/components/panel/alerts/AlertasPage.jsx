@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, saldoCuenta } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
+import CabeceraPagina from '../../ui/CabeceraPagina.jsx'
 import { useMoneda } from '../../../services/money.js'
 import { cargarAlertas, contarAbiertas, conNombres } from '../../../services/alertasApi.js'
 import { alertasAutomaticas, claveSugerencia } from './alertasAutomaticas.js'
@@ -320,26 +321,28 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
 
   return (
     <div className="ala">
-      <header className="ala-cab">
-        <div className="ala-cab-txt">
-          <h2>{tOr('alertas.titulo', 'Alertas')}</h2>
-          <p className="ala-sub">
+      <CabeceraPagina
+        titulo={tOr('alertas.titulo', 'Alertas')}
+        sub={(
+          <>
             {tOr('alertas.desc', 'Lo que necesita una acción ahora mismo en el negocio.')}{' '}
             <b>{tOr('alertas.abiertasN', `${nAbiertas} abiertas`, { n: nAbiertas })}</b>
             {enBase && cargando && frescas === null ? ` · ${tOr('alertas.cargando', 'cargando…')}` : ''}
-          </p>
-        </div>
-        <div className="ala-cab-acc">
-          {enBase && (
-            <button type="button" className="ghost" onClick={traer} disabled={cargando}>
-              {cargando ? tOr('alertas.cargando', 'Cargando…') : tOr('alertas.actualizar', 'Actualizar')}
+          </>
+        )}
+        acciones={(
+          <>
+            {enBase && (
+              <button type="button" className="ghost" onClick={traer} disabled={cargando}>
+                {cargando ? tOr('alertas.cargando', 'Cargando…') : tOr('alertas.actualizar', 'Actualizar')}
+              </button>
+            )}
+            <button type="button" className={form ? 'ghost' : 'primary'} onClick={form ? () => { setForm(null); setFormErr('') } : abrirForm}>
+              {form ? `✕ ${tOr('alertas.form.cerrar', 'Cerrar formulario')}` : `＋ ${tOr('alertas.nueva', 'Nueva alerta')}`}
             </button>
-          )}
-          <button type="button" className={form ? 'ghost' : 'primary'} onClick={form ? () => { setForm(null); setFormErr('') } : abrirForm}>
-            {form ? `✕ ${tOr('alertas.form.cerrar', 'Cerrar formulario')}` : `＋ ${tOr('alertas.nueva', 'Nueva alerta')}`}
-          </button>
-        </div>
-      </header>
+          </>
+        )}
+      />
 
       {error && <div className="ala-error" role="alert">⚠️ {error}</div>}
       {aviso && <div className="ala-ok" role="status">✓ {aviso}</div>}

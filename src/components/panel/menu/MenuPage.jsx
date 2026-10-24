@@ -10,6 +10,7 @@ import {
   LADO_VISUAL_PX, urlImagenProducto, procesarYGuardarImagen, quitarImagenGuardada,
 } from '../../../services/imageUpload.js'
 import { useIdioma } from '../../../i18n/index.jsx'
+import CabeceraPagina from '../../ui/CabeceraPagina.jsx'
 import Ventana from '../../ui/Ventana.jsx'
 import '../../../styles/admin.css'
 import './MenuPage.css'
@@ -570,9 +571,14 @@ export default function MenuPage({ rol }) {
 
   return (
     <div className="adm-panel">
-      <div className="adm-cab">
-        <h2>{tOr('items.titulo', 'Ítems')}</h2>
-      </div>
+      <CabeceraPagina
+        titulo={tOr('items.titulo', 'Ítems')}
+        acciones={(
+          <button type="button" className="success" onClick={vacio ? abrirNuevoGrupo : crearSegunTipo}>
+            + {vacio ? t('menu.grupoMas') : etiquetaNuevo[tipo]}
+          </button>
+        )}
+      />
 
       {vacio && <div className="adm-aviso mn-vacio">{t('menu.menuVacio')}</div>}
 
@@ -588,12 +594,7 @@ export default function MenuPage({ rol }) {
 
       {/* Crear va pegado a la explicación del menú, no al final de la carta:
           abajo del todo el botón desaparecía cuando la lista era larga. */}
-      <div className="mn-ayuda-fila">
-        {!vacio && <p className="mn-ayuda">{ayudaTipo[tipo]}</p>}
-        <button type="button" className="success mn-ayuda-nuevo" onClick={vacio ? abrirNuevoGrupo : crearSegunTipo}>
-          + {vacio ? t('menu.grupoMas') : etiquetaNuevo[tipo]}
-        </button>
-      </div>
+      {!vacio && <p className="mn-ayuda">{ayudaTipo[tipo]}</p>}
 
       {!vacio && (
         <div className="adm-fila menu-barra mn-barra">
@@ -1077,7 +1078,7 @@ export default function MenuPage({ rol }) {
               <small className="mn-nota">{tOr('items.herrEstadoNota', 'Activo = se puede pedir. Inactivo = queda oculto pero sigue en el historial. Agotado = se agota hoy y muestra el motivo.')}</small>
               <div className="adm-masivo-grupo">
                 <button type="button" className="success" onClick={() => aplicarASeleccion({ activo: true })}>{t('menu.activar')}</button>
-                <button type="button" className="warning" onClick={() => aplicarASeleccion({ activo: false })}>{t('menu.desactivar')}</button>
+                <button type="button" className="ghost" onClick={() => aplicarASeleccion({ activo: false })}>{t('menu.desactivar')}</button>
               </div>
               <div className="adm-masivo-grupo">
                 <input name="motivo" value={motivoTmp} maxLength={60} onChange={e => setMotivoTmp(e.target.value)} placeholder={t('agotado.motivoPlace')} aria-label={t('agotado.motivoPlace')} />

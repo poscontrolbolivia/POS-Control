@@ -1,4 +1,4 @@
-.super-envoltura{max-width:1040px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.super-envoltura{max-width:var(--pagina-max);margin:0 auto;padding:var(--pagina-pad);display:flex;flex-direction:column;gap:var(--pagina-gap)}
 .super-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .super-cab h2{margin:0;font-size:1.35rem}
 .super-cab .sp{flex:1}

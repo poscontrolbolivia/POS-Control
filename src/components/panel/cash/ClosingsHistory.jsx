@@ -118,7 +118,7 @@ export default function ClosingsHistory({ moneda = 'Bs' }) {
         <button type="button" className="ghost" onClick={() => rapido(hace(6), hoy())}>{t('cierres.d7')}</button>
         <button type="button" className="ghost" onClick={() => rapido(hace(29), hoy())}>{t('cierres.d30')}</button>
         <span className="sp" />
-        <button type="button" className="slate" disabled={!turnos?.length} onClick={csv}>{t('cierres.csv')}</button>
+        <button type="button" className="ghost" disabled={!turnos?.length} onClick={csv}>{t('cierres.csv')}</button>
       </div>
       {error && <p className="caja-aviso" role="alert">{error}</p>}
       {turnos && !turnos.length && !error && <p className="caja-nota">{t('cierres.vacio')}</p>}
@@ -151,7 +151,7 @@ export default function ClosingsHistory({ moneda = 'Bs' }) {
                     <span>{m(x.cobrado)}</span>
                     {x.cerrado_en && dif(x.diferencia)}
                     {x.cerrado_en && (
-                      <button type="button" className="slate" disabled={pdf === x.id} onClick={() => generarPdf(x)}>
+                      <button type="button" className="ghost" disabled={pdf === x.id} onClick={() => generarPdf(x)}>
                         {pdf === x.id ? t('cierres.pdfCargando') : t('cierres.pdf')}
                       </button>
                     )}

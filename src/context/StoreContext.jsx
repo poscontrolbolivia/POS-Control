@@ -621,6 +621,8 @@ function reducer(s, a) {
       : { ...s, usuariosDemo: [...s.usuariosDemo, { creadoEn: Date.now(), ...a.usuario }] }
     case 'usuario~': return { ...s, usuariosDemo: s.usuariosDemo.map(u => (u.usuario === a.usuario ? { ...u, ...a.cambios } : u)) }
     case 'usuario-': return { ...s, usuariosDemo: s.usuariosDemo.filter(u => u.usuario !== a.usuario) }
+    case 'personal+': return { ...s, personalDemo: [...(s.personalDemo || []), { id: 'p-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), nombre: a.nombre, cargo: a.cargo || '', creadoEn: Date.now() }] }
+    case 'personal-': return { ...s, personalDemo: (s.personalDemo || []).filter(p => p.id !== a.id) }
 
     case 'turno+': {
       if (s.caja.turno) return s

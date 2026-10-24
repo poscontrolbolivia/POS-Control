@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useState } from 'react'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
+import CabeceraPagina from '../../ui/CabeceraPagina.jsx'
 import { gruposDe } from '../../../services/printing.js'
 import { modoImpresion, gestionarImpresion } from '../../../services/printQueue.js'
 import { reutilizarImpresoras } from '../../../services/printer.js'
@@ -63,7 +64,7 @@ export default function StationPage({ rol, sesion, embebida = false }) {
     <div className={caja}>
       {embebida
         ? <p className="imp-subtitulo">🖨️ {t('estacion.titulo')}</p>
-        : <div className="adm-cab"><h2>{t('estacion.titulo')}</h2></div>}
+        : <CabeceraPagina titulo={t('estacion.titulo')} />}
 
       {modoImpresion(cfg) !== 'estacion' && (
         <div className="adm-aviso est-aviso">

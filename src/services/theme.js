@@ -11,7 +11,7 @@ export function aplicarTema(t) {
   d.dataset.theme = t
   d.style.colorScheme = t === 'night' ? 'dark' : 'light'
   const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.setAttribute('content', { light: '#3867f4', night: '#121824', forest: '#1f7a4d' }[t])
+  if (meta) meta.setAttribute('content', { light: '#0B5DA8', night: '#0b1120', forest: '#248F3C' }[t])
 }
 function guardarTema(t) {
   try { localStorage.setItem(KEY, t) } catch {  }

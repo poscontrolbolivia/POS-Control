@@ -303,7 +303,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .me-opc{font-size:1.2rem;line-height:1;padding:4px}
 
 /* Para llevar */
-.llevar-n { margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--accent, #2563eb); color: #fff; font-size: .78rem; font-weight: 700; display: inline-block; text-align: center; }
+.llevar-n { margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--ac); color: #fff; font-size: .78rem; font-weight: 700; display: inline-block; text-align: center; }
 .llevar { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
 .llevar-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .llevar-form input { flex: 1 1 180px; min-width: 0; }

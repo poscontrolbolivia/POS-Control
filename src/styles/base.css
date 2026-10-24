@@ -8,13 +8,13 @@ button{border:1.5px solid var(--chip-bd);background:var(--chip-bg);border-radius
 button:hover:not(:disabled){background:var(--chip-hover)}
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 button:disabled{opacity:.5;cursor:not-allowed}
-/* JERARQUÍA DE BOTONES (igual en toda la app):
-   1) PRINCIPAL  = verde sólido (primary / success): una sola acción clave por pantalla o diálogo.
-   2) SECUNDARIO = «ghost»: fondo de tarjeta con borde; todo lo demás que no es la acción clave.
+/* JERARQUÍA DE BOTONES (igual en toda la app; la guía completa está en GUIA-ESTILO.md):
+   1) PRINCIPAL  = verde sólido (primary / success): UNA sola acción clave por paso, pantalla o diálogo.
+   2) SECUNDARIO = «ghost»: fondo blanco con borde y texto azul; todo lo demás que no es la acción clave.
    3) DESTRUCTIVO = rojo suave (danger) y rojo sólido solo para confirmar algo irreversible.
-   Amarillo (warning), azul, naranja, violeta y turquesa quedan para casos puntuales de estado. */
-button.ghost{--pc:var(--line-fuerte);border:1.5px solid var(--line-fuerte);background:var(--card);color:var(--ink);font-weight:650;box-shadow:none;text-shadow:none}
-button.ghost:hover:not(:disabled){background:var(--card-2);border-color:var(--ac);transform:none;filter:none}
+   Azul oscuro (violet / teal / slate) = acción de apoyo sólida; naranja y amarillo solo marcan estado o atención. */
+button.ghost{--pc:var(--ghost-bd);border:2px solid var(--ghost-bd);background:var(--card);color:var(--ghost-ink);font-weight:700;box-shadow:none;text-shadow:none}
+button.ghost:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 12%,var(--card));border-color:var(--ghost-bd);transform:none;filter:none}
 button.big{width:100%;padding:16px;font-size:1.1rem}
 /* En los paneles de administración «big» ya no es gigante: mismo tamaño que los demás botones. */
 .adm-panel button.big{width:auto;min-width:160px;padding:9px 22px;font-size:1rem}
@@ -25,11 +25,11 @@ button.primary, button.info, button.success, button.danger.solid, button.warning
 /* El verde es la marca (el logo) y manda en el botón primario; el azul queda para información
    y estado, que es lo que hace --ac en foco, chips y enlaces. */
 button.primary{--pc:var(--btn-green)}
-button.info{--pc:var(--ac)}
+button.info{--pc:var(--logo-blue)}
 button.success{--pc:var(--btn-green)}
 button.danger.solid, button.rojo{--pc:var(--rojo)}
 button.warning{--pc:var(--btn-yellow);color:var(--on-warning);text-shadow:none}
-button.orange{--pc:var(--btn-orange)}
+button.orange{--pc:var(--btn-orange);color:var(--on-orange);text-shadow:none}
 button.violet{--pc:var(--btn-violet)}
 button.teal{--pc:var(--btn-teal)}
 button.slate{--pc:var(--btn-slate)}
@@ -161,3 +161,10 @@ button.ico.danger{background:var(--rojo)}
 .ck-tabs .ck-tab, .vd-tabs .vd-tab, .mn-tabs .tab, .inv-tabs .tab, .pm-tabs .tab{min-height:44px}
 
 .txt-mut{color:var(--mut)}
+
+/* Aviso y estado vacío: UNA sola forma para toda la app (antes había adm-aviso, auth-aviso y adm-vacio).
+   Los nombres viejos siguen valiendo como alias para no tocar cada pantalla; los nuevos usan <Aviso>. */
+.aviso,.adm-aviso,.auth-aviso,.adm-vacio{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:0;padding:12px 16px;text-align:center;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-md);color:var(--mut);font-size:.95rem;font-weight:600;line-height:1.4}
+.aviso.vacio,.adm-vacio{background:transparent;border-style:dashed;font-weight:500}
+.aviso.error{background:var(--danger-bg);border-color:var(--danger-bd);color:var(--danger-ink)}
+.aviso-ico{font-size:1.2rem;line-height:1}

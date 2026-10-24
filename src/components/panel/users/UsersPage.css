@@ -70,7 +70,12 @@
 .eq-campos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 12px}
 .eq-bloque .adm-campo select{min-height:46px;font-size:1rem;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:var(--r-sm);padding:8px 10px}
 
+/* Personal sin acceso: misma lista que Equipo pero con dos datos (nombre, cargo) y una acción. */
+.eq-personal{margin-top:12px}
+.eq-fila-personal{grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,auto)}
+
 @media (max-width:600px){
+  .eq-fila-personal{grid-template-columns:minmax(0,1fr)}
   .eq-cab{display:none}
   .eq-cab-movil{display:block}
   .eq-lista{padding:0 10px}

@@ -197,6 +197,7 @@ export default function LoginPage({ onEntrar }) {
       empresaId: emp?.id ?? null, rol: superUsuario && !emp ? 'super' : rol, supabase: true,
       es_super: superUsuario,
       usuario: user ? user.email : usuario.trim(),
+      usuarioId: user ? user.id : null,
       nombre: (user && user.email ? user.email.split('@')[0] : usuario.trim()),
       empresa: emp?.nombre || 'Plataforma',
     }

@@ -90,7 +90,7 @@ export default function PlanCard({ sesion }) {
             <button key={n} type="button" className="success" disabled={busy} onClick={() => aplicarPlan('pago', n)}>+{n} {tOr('super.plan.dias', 'días')}</button>
           ))}
           <button type="button" className="primary" disabled={busy} onClick={() => aplicarPlan('pago', null)}>{tOr('super.plan.premiumIndef', 'Premium indefinido')}</button>
-          <button type="button" className="orange" disabled={busy || gratis} onClick={() => aplicarPlan('gratis', null)}>{tOr('super.cuota.aBasico', 'Volver a Básico')}</button>
+          <button type="button" className="danger" disabled={busy || gratis} onClick={() => aplicarPlan('gratis', null)}>{tOr('super.cuota.aBasico', 'Volver a Básico')}</button>
         </div>
       ) : (
         <div className="adm-fila">

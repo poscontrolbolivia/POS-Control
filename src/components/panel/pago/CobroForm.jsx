@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useIdioma } from '../../../i18n/index.jsx'
+import { useStore } from '../../../context/StoreContext.jsx'
 import { MONEDA } from '../../../services/config'
 import { formatearMonto } from '../../../services/money.js'
 import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
 import { urlImagenNegocio } from '../../../services/imageUpload.js'
-import { rpc, sb } from '../../../services/supabaseClient.js'
+import { cargarTrabajadores, trabajadoresEnCache } from '../../../services/trabajadores.js'
 import { precalcularCambio } from '../../printing/Ticket.jsx'
 import { etiquetaFiscal, pideDatosFiscales } from '../../../services/fiscal.js'
 import ComprobanteQr from './ComprobanteQr.jsx'
@@ -34,34 +35,41 @@ export const METODOS_EXTRA = ['cheque', 'vale', 'cxc', 'otro']
 // Una cuenta por cobrar siempre se asigna a un trabajador registrado: sin él no se puede cobrar.
 export const cobroInvalido = (lineas, tr) => ((lineas || []).some(l => l.metodo === 'cxc' && numMonto(l.monto) > 0 && !l.trabajador_id) ? tr('venta.cxcElegir') : '')
 
-// Trabajadores de la empresa, pedidos una sola vez (solo se usan para «cuenta por cobrar»).
-let trabajadoresCache = null
-const cargarTrabajadores = async () => {
-  if (trabajadoresCache) return trabajadoresCache
-  if (!sb) return []
-  const filas = await rpc('trabajadores_cobro', {})
-  trabajadoresCache = (Array.isArray(filas) ? filas : []).map(f => ({ id: f.usuario_id, nombre: f.nombre, rol: f.rol }))
-  return trabajadoresCache
-}
-
 export const cobroNuevo = (extra = {}) => ({ lineas: [{ metodo: 'efectivo', monto: '' }], imprimir: true, comanda: true, fiscal: { nombre: '', numero: '', correo: '' }, ...extra })
 
 // Menú de cobro ÚNICO: el mismo en Salón, Caja y Venta directa.
 // El padre guarda `cobro` ({ lineas, imprimir, comanda }) y confirma; esto solo lo dibuja.
 export default function CobroForm({ cobro, onChange, total, config, mostrarComanda = false, children }) {
   const { t } = useIdioma()
+  const { s: tienda, modo, sesion } = useStore()
   const moneda = config?.moneda || MONEDA
   const m = n => formatearMonto(n, moneda)
   const hayQrNegocio = Boolean(urlImagenNegocio(config, 'qr'))
   const [masAbierto, setMasAbierto] = useState(-1)
-  const [trabajadores, setTrabajadores] = useState(trabajadoresCache || [])
+  const [remotos, setRemotos] = useState(trabajadoresEnCache)
+  const [errTrab, setErrTrab] = useState('')
+  const [intento, setIntento] = useState(0)
   const hayCxc = cobro.lineas.some(l => l.metodo === 'cxc')
   useEffect(() => {
-    if (!hayCxc || trabajadores.length) return undefined
+    if (!hayCxc || modo !== 'supabase') return undefined
     let vivo = true
-    cargarTrabajadores().then(v => { if (vivo) setTrabajadores(v) }).catch(() => {})
+    setErrTrab('')
+    cargarTrabajadores().then(v => { if (vivo) setRemotos(v) }).catch(e => { if (vivo) setErrTrab(String(e?.message || e)) })
     return () => { vivo = false }
-  }, [hayCxc])
+  }, [hayCxc, modo, intento])
+  // Siempre sale al menos quien está dentro del sistema, aunque la lista del servidor tarde o falle.
+  const trabajadores = useMemo(() => {
+    const base = modo === 'supabase'
+      ? remotos
+      : [
+        ...(tienda?.usuariosDemo || []).map(u => ({ id: u.usuario, nombre: u.nombre || u.usuario, rol: u.rol, acceso: true })),
+        ...(tienda?.personalDemo || []).map(p => ({ id: p.id, nombre: p.nombre, rol: p.cargo || 'personal', acceso: false })),
+      ]
+    const yoId = modo === 'supabase' ? sesion?.usuarioId : sesion?.usuario
+    if (!yoId || base.some(w => w.id === yoId)) return base
+    return [{ id: yoId, nombre: sesion?.nombre || sesion?.usuario || '', rol: sesion?.rol || '', acceso: true }, ...base]
+  }, [modo, remotos, tienda?.usuariosDemo, tienda?.personalDemo, sesion?.usuarioId, sesion?.usuario, sesion?.nombre, sesion?.rol])
+  const esYo = w => w.id === (modo === 'supabase' ? sesion?.usuarioId : sesion?.usuario)
   const setLinea = (i, cambios) => onChange({ ...cobro, lineas: cobro.lineas.map((l, j) => (j === i ? { ...l, ...cambios } : l)) })
   // Por defecto el monto es el total de la cuenta, para cobrar rápido en efectivo; si el cliente da otro
   // monto se corrige a mano. Se mantiene al día si el total cambia, mientras nadie lo haya tocado.
@@ -113,8 +121,9 @@ export default function CobroForm({ cobro, onChange, total, config, mostrarComan
               <select name="cxc-trabajador" value={l.trabajador_id || ''}
                 onChange={e => { const x = trabajadores.find(w => w.id === e.target.value); setLinea(i, { trabajador_id: x?.id || '', trabajador_nombre: x?.nombre || '' }) }}>
                 <option value="">{t('venta.cxcElegir')}</option>
-                {trabajadores.map(w => <option key={w.id} value={w.id}>{w.nombre}</option>)}
+                {trabajadores.map(w => <option key={w.id} value={w.id}>{w.nombre}{esYo(w) ? ` · ${t('venta.cxcYo')}` : (!w.acceso && w.rol ? ` · ${w.rol}` : '')}</option>)}
               </select>
+              {errTrab && <small className="adm-msg warn">{t('venta.cxcErrorLista')} <button type="button" className="ghost" onClick={() => setIntento(n => n + 1)}>{t('venta.cxcReintentar')}</button></small>}
             </label>
           )}
           <label className="vd-monto">{t('venta.recibido')}

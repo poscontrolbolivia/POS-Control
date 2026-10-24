@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
 import Ventana from '../../ui/Ventana.jsx'
+import PersonalBlock from './PersonalBlock.jsx'
 import { rpc, mensajeError } from '../../../services/supabaseClient.js'
 import { gruposDeComanda } from '../../../services/printing.js'
 import '../../../styles/admin.css'
@@ -223,6 +224,7 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
   }
 
   return (
+    <>
     <section className="adm-card adm-equipo eq-bloque">
       <div className="adm-card-cab">
         <button type="button" className="ghost eq-toggle" onClick={onToggleAbierto}>👥 {tOr('equipo.ocultar', 'Ocultar equipo')}</button>
@@ -393,6 +395,8 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
         </Ventana>
       )}
     </section>
+    <PersonalBlock />
+    </>
   )
 }
 
@@ -437,6 +441,7 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
   if (!abierto) return <EquipoFilaColapsada n={usuarios.length} onToggle={onToggleAbierto} tOr={tOr} />
 
   return (
+    <>
     <section className="adm-card adm-equipo eq-bloque">
       <div className="adm-card-cab">
         <button type="button" className="ghost eq-toggle" onClick={onToggleAbierto}>👥 {tOr('equipo.ocultar', 'Ocultar equipo')}</button>
@@ -517,5 +522,7 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
         </Ventana>
       )}
     </section>
+    <PersonalBlock />
+    </>
   )
 }

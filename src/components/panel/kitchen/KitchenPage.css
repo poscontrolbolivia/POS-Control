@@ -1,4 +1,4 @@
-.cocina.ck { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; max-width: none; margin: 0 auto; }
+.cocina.ck { display: flex; flex-direction: column; gap: 10px; padding: 10px var(--pagina-pad); max-width: none; margin: 0 auto; }
 .ck .ck-sp { flex: 1; }
 
 .ck-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -30,17 +30,16 @@
 .ck-fila-cab { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
 .ck-fila-cab h3 { margin: 0; font-size: 1.05rem; }
 .ck-cuenta { min-width: 26px; height: 26px; padding: 0 8px; display: inline-grid; place-items: center; border-radius: 999px; font-weight: 800; font-size: .85rem; background: var(--ac); color: var(--on-btn); }
-.ck-fila.area-cocina .ck-cuenta { background: var(--btn-orange); }
+.ck-fila.area-cocina .ck-cuenta { background: var(--btn-orange); color: var(--on-orange); }
 .ck-fila.area-barra .ck-cuenta { background: var(--btn-blue, var(--ac)); }
 
-.ck-filas.dos .ck-fila .ck-grid { max-height: calc((100dvh - 190px) / 2); min-height: 150px; overflow-y: auto; padding-right: 2px; }
-.ck-filas:not(.dos) .ck-fila .ck-grid { max-height: calc(100dvh - 170px); overflow-y: auto; }
-
-.ck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; align-content: start; }
+/* Sin scroll interno: la página se desplaza una sola vez y las comandas se reparten en columnas
+   (más comandas a la vez en pantalla grande, una columna en el móvil). */
+.ck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 8px; align-content: start; }
 .ck-vacio { display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 18px 12px; text-align: center; color: var(--ink); }
 .ck-vacio small, .ck-vacio-mini { color: var(--mut); }
 
-.ck-card { display: flex; flex-direction: column; gap: 6px; background: var(--card); border: 1.5px solid var(--line); border-radius:var(--r-md); padding: 8px 8px 6px; box-shadow: 0 3px 10px rgba(0,0,0,.05); }
+.ck-card { display: flex; flex-direction: column; gap: 5px; background: var(--card); border: 1.5px solid var(--line); border-radius:var(--r-md); padding: 8px 8px 6px; box-shadow: 0 3px 10px rgba(0,0,0,.05); }
 .ck-card.ambar { border-color: color-mix(in srgb, var(--btn-yellow) 70%, var(--line)); }
 .ck-card.rojo { border-color: color-mix(in srgb, var(--btn-red) 65%, var(--line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--btn-red) 24%, transparent), 0 3px 10px rgba(0,0,0,.05); }
 .ck-card.nueva { animation: ck-pulso 1.2s ease-out 2; }
@@ -51,29 +50,29 @@
 .ck-dato-fuerte { font-size: 1.35rem; font-family: var(--font-display); color: var(--ink); }
 .ck-tag { font-size: .95rem; font-weight: 700; border-radius: 999px; padding: 3px 10px; white-space: nowrap; background: var(--libre); color: var(--mut); border: 1px solid var(--line); }
 .ck-tag.pend { background: color-mix(in srgb, var(--btn-orange) 18%, var(--card)); color: var(--ink); border-color: color-mix(in srgb, var(--btn-orange) 55%, var(--line)); }
-.ck-timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1.2rem; padding: 4px 12px; border-radius: 999px; background: color-mix(in srgb, var(--btn-green) 16%, var(--card)); color: color-mix(in srgb, var(--btn-green) 70%, var(--ink)); white-space: nowrap; }
+.ck-timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1.05rem; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--btn-green) 16%, var(--card)); color: color-mix(in srgb, var(--btn-green) 70%, var(--ink)); white-space: nowrap; }
 .ck-timer.ambar { background: color-mix(in srgb, var(--btn-yellow) 30%, var(--card)); color: var(--ink); }
 .ck-timer.rojo { background: var(--btn-red); color: var(--on-btn); }
 .ck-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .95rem; color: var(--mut); }
 
 .ck-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .ck-item { border: 1.5px solid var(--line); border-radius:var(--r-md); background: var(--card-2, var(--card)); overflow: hidden; }
-.ck-item-fila { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; min-height: 64px; }
-.ck-qty { flex: 0 0 auto; min-width: 46px; height: 46px; padding: 0 6px; display: grid; place-items: center; border-radius: 999px; background: var(--ac); color: var(--on-btn); font-weight: 800; font-size: 1.45rem; }
+.ck-item-fila { display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 8px; min-height: 52px; }
+.ck-qty { flex: 0 0 auto; min-width: 38px; height: 38px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: var(--ac); color: var(--on-btn); font-weight: 800; font-size: 1.2rem; }
 .ck-item.listo { opacity: .6; }
 .ck-item.listo .ck-qty { background: color-mix(in srgb, var(--btn-green) 85%, var(--card)); }
 .ck-item.listo .ck-nombre { text-decoration: line-through; }
 .ck-item.anul { border-color: color-mix(in srgb, var(--btn-red) 50%, var(--line)); background: color-mix(in srgb, var(--btn-red) 7%, var(--card)); }
 .ck-item-cuerpo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.ck-nombre { font-weight: 800; font-size: 1.25rem; overflow-wrap: anywhere; line-height: 1.25; }
+.ck-nombre { font-weight: 800; font-size: 1.1rem; overflow-wrap: anywhere; line-height: 1.2; }
 .ck-combo { font-size: .9rem; font-weight: 700; color: var(--mut); }
 .ck-nota { font-size: .95rem; font-weight: 700; border-radius: 8px; padding: 4px 9px; background: color-mix(in srgb, var(--btn-yellow) 22%, var(--card)); border: 1px solid color-mix(in srgb, var(--btn-yellow) 55%, var(--line)); }
 .ck-listo-hora { color: var(--ok-ink); font-weight: 800; font-size: .9rem; }
 .ck-item-acc { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
 
-.ck-check { min-width: 56px; min-height: 56px; width: 56px; height: 56px; padding: 0; border-radius: 50%; font-size: 1.7rem; font-weight: 800; color: var(--on-btn); border: 0; text-shadow: 0 1px 1px rgba(0,0,0,.25);
+.ck-check { min-width: 48px; min-height: 48px; width: 48px; height: 48px; padding: 0; border-radius: 50%; font-size: 1.5rem; font-weight: 800; color: var(--on-btn); border: 0; text-shadow: 0 1px 1px rgba(0,0,0,.25);
   background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,0)), var(--btn-green); box-shadow: 0 4px 12px color-mix(in srgb, var(--btn-green) 38%, transparent); }
-.ck-mini { min-width: 44px; min-height: 44px; width: 44px; height: 44px; padding: 0; border-radius: 50%; font-size: 1.15rem; }
+.ck-mini { min-width: 40px; min-height: 40px; width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 1.15rem; }
 .cocina-btn { min-height: 44px; padding: 8px 16px; font-weight: 700; font-size: .95rem; border-radius: 999px; white-space: nowrap; }
 
 .ck-anul-block { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px; border-top: 1.5px dashed color-mix(in srgb, var(--btn-red) 45%, var(--line)); background: color-mix(in srgb, var(--btn-red) 10%, var(--card)); font-size: .88rem; }
@@ -99,7 +98,6 @@
 @media (max-width: 640px) {
   .cocina.ck { padding: 8px; }
   .ck-grid { grid-template-columns: 1fr; }
-  .ck-filas.dos .ck-fila .ck-grid { max-height: calc((100dvh - 210px) / 2); }
   .ck-barra .ck-sp { display: none; }
 }
 
@@ -112,4 +110,19 @@
 
 /* Una línea que explica cada bloque de la cola (áreas, sacadas, devueltos). */
 .ck-ayuda{margin:0 0 8px;padding:7px 10px;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--mut);font-size:.83rem;font-weight:600;line-height:1.35}
-.ck-linea { flex: 1 1 100%; font-size: 1.35rem; font-weight: 800; color: var(--ink); line-height: 1.25; overflow-wrap: anywhere; }
+.ck-linea { flex: 1 1 100%; font-size: 1.12rem; font-weight: 800; color: var(--ink); line-height: 1.25; overflow-wrap: anywhere; }
+
+/* Total por producto: el resumen de toda la cola, para cuando las comandas no caben en pantalla. */
+.ck-total-btn em { background: var(--ac); }
+.ck-total-btn.on, .ck-sacadas.on { border-color: var(--ac); }
+.ck-panel-total { background: var(--card); border: 1.5px solid var(--ac); border-radius: var(--r-md); padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 46dvh; overflow-y: auto; }
+.ck-panel-total > header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ck-panel-total .ico { min-width: 34px; min-height: 34px; border-radius: 50%; padding: 0; }
+.ck-total-n { font-weight: 800; font-size: .85rem; padding: 2px 10px; border-radius: 999px; background: var(--ac); color: var(--on-btn); }
+.ck-total-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.ck-total-p { border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--card-2, var(--card)); padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.ck-total-top { display: flex; align-items: center; gap: 10px; }
+.ck-total-qty { flex: 0 0 auto; min-width: 44px; height: 44px; padding: 0 8px; display: grid; place-items: center; border-radius: 999px; background: var(--ac); color: var(--on-btn); font-weight: 800; font-size: 1.5rem; }
+.ck-total-nombre { font-size: 1.15rem; line-height: 1.2; overflow-wrap: anywhere; }
+.ck-total-notas { list-style: none; margin: 0; padding: 0 0 0 54px; display: flex; flex-direction: column; gap: 2px; font-size: .98rem; font-weight: 600; color: var(--ink); }
+.ck-total-notas b { display: inline-block; min-width: 1.6em; font-weight: 800; }

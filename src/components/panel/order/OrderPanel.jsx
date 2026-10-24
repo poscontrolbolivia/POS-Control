@@ -579,7 +579,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
             })}
           </div>
           <div className="barra">
-            <button className="violet" disabled={!aUnir.length && !aUnirCtas.length} onClick={unirAhora}>{t('pedido.unirN', { n: aUnir.length + aUnirCtas.length })}</button>
+            <button className="success" disabled={!aUnir.length && !aUnirCtas.length} onClick={unirAhora}>{t('pedido.unirN', { n: aUnir.length + aUnirCtas.length })}</button>
             <button className="danger" onClick={cerrarUnir}>{t('comun.cancelar')}</button>
           </div>
         </div>
@@ -738,7 +738,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
                       <option value="">{t('pedido.intercambiarPor')}</option>
                       {itemsDestino.map(i => <option key={i.id} value={i.id}>{i.qty}× {i.nombre}</option>)}
                     </select>
-                    <button className="violet" disabled={!canje} onClick={intercambiar}>⇄ {t('pedido.intercambiar')}</button>
+                    <button className="success" disabled={!canje} onClick={intercambiar}>⇄ {t('pedido.intercambiar')}</button>
                   </div>
                 ) : <small className="txt-mut">{t('pedido.destinoVacia')}</small>
               )}
@@ -821,7 +821,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
               <CobroForm cobro={pagos} onChange={setPagos} total={round2(baseCobro)} config={s.config} />
               <div className="barra pm-acciones">
                 <button className="success" onClick={confirmarCobro}>{t('pedido.confirmarCobro')}</button>
-                {!marcados.length && sumaRecibida > 0.009 && sumaRecibida < round2(saldo) - 0.009 && <button className="warning" onClick={abonoLibre}>{t('pedido.abonar', { monto: money(sumaRecibida) })}</button>}
+                {!marcados.length && sumaRecibida > 0.009 && sumaRecibida < round2(saldo) - 0.009 && <button className="ghost" onClick={abonoLibre}>{t('pedido.abonar', { monto: money(sumaRecibida) })}</button>}
                 <button className="danger" onClick={() => { setPagos(null); setMarcados([]) }}>{t('comun.cancelar')}</button>
               </div>
             </div>
@@ -844,15 +844,15 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
                   {/* 1 · cuenta en blanco */}
                   {cuentaVacia && <button className="danger solid" onClick={cerrarVacia}>✕ {c.tipo === 'mesa' ? tOr('pedido.cerrarVacia', 'Cerrar mesa vacía') : tOr('pedido.cerrarPedidoVacio', 'Cerrar pedido vacío')}</button>}
                   {/* 2 · con productos sin enviar */}
-                  {c.estado === 'abierta' && hayPendientes && <button className="orange" onClick={enviarCocina}>🔥 {tOr('pedido.enviarDespacho', 'Enviar a despacho')}</button>}
+                  {c.estado === 'abierta' && hayPendientes && <button className="success" onClick={enviarCocina}>🔥 {tOr('pedido.enviarDespacho', 'Enviar a despacho')}</button>}
                   {c.estado === 'abierta' && hayPendientes && <button className="danger" onClick={() => setConfirmar('quitar')}>🗑 {tOr('pedido.quitarSinEnviar', 'Quitar productos sin enviar')}</button>}
                   {/* 3 · todo enviado a despacho */}
-                  {c.estado === 'abierta' && !hayPendientes && vivos.length > 0 && <button className="violet" onClick={sacarCuenta}>🧾 {tOr('pedido.sacarCuenta', 'Sacar cuenta')}</button>}
+                  {c.estado === 'abierta' && !hayPendientes && vivos.length > 0 && <button className="success" onClick={sacarCuenta}>🧾 {tOr('pedido.sacarCuenta', 'Sacar cuenta')}</button>}
                   {c.estado === 'abierta' && !hayPendientes && c.items.some(i => i.estado === 'enviado') && <button className="ghost" onClick={() => setConfirmar('reenviar')}>↻ {tOr('pedido.reenviarComanda', 'Reenviar comanda a despacho')}</button>}
                   {/* 4 · cuenta ya sacada */}
                   {c.estado === 'precuenta' && puede(rol, 'cobrar') && <button className="success" onClick={iniciarCobro}>💵 {t('pedido.cobrar')}</button>}
-                  {c.estado === 'precuenta' && <button className="slate" onClick={imprimirTicketCuenta}>🖨 {tOr('pedido.reimprimirCuenta', 'Reimprimir cuenta')}</button>}
-                  {c.estado === 'precuenta' && <button className="warning" onClick={() => d({ t: 'reabrir', cuentaId: c.id })}>↺ {c.tipo === 'mesa' ? tOr('pedido.reabrirMesa', 'Reabrir mesa') : tOr('pedido.reabrirPedido', 'Reabrir pedido')}</button>}
+                  {c.estado === 'precuenta' && <button className="ghost" onClick={imprimirTicketCuenta}>🖨 {tOr('pedido.reimprimirCuenta', 'Reimprimir cuenta')}</button>}
+                  {c.estado === 'precuenta' && <button className="ghost" onClick={() => d({ t: 'reabrir', cuentaId: c.id })}>↺ {c.tipo === 'mesa' ? tOr('pedido.reabrirMesa', 'Reabrir mesa') : tOr('pedido.reabrirPedido', 'Reabrir pedido')}</button>}
                 </div>
               )}
             </>

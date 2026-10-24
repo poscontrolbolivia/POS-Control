@@ -10,8 +10,8 @@
   "display": "standalone",
   "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "orientation": "any",
-  "theme_color": "#2f7d5b",
-  "background_color": "#f8f7f9",
+  "theme_color": "#0B5DA8",
+  "background_color": "#F3F5F7",
   "categories": ["business", "food"],
   "icons": [
     {

@@ -2,10 +2,6 @@
 .auth-legal{margin:0;text-align:center;font-size:.78rem;color:var(--mut)}
 .auth-legal a{color:var(--mut);text-decoration:underline}
 .auth-sub{margin:0;text-align:center;color:var(--mut);font-size:.92rem}
-.auth-aviso{
-  margin:0;text-align:center;font-size:.82rem;color:var(--mut);
-  background:var(--libre);border-radius:var(--r-sm);padding:8px 10px;
-}
 .auth-error{
   margin:0;text-align:center;color:var(--rojo-on);background:var(--rojo);
   border-radius:var(--r-sm);padding:10px;font-size:.9rem;

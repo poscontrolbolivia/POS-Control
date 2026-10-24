@@ -5,6 +5,7 @@ import {
   hayCliente, listarEmpresas, registrarExporte, salirDeEmpresa, sondearAcceso,
 } from '../../../services/super/superApi.js'
 import { useIdioma } from '../../../i18n/index.jsx'
+import CabeceraPagina from '../../ui/CabeceraPagina.jsx'
 import LanguageSelect from '../../login/LanguageSelect.jsx'
 import CompaniesTable from './CompaniesTable.jsx'
 import ImportBlock from './ImportBlock.jsx'
@@ -124,12 +125,11 @@ export default function SuperPage({ sesion }) {
 
   return (
     <div className="super-envoltura">
-      <header className="super-cab">
-        <h2>{tOr('super.titulo', 'Super administrador')}</h2>
-        <span className="super-chip">{tOr('super.subtitulo', 'dueño de la plataforma')}</span>
-        <span className="sp" />
-        <LanguageSelect />
-      </header>
+      <CabeceraPagina
+        titulo={tOr('super.titulo', 'Super administrador')}
+        datos={<span className="super-chip">{tOr('super.subtitulo', 'dueño de la plataforma')}</span>}
+        acciones={<LanguageSelect />}
+      />
 
       <p className="super-sub">
         {tOr('super.sesion', 'Sesión')}: <b>{sesion?.usuario || sesion?.nombre || '—'}</b> ·{' '}

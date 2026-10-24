@@ -3,7 +3,8 @@ import { useIdioma } from '../../../i18n/index.jsx'
 import { rpc, mensajeError, sb, obtenerEmpresaActiva } from '../../../services/supabaseClient.js'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { gruposDeComanda, repartirPorGrupo, SIN_AREA, GRUPO_DIRECTA } from '../../../services/printing.js'
-import { pendientesPorGrupo, mostradorPendientes, badgeDirecta } from '../../../services/despacho.js'
+import { pendientesPorGrupo, mostradorPendientes, badgeDirecta, aplicarOptimistas } from '../../../services/despacho.js'
+import Aviso from '../../ui/Aviso.jsx'
 import './KitchenPage.css'
 import { hora } from '../../../services/format.js'
 
@@ -135,6 +136,7 @@ export default function KitchenPage({ rol, sesion }) {
   const [anulando, setAnulando] = useState(null)
   const [motivo, setMotivo] = useState('')
   const [sacadasAbierto, setSacadasAbierto] = useState(false)
+  const [totalAbierto, setTotalAbierto] = useState(false)
   const [devs, setDevs] = useState([])
   const [notasDev, setNotasDev] = useState({})
 
@@ -146,14 +148,34 @@ export default function KitchenPage({ rol, sesion }) {
   areasRef.current = areasVisibles
   const sRef = useRef(s)
   sRef.current = s
+  // Marcar «ya salió» se pinta al instante y se confirma en segundo plano: antes cada toque esperaba al
+  // servidor, a la cola y a una recarga completa de la empresa (unos 4 s). `optRef` recuerda lo que el
+  // usuario ya hizo hasta que el servidor lo confirme, para que un refresco antiguo no lo desmarque.
+  const optRef = useRef(new Map())
+  const enVueloRef = useRef(new Map())
+  const repetirRef = useRef(false)
+  const realtimeRef = useRef(false)
+  realtimeRef.current = realtime
+  const vistaRef = useRef(vista)
+  vistaRef.current = vista
 
   // Un error de una acción (marcar salida, anular) se queda a la vista unos segundos: antes el siguiente
   // refresco lo borraba al instante y nadie sabía por qué «no pasaba nada».
   const avisoHastaRef = useRef(0)
   const avisar = useCallback(msg => { if (msg) avisoHastaRef.current = Date.now() + 10000; setAviso(msg || '') }, [])
 
+  const conOptimistas = (lista, area) => aplicarOptimistas(lista, area, optRef.current)
+  const repintar = () => {
+    const sig = { ...colasRef.current }
+    Object.keys(sig).forEach(a => { sig[a] = conOptimistas(sig[a], a) })
+    colasRef.current = sig
+    setColas(sig)
+  }
+  // Con el tiempo real conectado la pantalla y los contadores se ponen al día solos; sin él, se pide.
+  const reanudar = () => { if (!realtimeRef.current) window.dispatchEvent(new Event('pos-reanudar')) }
+
   const cargar = useCallback(async () => {
-    if (cargandoRef.current) return
+    if (cargandoRef.current) { repetirRef.current = true; return }
     cargandoRef.current = true
     setCargando(true)
     try {
@@ -171,7 +193,8 @@ export default function KitchenPage({ rol, sesion }) {
       })
       const nuevoRecien = {}
       const sig = { ...colasRef.current }
-      res.forEach(([a, lista]) => {
+      res.forEach(([a, lista0]) => {
+        const lista = conOptimistas(lista0, a)
         sig[a] = lista
         const enviados = new Set()
         lista.forEach(c => (c.items || []).forEach(it => { if (it.estado === 'enviado') enviados.add(it.id) }))
@@ -195,6 +218,7 @@ export default function KitchenPage({ rol, sesion }) {
     } finally {
       cargandoRef.current = false
       setCargando(false)
+      if (repetirRef.current) { repetirRef.current = false; cargarRef.current?.() }
     }
   }, [conectado, avisar, idsGrupos])
   cargarRef.current = cargar
@@ -236,7 +260,7 @@ export default function KitchenPage({ rol, sesion }) {
     try {
       await fn()
       await cargarRef.current?.()
-      window.dispatchEvent(new Event('pos-reanudar'))
+      reanudar()
     } catch (e) { avisar(mensajeError(e)) } finally { setOcupado('') }
   }
 
@@ -249,15 +273,29 @@ export default function KitchenPage({ rol, sesion }) {
       else d({ t: 'devolver~', id: dv.id, nota, usuario })
       setNotasDev(n => { const { [dv.id]: _x, ...resto } = n; return resto })
       await cargarRef.current?.()
-      window.dispatchEvent(new Event('pos-reanudar'))
+      reanudar()
     } catch (e) { avisar(mensajeError(e)) } finally { setOcupado('') }
   }
-  const marcarSalio = (item, c) => accion(item, () => conectado
-    ? rpc('marcar_salida', { p_item_ids: [item.id], p_area: vista === SIN_AREA ? null : vista })
-    : d({ t: 'cocina-salida', cuentaId: c.cuenta_id, itemId: item.id, area: vista }))
-  const deshacer = (item, c) => accion(item, () => conectado
-    ? rpc('deshacer_salida', { p_item_ids: [item.id], p_area: vista === SIN_AREA ? null : vista })
-    : d({ t: 'cocina-deshacer', cuentaId: c.cuenta_id, itemId: item.id, area: vista }))
+  // Sale/vuelve un plato: se ve ya en pantalla y el servidor lo confirma detrás. Si falla, se deshace solo.
+  const cambiarSalida = (item, c, listo) => {
+    if (!conectado) {
+      d({ t: listo ? 'cocina-salida' : 'cocina-deshacer', cuentaId: c.cuenta_id, itemId: item.id, area: vistaRef.current })
+      return
+    }
+    const area = vistaRef.current
+    const clave = area + ':' + item.id
+    optRef.current.set(clave, { listo, en: Date.now(), hasta: Date.now() + 8000 })
+    repintar()
+    const previa = enVueloRef.current.get(clave) || Promise.resolve()
+    const p = previa
+      .then(() => rpc(listo ? 'marcar_salida' : 'deshacer_salida', { p_item_ids: [item.id], p_area: area === SIN_AREA ? null : area }))
+      .then(() => { reanudar() })
+      .catch(e => { optRef.current.delete(clave); avisar(mensajeError(e)) })
+      .finally(() => { if (enVueloRef.current.get(clave) === p) enVueloRef.current.delete(clave); cargarRef.current?.() })
+    enVueloRef.current.set(clave, p)
+  }
+  const marcarSalio = (item, c) => cambiarSalida(item, c, true)
+  const deshacer = (item, c) => cambiarSalida(item, c, false)
   const abrirAnular = (item, c) => {
     // Lo vendido en el mostrador ya está cobrado: el servidor no deja anular una cuenta cerrada.
     if (c.canal === 'mostrador') { avisar(tOr('cocina.mostradorCobrado', 'Esa venta ya está cobrada. Para anularla registra una devolución en Caja.')); return }
@@ -278,7 +316,7 @@ export default function KitchenPage({ rol, sesion }) {
       return
     }
     rpc('pedir_anulacion', { p_item_id: item.id, p_motivo: txt })
-      .then(() => { cargarRef.current?.(); window.dispatchEvent(new Event('pos-reanudar')) })
+      .then(() => { cargarRef.current?.(); reanudar() })
       .catch(e => avisar(mensajeError(e)))
       .finally(() => setOcupado(''))
   }
@@ -309,12 +347,33 @@ export default function KitchenPage({ rol, sesion }) {
   }, [colas, areasMostradas])
   const totalSacadas = areasMostradas.reduce((n, a) => n + (filas[a]?.sacadas.length || 0), 0)
 
+  // «Total»: lo que falta sacar sumado entre TODAS las comandas, por producto y separado por indicación
+  // (término, salsa…). Con el salón lleno no caben todas las comandas en pantalla: esto da la cuenta de un vistazo.
+  const totales = useMemo(() => {
+    const por = new Map()
+    let unidades = 0
+    areasMostradas.forEach(a => (filas[a]?.enCurso || []).forEach(c => (c.items || []).forEach(it => {
+      if (it.estado !== 'enviado') return
+      const q = Number(it.qty) || 1
+      const nombre = String(it.nombre || '').trim()
+      const e = por.get(nombre) || { nombre, qty: 0, notas: new Map() }
+      const nota = String(it.nota || '').trim()
+      e.qty += q
+      e.notas.set(nota, (e.notas.get(nota) || 0) + q)
+      por.set(nombre, e)
+      unidades += q
+    })))
+    const lista = [...por.values()].sort((x, y) => y.qty - x.qty || x.nombre.localeCompare(y.nombre))
+    return { lista, unidades }
+  }, [filas, areasMostradas])
+  const hayComandas = areasMostradas.some(a => (filas[a]?.enCurso || []).length > 0)
+
   // Cuántos ítems quedan por sacar en cada área: el contador rojo del botón, como en las
   // notificaciones de una app. Se lee del store, no de la cola, para poder contar los otros.
   const pendientes = useMemo(() => pendientesPorGrupo(s.cuentas, s.productos, s.config), [s.cuentas, s.productos, s.config])
   const porEntregar = useMemo(() => badgeDirecta(s.cuentas, s.productos, s.config), [s.cuentas, s.productos, s.config])
 
-  if (!permitido) return <div className="cocina adm-panel"><div className="auth-aviso">{tOr('cocina.sinPermiso', 'Esta pantalla no está habilitada para tu rol.')}</div></div>
+  if (!permitido) return <div className="cocina adm-panel"><Aviso icono="🔒">{tOr('cocina.sinPermiso', 'Esta pantalla no está habilitada para tu rol.')}</Aviso></div>
 
   const nombreArea = a => (a === SIN_AREA ? tOr('cocina.sinArea', 'Sin área') : (grupos.find(g => g.id === a)?.nombre || tOr('cocina.area.' + a, a)))
   const icono = a => (a === SIN_AREA ? '⚠️' : a === 'cocina' ? '🍳' : a === 'barra' ? '🍹' : a === GRUPO_DIRECTA ? '🛒' : '🍽️')
@@ -357,11 +416,11 @@ export default function KitchenPage({ rol, sesion }) {
           </div>
           <div className="ck-item-acc">
             {!anulacion && !listo && (
-              <button type="button" className="ck-check" disabled={ocupado === it.id} onClick={() => marcarSalio(it, c)}
+              <button type="button" className="ck-check" onClick={() => marcarSalio(it, c)}
                 title={tOr('cocina.yaSalio', 'Ya salió')} aria-label={`${tOr('cocina.yaSalio', 'Ya salió')}: ${it.nombre}`}>✓</button>
             )}
             {listo && (
-              <button type="button" className="ck-mini ghost" disabled={ocupado === it.id} onClick={() => deshacer(it, c)}
+              <button type="button" className="ck-mini ghost" onClick={() => deshacer(it, c)}
                 title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button>
             )}
             {!anulacion && !listo && (
@@ -442,6 +501,10 @@ export default function KitchenPage({ rol, sesion }) {
           ))}
         </div>
         <span className="ck-sp" />
+        <button type="button" className={'ck-sacadas ck-total-btn' + (totalAbierto ? ' on' : '')} aria-expanded={totalAbierto} onClick={() => setTotalAbierto(v => !v)}
+          title={tOr('cocina.totalAyuda', 'Lo que falta sacar, sumado entre todas las comandas y separado por indicación (término, salsa…).')}>
+          Σ {tOr('cocina.total', 'Total')}{totales.unidades > 0 && <em>{totales.unidades}</em>}
+        </button>
         <button type="button" className={'ck-sacadas' + (sacadasAbierto ? ' on' : '')} aria-expanded={sacadasAbierto} onClick={() => setSacadasAbierto(v => !v)}
           title={tOr('cocina.sacadasTitulo', 'Comandas que ya salieron completas')}>
           ✓ {tOr('cocina.sacadas', 'Sacadas')}{totalSacadas > 0 && <em>{totalSacadas}</em>}
@@ -454,13 +517,42 @@ export default function KitchenPage({ rol, sesion }) {
         </button>
       </div>
 
-      {tabs.length > 1 && <p className="ck-ayuda">{tOr('cocina.areasAyuda', 'Cada pestaña es un área con su impresora (se crean en Configuración → Impresión).')}</p>}
+      {tabs.length > 1 && !hayComandas && <p className="ck-ayuda">{tOr('cocina.areasAyuda', 'Cada pestaña es un área con su impresora (se crean en Configuración → Impresión).')}</p>}
 
       {aviso && (
         <div className="auth-aviso cocina-aviso" role="alert">
           <span>⚠️ {aviso}</span>
           <button type="button" className="ico" onClick={() => setAviso('')} aria-label={tOr('comun.cerrar', 'Cerrar')}>✕</button>
         </div>
+      )}
+
+      {totalAbierto && (
+        <section className="ck-panel-total" aria-label={tOr('cocina.totalTitulo', 'Total por producto')}>
+          <header>
+            <b>Σ {tOr('cocina.totalTitulo', 'Total por producto')}</b>
+            <span className="ck-total-n">{tOr('cocina.totalUnidades', `${totales.unidades} por sacar`, { n: totales.unidades })}</span>
+            <span className="ck-sp" />
+            <button type="button" className="ico" onClick={() => setTotalAbierto(false)} aria-label={tOr('comun.cerrar', 'Cerrar')}>✕</button>
+          </header>
+          {totales.lista.length === 0 ? <p className="ck-vacio-mini">{tOr('cocina.totalVacio', 'No hay nada pendiente por sumar.')}</p> : (
+            <ul className="ck-total-grid">
+              {totales.lista.map(p => {
+                const desglose = [...p.notas.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+                const conDetalle = desglose.length > 1 || desglose[0][0] !== ''
+                return (
+                  <li key={p.nombre} className="ck-total-p">
+                    <div className="ck-total-top"><span className="ck-total-qty">{p.qty}</span><b className="ck-total-nombre">{p.nombre}</b></div>
+                    {conDetalle && (
+                      <ul className="ck-total-notas">
+                        {desglose.map(([nota, q]) => <li key={nota || '_'}><b>{q}</b> {nota || tOr('cocina.sinIndicacion', 'Sin indicación')}</li>)}
+                      </ul>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
       )}
 
       {sacadasAbierto && (
@@ -479,7 +571,7 @@ export default function KitchenPage({ rol, sesion }) {
                     <ul>
                       {(c.items || []).map(it => (
                         <li key={it.id}><span>{it.qty}× {it.nombre}{it.nota ? ` · ${it.nota}` : ''}</span>
-                          <button type="button" className="ck-mini ghost" disabled={ocupado === it.id} onClick={() => deshacer(it, c)} title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button></li>
+                          <button type="button" className="ck-mini ghost" onClick={() => deshacer(it, c)} title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button></li>
                       ))}
                     </ul>
                   </li>
@@ -506,7 +598,7 @@ export default function KitchenPage({ rol, sesion }) {
           ))}
         </div>
       )}
-      {vista === SIN_AREA && <div className="auth-aviso" role="status">{tOr('cocina.sinAreaAviso', 'Estos ítems fueron enviados a un área que ya no existe. Márcalos cuando salgan.')}</div>}
+      {vista === SIN_AREA && <Aviso icono="⚠️">{tOr('cocina.sinAreaAviso', 'Estos ítems fueron enviados a un área que ya no existe. Márcalos cuando salgan.')}</Aviso>}
       <div className={'ck-filas' + (areasMostradas.length > 1 ? ' dos' : '')}>
         {areasMostradas.map(a => {
           const { enCurso } = filas[a] || { enCurso: [] }

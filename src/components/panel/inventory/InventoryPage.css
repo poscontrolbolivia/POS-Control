@@ -1,4 +1,4 @@
-.inv-page{max-width:980px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.inv-page{max-width:var(--pagina-max);margin:0 auto;padding:var(--pagina-pad);display:flex;flex-direction:column;gap:var(--pagina-gap)}
 .inv-cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .inv-cab h2{margin:0;font-size:1.35rem}
 

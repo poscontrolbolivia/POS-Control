@@ -1,4 +1,4 @@
-.ala{max-width:900px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.ala{max-width:var(--pagina-max);margin:0 auto;padding:var(--pagina-pad);display:flex;flex-direction:column;gap:var(--pagina-gap)}
 
 .ala-cab{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
 .ala-cab-txt{flex:1 1 240px;min-width:0}

@@ -81,3 +81,22 @@ export function totalDespacho(cuentas = [], productos = [], config = {}) {
   const sinDirecta = Object.entries(por).filter(([id]) => id !== GRUPO_DIRECTA).reduce((a, [, n]) => a + n, 0)
   return sinDirecta + badgeDirecta(cuentas, productos, config)
 }
+
+// Lo que el usuario ya marcó en pantalla («ya salió» / «deshacer») y el servidor todavía no confirmó.
+// `pend` es un Map clave `área:idÍtem` -> { listo, en, hasta }. Un refresco que llegue con datos viejos no
+// debe desmarcar el plato: se le superpone lo pendiente. Cuando el servidor ya coincide, o vence el plazo,
+// la entrada se borra y manda el servidor. Una anulación pedida siempre manda sobre lo local.
+export function aplicarOptimistas(lista, area, pend, ahora = Date.now()) {
+  if (!pend || !pend.size) return lista
+  return (lista || []).map(c => ({
+    ...c,
+    items: (c.items || []).map(i => {
+      const clave = area + ':' + i.id
+      const o = pend.get(clave)
+      if (!o) return i
+      const quiere = o.listo ? 'listo' : 'enviado'
+      if (i.estado === quiere || i.estado === 'anulacion' || ahora > o.hasta) { pend.delete(clave); return i }
+      return { ...i, estado: quiere, listo_en: o.listo ? (i.listo_en || o.en) : null }
+    }),
+  }))
+}
