@@ -147,7 +147,10 @@ export default function KitchenPage({ rol, sesion }) {
   const sRef = useRef(s)
   sRef.current = s
 
-  const avisar = useCallback(msg => setAviso(msg || ''), [])
+  // Un error de una acción (marcar salida, anular) se queda a la vista unos segundos: antes el siguiente
+  // refresco lo borraba al instante y nadie sabía por qué «no pasaba nada».
+  const avisoHastaRef = useRef(0)
+  const avisar = useCallback(msg => { if (msg) avisoHastaRef.current = Date.now() + 10000; setAviso(msg || '') }, [])
 
   const cargar = useCallback(async () => {
     if (cargandoRef.current) return
@@ -186,7 +189,7 @@ export default function KitchenPage({ rol, sesion }) {
       if (Object.keys(nuevoRecien).length) setRecien(r => ({ ...r, ...nuevoRecien }))
       setAhora(Date.now())
       setUltimo(Date.now())
-      setAviso('')
+      if (Date.now() > avisoHastaRef.current) setAviso('')
     } catch (e) {
       avisar(mensajeError(e))
     } finally {
@@ -255,7 +258,11 @@ export default function KitchenPage({ rol, sesion }) {
   const deshacer = (item, c) => accion(item, () => conectado
     ? rpc('deshacer_salida', { p_item_ids: [item.id], p_area: vista === SIN_AREA ? null : vista })
     : d({ t: 'cocina-deshacer', cuentaId: c.cuenta_id, itemId: item.id, area: vista }))
-  const abrirAnular = (item, c) => { setAnulando({ id: item.id, cuentaId: c.cuenta_id, nombre: item.nombre }); setMotivo('') }
+  const abrirAnular = (item, c) => {
+    // Lo vendido en el mostrador ya está cobrado: el servidor no deja anular una cuenta cerrada.
+    if (c.canal === 'mostrador') { avisar(tOr('cocina.mostradorCobrado', 'Esa venta ya está cobrada. Para anularla registra una devolución en Caja.')); return }
+    setAnulando({ id: item.id, cuentaId: c.cuenta_id, nombre: item.nombre }); setMotivo('')
+  }
   const cerrarAnular = () => { setAnulando(null); setMotivo('') }
   const pedirAnulacion = () => {
     const item = anulando

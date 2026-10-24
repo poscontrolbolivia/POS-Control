@@ -3587,10 +3587,17 @@ begin
 
   -- ## 1) marca el ítem como sacado en el área pedida
   insert into public.cuenta_item_areas (item_id, empresa_id, area, listo_por)
+  -- «Venta directa» (entrega en el mostrador): un plato cobrado ahí cuyo artículo no tiene esa área
+  -- (sale de cocina o barra) se da por entregado en TODAS sus áreas; antes no marcaba nada y se quedaba
+  -- eternamente en la pantalla de Despacho.
   select i.id, v_emp, a, auth.uid()
-    from public.cuenta_items i cross join lateral unnest(i.areas) as a
+    from public.cuenta_items i
+    join public.cuentas cu on cu.id = i.cuenta_id
+    cross join lateral unnest(i.areas) as a
    where i.empresa_id = v_emp and i.estado = 'enviado' and i.id = any(v_ids)
-     and (p_area is null or a = p_area)
+     and (p_area is null or a = p_area
+          or (p_area = 'directa' and cu.tipo = 'directa' and cu.canal is distinct from 'llevar'
+              and not ('directa' = any(i.areas))))
   on conflict (item_id, area) do nothing;
   get diagnostics v_n = row_count;
 
@@ -3647,9 +3654,12 @@ begin
   perform private.exigir_area(p_area);
   v_ids := array(select "value"::uuid from jsonb_array_elements_text(p_item_ids));
 
-  delete from public.cuenta_item_areas ia using public.cuenta_items i
-   where ia.item_id = i.id and i.empresa_id = v_emp and i.id = any(v_ids)
-     and i.estado in ('enviado','listo') and (p_area is null or ia.area = p_area);
+  delete from public.cuenta_item_areas ia using public.cuenta_items i, public.cuentas cu
+   where ia.item_id = i.id and cu.id = i.cuenta_id and i.empresa_id = v_emp and i.id = any(v_ids)
+     and i.estado in ('enviado','listo')
+     and (p_area is null or ia.area = p_area
+          or (p_area = 'directa' and cu.tipo = 'directa' and cu.canal is distinct from 'llevar'
+              and not ('directa' = any(i.areas))));
 
   update public.cuenta_items i
      set areas_listas = array(select ia.area from public.cuenta_item_areas ia
