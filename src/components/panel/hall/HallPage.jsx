@@ -165,7 +165,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
     if (ro && bloque.current) ro.observe(bloque.current)
     window.addEventListener('resize', calc)
     return () => { ro?.disconnect(); window.removeEventListener('resize', calc) }
-  }, [edit, vista, activo === LLEVAR])
+  }, [edit, vista, zona === LLEVAR])
 
   const activo = zona === TODAS || zona === LLEVAR || zonas.some(z => z.id === zona) ? zona : (zonas[0]?.id ?? TODAS)
   // «Para llevar» no es un salón: si fuera destino de alta, la mesa nacería con una zona inexistente.
