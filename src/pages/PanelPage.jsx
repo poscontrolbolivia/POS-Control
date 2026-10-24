@@ -2,7 +2,8 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { lazyRetry } from '../services/lazyRetry.js'
 import ChunkBoundary from '../components/ChunkBoundary.jsx'
 import { useStore } from '../context/StoreContext.jsx'
-import { puede } from '../services/permissions.js'
+import { puede, fijarPermisosExtra } from '../services/permissions.js'
+import { rpc } from '../services/supabaseClient.js'
 import { suscribirVista } from '../services/notifications.js'
 import { useIdioma } from '../i18n/index.jsx'
 import Topbar from '../components/panel/Topbar.jsx'
@@ -36,6 +37,24 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   const { s, error } = useStore()
   const { t, tOr } = useIdioma()
   const enPantalla = EN_PANTALLA.includes(sesion.rol)
+
+  // Permisos que el admin otorgó a esta persona (ver/gestionar inventario). En la base salen de
+  // mis_permisos; en demo, del usuario demo. El admin los tiene siempre (puede() ya lo sabe).
+  const [, setPermTick] = useState(0)
+  const permisosDemo = sesion.supabase ? null : ((s.usuariosDemo || []).find(u => u.usuario === sesion.usuario)?.permisos || [])
+  const claveDemo = permisosDemo ? permisosDemo.join(',') : ''
+  useEffect(() => {
+    let vivo = true
+    if (sesion.supabase) {
+      fijarPermisosExtra([])
+      setPermTick(n => n + 1)
+      rpc('mis_permisos', {}).then(r => { if (vivo) { fijarPermisosExtra(r); setPermTick(n => n + 1) } }).catch(() => {})
+    } else {
+      fijarPermisosExtra(claveDemo ? claveDemo.split(',') : [])
+      setPermTick(n => n + 1)
+    }
+    return () => { vivo = false }
+  }, [sesion.supabase, sesion.empresaId, sesion.usuario, claveDemo])
 
   const [modulo, setModulo] = useState(
     sesion.es_super && !sesion.empresaId ? 'super' : enPantalla ? 'cocina' : 'salon'

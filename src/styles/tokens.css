@@ -1,4 +1,6 @@
 :root{
+  --pagina-max:1100px;--pagina-pad:16px;
+  --overlay:rgba(8,14,28,.62);--borde-ventana:1.5px solid var(--line-fuerte);
   --logo-navy:#0f4c91;--logo-blue:#1f6fd0;--logo-teal:#1686ba;
   --logo-green:#238f41;--logo-orange:#f16f1b;--logo-yellow:#fbb633;
 

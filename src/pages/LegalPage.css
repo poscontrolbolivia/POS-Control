@@ -12,7 +12,7 @@
 .legal-wrap h2{font-size:1.12rem;margin:26px 0 8px;scroll-margin-top:16px;color:var(--ink)}
 .legal-wrap p, .legal-wrap li{font-size:.95rem}
 .legal-wrap ul{padding-left:20px}
-.legal-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 28px}
+.legal-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:26px 28px}
 .legal-tabla{width:100%;min-width:460px;border-collapse:collapse;font-size:.88rem;margin:10px 0 6px}
 .legal-tabla th, .legal-tabla td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 .legal-tabla th{color:var(--mut);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.02em}

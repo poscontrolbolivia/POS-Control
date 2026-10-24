@@ -21,7 +21,7 @@
 }
 .ztab.on{ border-color: var(--ac); }
 .ztab .tab{ border: 0; border-radius: 999px; background: transparent; padding: 6px 12px; min-height: 34px; }
-.ztab .n{ font-style: normal; color: var(--mut); font-size: .75rem; margin-left: 5px; }
+.ztab .n{ font-style: normal; color: var(--mut); font-size: .78rem; margin-left: 5px; }
 .ztab.on .n{ color: var(--on-btn); }
 .ztools{ display: inline-flex; align-items: center; gap: 1px; padding: 0 4px 0 2px; border-left: 1px solid var(--line); }
 .salon .tab.mas{ color: var(--ac); border-style: dashed; }
@@ -43,18 +43,18 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .zren{ display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--ac); border-radius: 999px; background: var(--card); }
 .zinput{ min-width: 9rem; padding: 4px 8px; min-height: 30px; border-radius: 8px; }
 .zconf{ display: inline-flex; align-items: center; gap: 2px; padding-left: 4px; }
-.zconf-txt{ font-size: .72rem; color: var(--danger); font-weight: 600; white-space: nowrap; }
+.zconf-txt{ font-size: .78rem; color: var(--danger); font-weight: 600; white-space: nowrap; }
 /* El salón con mesas elige aquí su destino: a otro salón, sin salón, o eliminarlas con él. */
-.zconf-sel{ min-width:0; max-width:190px; min-height:32px; padding:2px 8px; font-size:.75rem; font-weight:600;
+.zconf-sel{ min-width:0; max-width:190px; min-height:32px; padding:2px 8px; font-size:.78rem; font-weight:600;
   border:1.5px solid var(--line-fuerte); border-radius:999px; background:var(--card); color:var(--ink); }
 .barra.zona-alta{ align-items: flex-end; }
 .barra.zona-alta .zinput{ min-width: 14rem; }
 .pista{ color: var(--mut); font-size: .8rem; margin: 0 0 0 4px; align-self: center; }
-.campo{ display: inline-flex; flex-direction: column; gap: 2px; font-size: .75rem; color: var(--mut); }
+.campo{ display: inline-flex; flex-direction: column; gap: 2px; font-size: .78rem; color: var(--mut); }
 .campo input, .campo select{ min-width: 8rem; }
-.grupo{ display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: var(--mut); border: 1px solid var(--line); border-radius: 999px; padding: 3px 6px; background: var(--card); }
+.grupo{ display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; color: var(--mut); border: 1px solid var(--line); border-radius: 999px; padding: 3px 6px; background: var(--card); }
 .grupo b{ font-size: .85rem; color: var(--ink); min-width: 1.6rem; text-align: center; }
-.barra.mesa-edit{ gap: 10px; padding: 8px 10px; border: 1px dashed var(--ac); border-radius: 12px; background: var(--card); }
+.barra.mesa-edit{ gap: 10px; padding: 8px 10px; border: 1px dashed var(--ac); border-radius:var(--r-md); background: var(--card); }
 .salon .salon-aviso{
   display: flex;
   align-items: center;
@@ -64,7 +64,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
   padding: 8px 12px;
   background: var(--libre);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius:var(--r-sm);
   font-size: .85rem;
   font-weight: 600;
 }
@@ -176,7 +176,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .mesa-edit .campo input, .mesa-edit .campo select{ width: 100%; min-width: 0; }
 .mesa-edit .grupo{ justify-content: space-between; width: 100%; }
 .mesa-edit > button{ width: 100%; }
-.salon .lienzo-area{ width: 100%; border-radius: 12px; }
+.salon .lienzo-area{ width: 100%; border-radius:var(--r-md); }
 .salon .mesa{ font-size: clamp(.58rem, 2.6vw, .85rem); border-width: 2px; }
 .salon .mesa .badge-unida{ font-size: .6rem; padding: 1px 5px; top: 2px; right: 3px; }
 .pista{ flex: 1 1 100%; }
@@ -194,7 +194,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .zona-strip :focus-visible, .mesa-edit :focus-visible, .salon .mesa:focus-visible{ outline: 3px solid var(--ac); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce){.salon .lienzo .mesa{ transition: none; }
 .salon .mesa.arrastrando{ box-shadow: none; opacity: 1; }}
-.mesa-edit{margin:8px 0;padding:12px 14px;background:var(--card);border:2px solid var(--ac);border-radius:14px;box-shadow:var(--sombra)}
+.mesa-edit{margin:8px 0;padding:12px 14px;background:var(--card);border:2px solid var(--ac);border-radius:var(--r-md);box-shadow:var(--sombra)}
 .me-cab{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;color:var(--ink)}
 .me-nom{color:var(--ac);font-weight:700}
 .me-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 14px;align-items:end}
@@ -221,7 +221,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .mesa-item .nombre{font-size:1.05rem}
 .mesa-item .mi-est{font-size:.8rem;font-weight:600;opacity:.85}
 .mesa-item .importe{font-weight:700}
-.mesa-item .etiqueta-zona{font-size:.72rem;opacity:.75}
+.mesa-item .etiqueta-zona{font-size:.78rem;opacity:.75}
 .mesa-item .mi-quien{font-size:.78rem;font-weight:600;opacity:.9;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mesa-item.libre{background:var(--libre-bg);border-color:var(--libre-bd);color:var(--libre-ink)}
 .mesa-item.ocupada{background:var(--ocupada-bg);border-color:var(--ocupada-bd);color:var(--ocupada-ink)}
@@ -244,7 +244,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
   max-width:calc(max(200px,calc(100dvh - var(--lienzo-descuento))) * 1000 / 600);
   margin:0 auto;
   border:2px solid var(--line-fuerte);
-  border-radius:14px;
+  border-radius:var(--r-md);
   background-color:var(--lienzo);
   overflow:hidden;
 }
@@ -293,7 +293,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .salon .mapa-col.editando .lienzo-area{order:3;align-self:center;width:100%;--lienzo-descuento:340px}
 .salon .mapa-col.editando .mesa-edit{
     order:4;position:static;z-index:auto;margin:0;
-    border:2px solid var(--ac);border-radius:14px;box-shadow:none;
+    border:2px solid var(--ac);border-radius:var(--r-md);box-shadow:none;
     padding:10px 12px calc(10px + env(safe-area-inset-bottom));
     max-height:44vh;overflow-y:auto;
   }
@@ -303,12 +303,12 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .me-opc{font-size:1.2rem;line-height:1;padding:4px}
 
 /* Para llevar */
-.llevar-n { margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--accent, #2563eb); color: #fff; font-size: .72rem; font-weight: 700; display: inline-block; text-align: center; }
+.llevar-n { margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--accent, #2563eb); color: #fff; font-size: .78rem; font-weight: 700; display: inline-block; text-align: center; }
 .llevar { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
 .llevar-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .llevar-form input { flex: 1 1 180px; min-width: 0; }
 .llevar-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
-.llevar-card { border: 1px solid var(--line); border-radius: 12px; background: var(--card, #fff); padding: 8px; display: flex; flex-direction: column; gap: 6px; border-left: 5px solid var(--libre); }
+.llevar-card { border: 1px solid var(--line); border-radius:var(--r-md); background: var(--card, #fff); padding: 8px; display: flex; flex-direction: column; gap: 6px; border-left: 5px solid var(--libre); }
 .llevar-card.ocupada { border-left-color: var(--ocupada, #f59e0b); }
 .llevar-card.enviada { border-left-color: var(--enviada, #3b82f6); }
 .llevar-card.porcobrar { border-left-color: var(--porcobrar, #16a34a); }
@@ -332,7 +332,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .salon .mapa-col.editando .lienzo-bloque .lienzo-area{ order:initial; --lienzo-descuento:385px; }}
 
 /* Editar salón: panel con botones que SÍ dicen para qué sirven (en el teléfono solo se veían iconos). */
-.zona-panel{ display:none; flex-direction:column; gap:8px; padding:10px; margin:6px 0; border:1px dashed var(--ac); border-radius:12px; background:var(--card); }
+.zona-panel{ display:none; flex-direction:column; gap:8px; padding:10px; margin:6px 0; border:1px dashed var(--ac); border-radius:var(--r-md); background:var(--card); }
 .zona-panel .zp-nom{ font-size:1rem; }
 .zona-panel .zp-acc{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .zona-panel .zp-acc button{ width:100%; min-height:44px; white-space:normal; }
@@ -343,3 +343,19 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
   .salon .mapa-col.editando .ztools{ display:none; }
   .salon .vt .txt{ display:inline; }
 }
+
+/* ── v0.43.2 ───────────────────────────────────────────────────────────── */
+/* Mapa centrado y más ancho: la proporción (--asp) la calcula HallPage según el espacio libre. */
+.lienzo-bloque{ display:flex; flex-direction:column; align-items:center; width:100%; }
+.lienzo-bloque[hidden]{ display:none; }
+.salon .lienzo-area{
+  aspect-ratio:var(--asp, 1.6667);
+  max-width:calc(max(200px,calc(100vh - var(--lienzo-descuento))) * var(--asp, 1.6667));
+  max-width:calc(max(200px,calc(100dvh - var(--lienzo-descuento))) * var(--asp, 1.6667));
+  margin:0;
+}
+/* Mesa: número grande + consumo debajo (sin repetir «Mesa N»). */
+.salon .mesa:not(.libre) .nombre{ font-size:min(40cqw,34cqh); }
+.salon .mesa .importe{ font-size:min(19cqw,16cqh); font-weight:750; line-height:1.1; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; display:block; }
+@container (max-height: 40px){ .salon .mesa .importe{ display:none; } }
+@media (max-width:480px){ .salon .mesa .importe{ display:block; } }

@@ -313,7 +313,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
 
         <section className="caja-card">
           <div className="caja-head"><h2>{t('caja.ticketsTurno')}</h2><span className="sp" />
-            <button className="info" onClick={pdfDelTurno} disabled={!resumen.tickets.length}>📄 {t('cierrePdf.boton')}</button>
+            <button className="ghost" onClick={pdfDelTurno} disabled={!resumen.tickets.length}>📄 {t('cierrePdf.boton')}</button>
             <button className="primary" onClick={imprimirResumen} disabled={!resumen.tickets.length}>{t('caja.imprimirResumen')}</button>
           </div>
           <p className="caja-nota">{tOr('caja.ticketsAyuda', 'Cuentas ya cobradas en este turno, de mesas y de mostrador.')}</p>

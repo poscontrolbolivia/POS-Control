@@ -2,7 +2,7 @@
 .est-nombre{font-size:1.05rem}
 .est-fallo{background:var(--danger-bg);color:var(--danger)}
 .est-cola{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.est-job{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+.est-job{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-sm)}
 .est-job.error{border-color:var(--danger)}
 .est-hora{font-variant-numeric:tabular-nums;opacity:.7;font-size:.85rem}
 .est-titulo{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}

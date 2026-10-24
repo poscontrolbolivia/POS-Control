@@ -19,6 +19,8 @@ const TAM_MIN = 60
 const PASO_TAM = 25
 const ZOOM_MIN = 0.6, ZOOM_MAX = 2.5, ZOOM_PASO = 0.25
 const MAX_PX_MOVIL = 768
+const ASP_BASE = W / H
+const ASP_MAX = 2.6
 
 const estadoMesa = c => (!c ? 'libre' : c.estado === 'precuenta' ? 'porcobrar' : c.items.some(i => i.estado === 'enviado') ? 'enviada' : 'ocupada')
 
@@ -92,6 +94,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   const [cli, setCli] = useState(null)
   const [aMesa, setAMesa] = useState(null)
   const [llevarSelId, setLlevarSelId] = useState(null)
+  const esperaLlevar = useRef(null)
 
   const [aviso, setAviso] = useState('')
   const avisoTimer = useRef(null)
@@ -140,10 +143,29 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   const [mueve, setMueve] = useState(null)
   const of = useRef(null)
   const lienzo = useRef(null)
+  const bloque = useRef(null)
+  // El mapa se ensancha para aprovechar la pantalla: más proporción horizontal, mesas del mismo tamaño.
+  const [asp, setAsp] = useState(ASP_BASE)
   const [movil, setMovil] = useState(() => typeof window !== 'undefined' && window.innerWidth <= MAX_PX_MOVIL)
   useViewport(setMovil)
 
   const zonas = useMemo(() => ordenarZonas(s.zonas), [s.zonas])
+  useEffect(() => {
+    const calc = () => {
+      const bl = bloque.current
+      const area = bl?.firstElementChild
+      if (!bl || !area || !bl.clientWidth) return
+      const desc = parseFloat(getComputedStyle(area).getPropertyValue('--lienzo-descuento')) || 330
+      const alto = Math.max(200, window.innerHeight - desc)
+      const a = Math.max(ASP_BASE, Math.min(ASP_MAX, bl.clientWidth / alto))
+      setAsp(prev => (Math.abs(prev - a) > 0.01 ? Math.round(a * 100) / 100 : prev))
+    }
+    calc()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(calc) : null
+    if (ro && bloque.current) ro.observe(bloque.current)
+    window.addEventListener('resize', calc)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', calc) }
+  }, [edit, vista, activo === LLEVAR])
 
   const activo = zona === TODAS || zona === LLEVAR || zonas.some(z => z.id === zona) ? zona : (zonas[0]?.id ?? TODAS)
   // «Para llevar» no es un salón: si fuera destino de alta, la mesa nacería con una zona inexistente.
@@ -154,16 +176,20 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   const iZonaAct = zonaAct ? zonas.indexOf(zonaAct) : -1
   const enLlevar = activo === LLEVAR
   const llevarCuentas = s.cuentas.filter(c => c.canal === 'llevar' && c.estado !== 'cerrada').sort((a, b) => (a.numero || 0) - (b.numero || 0))
-  const llevarSel = llevarSelId ? llevarCuentas.find(c => c.id === llevarSelId) : null
+  // Al sincronizar con el servidor el pedido recién creado cambia de id: se resuelve en el mismo render
+  // (sin soltar el panel un instante), así no hay parpadeo ni se reabre.
+  const llevarSel = llevarSelId
+    ? (llevarCuentas.find(c => c.id === llevarSelId)
+      || (esperaLlevar.current ? llevarCuentas.find(c => !esperaLlevar.current.has(c.id)) : null) || null)
+    : null
   const mesasLibres = s.mesas.filter(m => cuentasDeMesa(s, m.id).length === 0)
   // En modo servidor el pedido recién creado cambia de id al sincronizar: sin esto el panel se cerraba
   // solo y el pedido «no dejaba comandar». Se vuelve a enganchar al pedido nuevo que aparece.
-  const esperaLlevar = useRef(null)
   useEffect(() => {
-    if (!llevarSelId || llevarSel || !esperaLlevar.current) return
-    const nueva = llevarCuentas.find(c => !esperaLlevar.current.has(c.id))
-    if (nueva) { esperaLlevar.current = null; setLlevarSelId(nueva.id) }
-  }, [llevarSelId, llevarSel, llevarCuentas.length])
+    if (!llevarSelId || !esperaLlevar.current || !llevarSel || llevarSel.id === llevarSelId) return
+    esperaLlevar.current = null
+    setLlevarSelId(llevarSel.id)
+  }, [llevarSelId, llevarSel?.id])
   useEffect(() => {
     if (!enLlevar || modo !== 'supabase') return undefined
     const id = setInterval(() => { if (!document.hidden) window.dispatchEvent(new Event('pos-reanudar')) }, 20000)
@@ -537,8 +563,8 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           </div>
         )}
 
-        <div className="lienzo-bloque" hidden={(vista === 'lista' && !edit) || enLlevar}>
-        <div className="lienzo-area">
+        <div className="lienzo-bloque" ref={bloque} hidden={(vista === 'lista' && !edit) || enLlevar}>
+        <div className="lienzo-area" style={{ ['--asp']: String(asp) }}>
           <div className="lienzo-wrap">
             <div ref={lienzo} className={'lienzo' + (edit ? ' edit' : '')} style={{ ['--z']: String(zoom) }}
               onPointerDown={e => { if (e.target === e.currentTarget) setSel(null) }}
@@ -559,9 +585,9 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
             return (
               <div key={m.id} className={`mesa ${m.forma} ${est}${sel === m.id ? ' sel' : ''}${mueve?.id === m.id ? ' arrastrando' : ''}`}
                 title={sub}
-                onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) abrirMesa(m.id) }} style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%`, width: `${(p.w / W) * 100}%`, height: `${(p.h / H) * 100}%` }}>
+                onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) abrirMesa(m.id) }} style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%`, width: `${(p.w / W) * 100 * (ASP_BASE / asp)}%`, height: `${(p.h / H) * 100}%` }}>
                 <b className="nombre">{num || m.nombre}</b>
-                {num && <span className="mesa-nom">{m.nombre}</span>}
+                {c && <span className="importe">{money(resto)}</span>}
                 {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
                 {c && heredadas.includes(c.id) && <span className="badge-heredada" title={t('salon.heredadaTitle')}>↩</span>}
                 {!unida && cs.length > 1 && <span className="badge-unida" title={t('pedido.menuDividir')}>✂ ×{cs.length}</span>}
@@ -650,7 +676,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
         onClose={() => {
           // Venía de Caja a cobrar: se cierra la vista de cobro y vuelve a Caja, no se queda suelto en el Salón.
           const eraCobro = cobro
-          setCobro(false); setSel(null); setLlevarSelId(null)
+          setCobro(false); setSel(null); setLlevarSelId(null); esperaLlevar.current = null
           if (eraCobro) onVolverCaja?.()
         }} bloqueado={edit} />
     </div>

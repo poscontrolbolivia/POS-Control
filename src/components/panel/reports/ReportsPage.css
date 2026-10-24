@@ -20,14 +20,14 @@
 
 .rp-aviso{
   background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-ink);
-  border-radius:12px;padding:10px 12px;font-size:.9rem;font-weight:600}
+  border-radius:var(--r-md);padding:10px 12px;font-size:.9rem;font-weight:600}
 .rp-nota{margin:10px 0 0;color:var(--mut);font-size:.85rem}
 
 .rp-tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
 .rp-tarjeta{
-  background:var(--card-2);border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;
+  background:var(--card-2);border:1.5px solid var(--line);border-radius:var(--r-md);padding:10px 12px;
   display:flex;flex-direction:column;gap:3px;min-width:0}
-.rp-tarjeta span{font-size:.74rem;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.02em}
+.rp-tarjeta span{font-size:.78rem;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.02em}
 .rp-tarjeta b{font-size:1.05rem;color:var(--ink);overflow-wrap:anywhere}
 .rp-destacada{border-color:var(--ac)}
 .rp-destacada b{color:var(--ac)}
@@ -48,7 +48,7 @@
 .rp-zonas{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
 
 .rp-filtro{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--verde-bg);border:1.5px solid var(--verde-bd);
-  border-radius:14px;padding:8px 12px;font-size:.92rem}
+  border-radius:var(--r-md);padding:8px 12px;font-size:.92rem}
 .rp-filtro b{color:var(--verde-txt)}
 .rp-filtro-x{flex:0 0 auto;width:38px;height:38px;border-radius:50%;border:1.5px solid var(--line-fuerte);
   background:var(--card);color:var(--ink);font-weight:700;cursor:pointer}
@@ -64,9 +64,9 @@
 
 .rp-mesa-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .rp-mesa-card{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-height:84px;min-width:0;padding:10px 12px;
-  border-radius:14px;border:2px solid var(--line-fuerte);text-align:left;font:inherit;cursor:pointer;overflow-wrap:anywhere}
+  border-radius:var(--r-md);border:2px solid var(--line-fuerte);text-align:left;font:inherit;cursor:pointer;overflow-wrap:anywhere}
 .rp-mesa-card b{font-size:1.02rem;font-weight:700;line-height:1.2}
-.rp-mesa-card .rp-mesa-zona{font-size:.72rem;opacity:.75;min-height:0}
+.rp-mesa-card .rp-mesa-zona{font-size:.78rem;opacity:.75;min-height:0}
 .rp-mesa-card .rp-mesa-zona:empty{display:none}
 .rp-mesa-card .rp-mesa-monto{font-weight:700;font-variant-numeric:tabular-nums}
 .rp-mesa-card small{font-size:.78rem;opacity:.9}

@@ -2,7 +2,7 @@
 .dt-search{flex:1 1 220px;min-width:180px}
 
 .sheet{
-  background:var(--card);border:1px solid var(--line);border-radius:14px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
   overflow:auto;box-shadow:0 4px 14px rgba(0,0,0,.05)}
 .sheet table{border-collapse:collapse;width:100%;min-width:560px}
 .sheet th,.sheet td{
@@ -33,7 +33,7 @@
 .sheet td.empty{color:var(--mut);text-align:center;padding:22px 12px;font-style:italic}
 
 @media (max-width:640px){
-  .sheet{border-radius:12px}
+  .sheet{border-radius:var(--r-md)}
   .sheet th,.sheet td{padding:8px 9px;font-size:.84rem}
 }
 @media (prefers-reduced-motion:reduce){

@@ -48,8 +48,8 @@ export default function ComprobanteQr({ valor, onCambio }) {
         <span role="status">{t('comp.subiendo')}</span>
       ) : (
         <>
-          <button type="button" className="info" onClick={() => camara.current?.click()}>📷 {t('comp.tomar')}</button>
-          <button type="button" className="info" onClick={() => galeria.current?.click()}>🖼 {t('comp.subir')}</button>
+          <button type="button" className="ghost" onClick={() => camara.current?.click()}>📷 {t('comp.tomar')}</button>
+          <button type="button" className="ghost" onClick={() => galeria.current?.click()}>🖼 {t('comp.subir')}</button>
           <small className="cq-omitir">{t('comp.omitir')}</small>
         </>
       )}

@@ -49,8 +49,8 @@
 
 /* Subidas de logo y QR de pago dentro de «Datos del negocio» */
 .cfg-imagenes{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px}
-.cfg-img{display:flex;gap:12px;align-items:flex-start;flex:1 1 340px;border:1.5px solid var(--line);border-radius:14px;padding:12px;background:var(--card-2)}
-.cfg-img-vista{width:92px;height:92px;flex:0 0 auto;border-radius:12px;border:1px dashed var(--line-fuerte);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--card)}
+.cfg-img{display:flex;gap:12px;align-items:flex-start;flex:1 1 340px;border:1.5px solid var(--line);border-radius:var(--r-md);padding:12px;background:var(--card-2)}
+.cfg-img-vista{width:92px;height:92px;flex:0 0 auto;border-radius:var(--r-md);border:1px dashed var(--line-fuerte);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--card)}
 .cfg-img-vista img{max-width:100%;max-height:100%;object-fit:contain}
 /* El QR se muestra entero sobre fondo blanco para no perder nitidez */
 .cfg-img-qr .cfg-img-vista{background:#fff}
@@ -78,7 +78,7 @@
 .plan-chip{font-weight:650}
 .plan-chip-premium{background:var(--logo-green);color:var(--on-btn);border-color:var(--logo-green)}
 .plan-vigencia{font-size:.95rem}
-.plan-uso{display:flex;flex-wrap:wrap;gap:8px 16px;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--card-2)}
+.plan-uso{display:flex;flex-wrap:wrap;gap:8px 16px;border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;background:var(--card-2)}
 .plan-uso-item{display:inline-flex;align-items:baseline;gap:6px}
 .plan-uso-item b{font-size:1.05rem}
 .plan-uso-tope{color:var(--mut)}

@@ -3,19 +3,19 @@
 
 .eq-error{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  background:var(--danger-bg);border:1px solid var(--danger-bd);color:var(--danger);border-radius:12px;
+  background:var(--danger-bg);border:1px solid var(--danger-bd);color:var(--danger);border-radius:var(--r-md);
   padding:10px 12px;font-size:.88rem;font-weight:600;
 }
 .eq-error button{min-height:36px;padding:5px 12px;font-size:.84rem;background:var(--card);border-color:var(--danger-bd);color:var(--danger)}
 .eq-ok{
-  background:var(--ok-bg);border:1px solid var(--ok-bd);color:var(--ok);border-radius:12px;
+  background:var(--ok-bg);border:1px solid var(--ok-bd);color:var(--ok);border-radius:var(--r-md);
   padding:10px 12px;font-size:.9rem;font-weight:600;
 }
 .eq-ayuda{margin:0;color:var(--mut);font-size:.82rem;line-height:1.45}
 
-.eq-lista{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;padding:0 10px;background:var(--card)}
+.eq-lista{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r-md);padding:0 10px;background:var(--card)}
 .eq-cab,.eq-cab-movil{
-  color:var(--mut);font-size:.72rem;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  color:var(--mut);font-size:.78rem;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
 }
 .eq-cab{
   display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.6fr) auto auto minmax(0,auto);
@@ -37,7 +37,7 @@
 .eq-alta{color:var(--mut);font-size:.85rem;white-space:nowrap;font-variant-numeric:tabular-nums}
 
 .eq-rol{
-  display:inline-flex;align-items:center;text-transform:lowercase;font-size:.75rem;font-weight:700;
+  display:inline-flex;align-items:center;text-transform:lowercase;font-size:.78rem;font-weight:700;
   padding:3px 10px;border-radius:999px;color:var(--on-btn);background:var(--mut);white-space:nowrap;
 }
 .eq-rol-admin{background:var(--rol-admin)}
@@ -56,7 +56,7 @@
 
 .eq-clave{
   grid-column:1 / -1;display:flex;flex-direction:column;gap:8px;
-  background:var(--libre);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;
+  background:var(--libre);border:1px dashed var(--line);border-radius:var(--r-md);padding:10px 12px;
 }
 .eq-clave-titulo{font-size:.9rem}
 .eq-clave-nombre{color:var(--ac)}
@@ -68,7 +68,7 @@
 /* El formulario de invitación vive dentro de la ventana (Ventana.jsx), así que ya no necesita filete propio. */
 .eq-invitar{display:flex;flex-direction:column;gap:10px;min-width:0}
 .eq-campos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 12px}
-.eq-bloque .adm-campo select{min-height:46px;font-size:1rem;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 10px}
+.eq-bloque .adm-campo select{min-height:46px;font-size:1rem;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:var(--r-sm);padding:8px 10px}
 
 @media (max-width:600px){
   .eq-cab{display:none}

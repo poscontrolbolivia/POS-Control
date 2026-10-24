@@ -4,6 +4,10 @@ import { useIdioma } from '../../../i18n/index.jsx'
 import { useMoneda } from '../../../services/money.js'
 import { rpc, mensajeError } from '../../../services/supabaseClient.js'
 import { limpiarMonto, numMonto } from '../../../services/format.js'
+import { puede } from '../../../services/permissions.js'
+import { equivalencia, resolverCantidad, costoDePresentacion, aplicarEntrada, MOTIVOS_MERMA, MOTIVO_ETIQUETA, round3 } from '../../../services/inventario.js'
+import CantidadUnidad from './CantidadUnidad.jsx'
+import MermasTab from './MermasTab.jsx'
 import ProveedoresTab from './ProveedoresTab.jsx'
 import CuentasTab from './CuentasTab.jsx'
 import './InventoryPage.css'
@@ -12,6 +16,7 @@ const DIAS = [7, 30, 90]
 const LOCALE = { es: 'es', en: 'en-GB', pt: 'pt-BR' }
 
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+const presentacionesActivasDe = i => (Array.isArray(i?.presentaciones) ? i.presentaciones : []).filter(p => p && p.activo !== false && num(p.cantidad) > 0)
 
 // En el schema (tabla insumos / insumos_movimientos / recetas) stock, stock_min y las cantidades
 // son numeric(12,3): admiten 3 decimales, NO son enteros. Por eso las cantidades usan un sanitizer
@@ -22,7 +27,14 @@ const limpiarCant = txt => {
   return m ? m[0] : ''
 }
 const normalizarCant = v => { const n = Number(v); return v !== '' && Number.isFinite(n) ? String(n) : '' }
-const normalizarCosto = v => (v !== '' ? numMonto(v).toFixed(2) : '')
+// El costo por unidad base admite 4 decimales (numeric(14,4)): Bs 0,0425 por gramo.
+const limpiarCosto = txt => {
+  const s = String(txt ?? '').replace(/[^0-9.,]/g, '').replace(',', '.')
+  const m = s.match(/^\d*\.?\d{0,4}/)
+  return m ? m[0] : ''
+}
+const normalizarCosto = v => (v !== '' ? String(Math.round(numMonto(v) * 10000) / 10000) : '')
+let kPres = 0
 
 const CADUCA_PREGUNTA = 4000
 const CADUCA_AVISO = 5000
@@ -34,6 +46,8 @@ export default function InventoryPage({ rol, sesion }) {
   const locale = LOCALE[idiom] || 'es'
   const fmtNum = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }), [locale])
   const fmt = v => fmtNum.format(num(v))
+  const fmtCosto = useMemo(() => new Intl.NumberFormat(locale, { maximumFractionDigits: 4 }), [locale])
+  const fmtC = v => fmtCosto.format(num(v))
   const fmtFecha = iso => {
     const d = new Date(iso)
     return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(locale, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -75,6 +89,9 @@ export default function InventoryPage({ rol, sesion }) {
   const [errorMovs, setErrorMovs] = useState('')
 
   const esAdmin = rol === 'admin'
+  // ver_inventario: ve la pantalla; gestionar_inventario: además escribe (el servidor lo vuelve a validar en cada RPC).
+  const puedeVer = puede(rol, 'ver_inventario')
+  const puedeGestionar = puede(rol, 'gestionar_inventario')
   const enBase = modo === 'supabase'
   const quien = sesion?.nombre || sesion?.usuario || ''
   const ocupado = guardando || movEnVio || guardandoRec || Boolean(borrandoId)
@@ -107,9 +124,9 @@ export default function InventoryPage({ rol, sesion }) {
   }
 
   useEffect(() => {
-    if (esAdmin && enBase) cargar()
+    if (puedeVer && enBase) cargar()
 
-  }, [esAdmin, enBase])
+  }, [puedeVer, enBase])
 
   const cargarMovs = async () => {
     setCargandoMovs(true)
@@ -124,9 +141,9 @@ export default function InventoryPage({ rol, sesion }) {
     }
   }
   useEffect(() => {
-    if (esAdmin && enBase && pestana === 'movimientos') cargarMovs()
+    if (puedeVer && enBase && pestana === 'movimientos') cargarMovs()
 
-  }, [pestana, dias, esAdmin, enBase])
+  }, [pestana, dias, puedeVer, enBase])
 
   // En demo los movimientos ya salen del store (los escriben el cobro y las pestañas de Insumos).
   const movs = useMemo(() => {
@@ -195,7 +212,7 @@ export default function InventoryPage({ rol, sesion }) {
 
   const abrirNuevo = () => {
     setError(''); setFormErr(''); setMov(null)
-    setForm({ id: undefined, nombre: '', unidad: '', stock: '', stock_min: '', costo: '', activo: true })
+    setForm({ id: undefined, nombre: '', unidad: '', stock: '', stock_min: '', minSel: 'base', costo: '', activo: true, presentaciones: [], con_merma: false, rendimiento_esp: '' })
   }
   const abrirEditar = i => {
     setError(''); setFormErr(''); setMov(null); cerrarConfirmar()
@@ -205,10 +222,20 @@ export default function InventoryPage({ rol, sesion }) {
       unidad: i.unidad || '',
       stock: String(i.stock ?? ''),
       stock_min: String(i.stock_min ?? ''),
+      minSel: 'base',
       costo: String(i.costo ?? ''),
       activo: Boolean(i.activo),
+      presentaciones: (Array.isArray(i.presentaciones) ? i.presentaciones : []).map(p => ({
+        k: ++kPres, id: p.id || '', nombre: p.nombre || '', cantidad: String(p.cantidad ?? ''),
+        costo: p.costo === null || p.costo === undefined ? '' : String(p.costo), activo: p.activo !== false, principal: Boolean(p.principal) })),
+      con_merma: Boolean(i.con_merma),
+      rendimiento_esp: i.rendimiento_esp === null || i.rendimiento_esp === undefined ? '' : String(i.rendimiento_esp),
     })
   }
+  const cambiarPres = (ix, k, v) => { setForm(f => ({ ...f, presentaciones: f.presentaciones.map((p, j) => (j === ix ? { ...p, [k]: v } : p)) })); setFormErr('') }
+  const marcarPrincipal = ix => setForm(f => ({ ...f, presentaciones: f.presentaciones.map((p, j) => ({ ...p, principal: j === ix ? !p.principal : false })) }))
+  const anadirPres = () => setForm(f => ({ ...f, presentaciones: [...f.presentaciones, { k: ++kPres, id: '', nombre: '', cantidad: '', costo: '', activo: true, principal: !f.presentaciones.some(p => p.principal) }] }))
+  const quitarPres = ix => setForm(f => ({ ...f, presentaciones: f.presentaciones.filter((_, j) => j !== ix) }))
   const setCampo = k => e => { setForm(f => ({ ...f, [k]: e.target.value })); setFormErr('') }
 
   const guardarInsumo = async e => {
@@ -223,15 +250,32 @@ export default function InventoryPage({ rol, sesion }) {
         return
       }
     }
+    for (const p of form.presentaciones) {
+      if (!p.nombre.trim() || !(Number(p.cantidad) > 0)) {
+        setFormErr(tOr('inventario.presInvalida', 'Cada presentación necesita un nombre y una cantidad mayor que 0.'))
+        return
+      }
+    }
+    const rend = form.rendimiento_esp === '' ? null : Number(String(form.rendimiento_esp).replace(',', '.'))
+    if (rend !== null && !(rend > 0 && rend <= 100)) {
+      setFormErr(tOr('inventario.rendInvalido', 'El rendimiento esperado debe estar entre 1 y 100 %.'))
+      return
+    }
+    const minBase = resolverCantidad({ unidad: form.unidad, presentaciones: form.presentaciones.filter(p => p.id).map(p => ({ ...p, cantidad: Number(p.cantidad) })) }, form.stock_min, form.minSel).base
     setFormErr(''); setError(''); setGuardando(true)
     const nuevo = {
       ...(form.id ? { id: form.id } : {}),
       nombre: form.nombre.trim(),
       unidad: form.unidad.trim(),
       stock: numMonto(form.stock),
-      stock_min: numMonto(form.stock_min),
-      costo: numMonto(form.costo),
+      stock_min: minBase,
+      costo: Math.round(numMonto(form.costo) * 10000) / 10000,
       activo: Boolean(form.activo),
+      con_merma: Boolean(form.con_merma),
+      rendimiento_esp: rend,
+      presentaciones: form.presentaciones.map(p => ({
+        ...(p.id ? { id: p.id } : {}), nombre: p.nombre.trim(), cantidad: round3(Number(p.cantidad)),
+        costo: p.costo === '' ? null : numMonto(p.costo), activo: Boolean(p.activo), principal: Boolean(p.principal) })),
     }
     try {
       if (enBase) await rpc('insumo_guardar', { p_insumo: nuevo })
@@ -274,24 +318,50 @@ export default function InventoryPage({ rol, sesion }) {
 
   const abrirMov = (i, tipo) => {
     setError(''); setMovErr(''); setForm(null); cerrarConfirmar()
-    setMov(c => (c && c.insumoId === i.id && c.tipo === tipo ? null : { insumoId: i.id, tipo, cantidad: '', nota: '' }))
+    setMov(c => (c && c.insumoId === i.id && c.tipo === tipo ? null : { insumoId: i.id, tipo, cantidad: '', sel: 'base', nota: '', limpio: '', limpioSel: 'base', costoTotal: '', motivo: 'desecho' }))
+  }
+  // Misma regla que private.insumo_mover en el servidor: conversión de presentaciones y unidades,
+  // rendimiento de limpieza y costo promedio ponderado sobre lo limpio.
+  const analizarMov = (i, m) => {
+    if (!i || !m) return null
+    const r = resolverCantidad(i, m.cantidad, m.sel)
+    const out = { r, base: r.base, stock: null, costo: num(i.costo), det: {}, limpio: null, costoTotal: null, error: '' }
+    if (m.tipo === 'ajuste' ? m.cantidad === '' : !(r.base > 0)) return out
+    if (m.tipo === 'entrada') {
+      if (i.con_merma && m.limpio !== '') out.limpio = resolverCantidad({ unidad: i.unidad, presentaciones: [] }, m.limpio, m.limpioSel).base
+      out.costoTotal = m.costoTotal !== '' ? numMonto(m.costoTotal) : null
+      let ct = out.costoTotal
+      if (!(ct > 0) && r.pres && num(r.pres.costo) > 0) ct = Math.round(r.cantPres * num(r.pres.costo) * 100) / 100
+      try {
+        const e = aplicarEntrada(i, { cantidad: r.base, limpio: out.limpio, costoTotal: ct })
+        out.stock = e.stock; out.costo = e.costo; out.det = e.detalle
+      } catch (ex) { out.error = tOr('inventario.limpioInvalido', 'El peso limpio debe ser mayor que 0 y no superar lo recibido.') }
+    } else if (m.tipo === 'salida' || m.tipo === 'merma') out.stock = round3(num(i.stock) - r.base)
+    else out.stock = r.base
+    return out
   }
   const enviarMov = async e => {
     e.preventDefault()
     if (!mov || ocupado) return
     const i = insumoPorId.get(mov.insumoId)
-    const cantidad = numMonto(mov.cantidad)
-    if (!(cantidad > 0)) { setMovErr(tOr('inventario.cantidadInvalida', 'La cantidad debe ser un número mayor que 0.')); return }
+    const an = analizarMov(i, mov)
+    if (!an || (mov.tipo === 'ajuste' ? mov.cantidad === '' : !(an.base > 0))) { setMovErr(tOr('inventario.cantidadInvalida', 'La cantidad debe ser un número mayor que 0.')); return }
+    if (an.error) { setMovErr(an.error); return }
     setMovErr(''); setError(''); setMovEnVio(true)
     const nota = mov.nota.trim() || null
     try {
-      let nuevo = cantidad
+      let nuevo = an.stock
       if (enBase) {
-        nuevo = await rpc('insumo_movimiento', { p_insumo_id: mov.insumoId, p_tipo: mov.tipo, p_cantidad: cantidad, p_nota: nota })
+        nuevo = await rpc('insumo_movimiento', {
+          p_insumo_id: mov.insumoId, p_tipo: mov.tipo, p_nota: nota,
+          ...(an.r.presId ? { p_presentacion_id: an.r.presId, p_cant_pres: an.r.cantPres } : { p_cantidad: an.base }),
+          ...(mov.tipo === 'entrada' && an.limpio !== null ? { p_limpio: an.limpio } : {}),
+          ...(mov.tipo === 'entrada' && an.costoTotal > 0 ? { p_costo_total: an.costoTotal } : {}),
+          ...(mov.tipo === 'merma' ? { p_motivo: mov.motivo } : {}),
+        })
       } else {
-        const actual = num(i?.stock)
-        nuevo = mov.tipo === 'entrada' ? actual + cantidad : mov.tipo === 'salida' ? actual - cantidad : cantidad
-        d({ t: 'insumo-mov', id: mov.insumoId, tipo: mov.tipo, cantidad, nota, usuario: quien })
+        d({ t: 'insumo-mov', id: mov.insumoId, tipo: mov.tipo, cantidad: an.base, presId: an.r.presId, cantPres: an.r.cantPres,
+          limpio: an.limpio, costoTotal: an.costoTotal, motivo: mov.motivo, nota, usuario: quien })
       }
       setMov(null)
       avisar(`${i?.nombre ?? ''} — ${tOr('inventario.nuevoStock', 'Nuevo stock')}: ${fmt(nuevo)} ${i?.unidad ?? ''}`.trim())
@@ -345,14 +415,23 @@ export default function InventoryPage({ rol, sesion }) {
 
   const etiquetaTipo = t => {
     const clave = 'inventario.tipo.' + t
-    const defecto = { entrada: 'Entrada', salida: 'Salida', venta: 'Venta', ajuste: 'Ajuste' }[t] || String(t || '—')
+    const defecto = { entrada: 'Entrada', salida: 'Salida', venta: 'Venta', ajuste: 'Ajuste', merma: 'Merma' }[t] || String(t || '—')
     return tOr(clave, defecto)
   }
   const cantidadConSigno = m => {
     const n = num(m.cantidad)
-    if (m.tipo === 'salida' || m.tipo === 'venta') return '−' + fmt(Math.abs(n))
+    if (m.tipo === 'salida' || m.tipo === 'venta' || m.tipo === 'merma') return '−' + fmt(Math.abs(n))
     if (m.tipo === 'entrada') return '+' + fmt(Math.abs(n))
     return fmt(n)
+  }
+  // Nota del movimiento + detalle de rendimiento / motivo (los guarda el servidor en `detalle`).
+  const notaMov = m => {
+    const det = m?.detalle || {}
+    const partes = []
+    if (m?.nota) partes.push(m.nota)
+    if (det.bruto !== undefined) partes.push(`${tOr('inventario.bruto', 'Bruto')} ${fmt(det.bruto)} · ${tOr('inventario.limpio', 'limpio')} ${fmt(det.limpio)} · ${tOr('inventario.rendimiento', 'Rendimiento')} ${fmt(det.rendimiento)} % · ${tOr('inventario.mermaLimpieza', 'Merma de limpieza')} ${fmt(det.merma_limpieza)}`)
+    if (det.motivo) partes.push(`${tOr('inventario.motivoTitulo', 'Motivo')}: ${tOr('inventario.motivo.' + det.motivo, MOTIVO_ETIQUETA[det.motivo] || det.motivo)}`)
+    return partes.join(' · ')
   }
   const exportarCSV = () => {
     if (!movs.length) return
@@ -362,7 +441,7 @@ export default function InventoryPage({ rol, sesion }) {
       tOr('inventario.colCantidad', 'Cantidad'), tOr('inventario.colStock', 'Stock después'),
       tOr('inventario.colNota', 'Nota'), tOr('inventario.colUsuario', 'Usuario'),
     ]
-    const filas = movs.map(m => [fmtFecha(m.en), m.insumo_nombre, etiquetaTipo(m.tipo), cantidadConSigno(m), m.stock_after, m.nota || '', m.usuario_nombre || ''])
+    const filas = movs.map(m => [fmtFecha(m.en), m.insumo_nombre, etiquetaTipo(m.tipo), cantidadConSigno(m), m.stock_after, notaMov(m), m.usuario_nombre || ''])
     const csv = '\ufeff' + [cab, ...filas].map(f => f.map(esc).join(',')).join('\r\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     try {
@@ -375,7 +454,7 @@ export default function InventoryPage({ rol, sesion }) {
     }
   }
 
-  if (!esAdmin) {
+  if (!puedeVer) {
     return (
       <div className="inv-page">
         <div className="auth-aviso">{tOr('inventario.sinPermiso', 'Inventario: solo administrador.')}</div>
@@ -400,23 +479,19 @@ export default function InventoryPage({ rol, sesion }) {
             placeholder={tOr('inventario.pistaUnidad', 'kg, litro, unidad')} />
         </label>
         <label className="adm-campo">
-          <span>{tOr('inventario.stock', 'Stock')}</span>
+          <span>{tOr('inventario.stock', 'Stock')} ({form.unidad || tOr('inventario.unidadBase', 'unidad base')})</span>
           <input name="stock" type="text" inputMode="decimal" autoComplete="off" value={form.stock}
             onChange={e => { setForm(f => ({ ...f, stock: limpiarCant(e.target.value) })); setFormErr('') }}
             onBlur={() => setForm(f => ({ ...f, stock: normalizarCant(f.stock) }))}
             onFocus={e => e.target.select()} placeholder="0" />
         </label>
+        <CantidadUnidad ins={{ unidad: form.unidad, presentaciones: form.presentaciones.filter(p => p.id).map(p => ({ ...p, cantidad: Number(p.cantidad) })) }}
+          etiqueta={tOr('inventario.minimo', 'Mínimo')} valor={form.stock_min} sel={form.minSel} name="stock-min"
+          onValor={v => { setForm(f => ({ ...f, stock_min: v })); setFormErr('') }} onSel={v => setForm(f => ({ ...f, minSel: v }))} />
         <label className="adm-campo">
-          <span>{tOr('inventario.minimo', 'Mínimo')}</span>
-          <input name="stock-min" type="text" inputMode="decimal" autoComplete="off" value={form.stock_min}
-            onChange={e => { setForm(f => ({ ...f, stock_min: limpiarCant(e.target.value) })); setFormErr('') }}
-            onBlur={() => setForm(f => ({ ...f, stock_min: normalizarCant(f.stock_min) }))}
-            onFocus={e => e.target.select()} placeholder="0" />
-        </label>
-        <label className="adm-campo">
-          <span>{tOr('inventario.costo', 'Costo')} ({MONEDA})</span>
+          <span>{tOr('inventario.costoPorUnidad', 'Costo por unidad base')} ({MONEDA}{form.unidad ? ' / ' + form.unidad : ''})</span>
           <input name="costo" type="text" inputMode="decimal" autoComplete="off" value={form.costo}
-            onChange={e => { setForm(f => ({ ...f, costo: limpiarMonto(e.target.value) })); setFormErr('') }}
+            onChange={e => { setForm(f => ({ ...f, costo: limpiarCosto(e.target.value) })); setFormErr('') }}
             onBlur={() => setForm(f => ({ ...f, costo: normalizarCosto(f.costo) }))}
             onFocus={e => e.target.select()} placeholder="0" />
         </label>
@@ -424,6 +499,53 @@ export default function InventoryPage({ rol, sesion }) {
           <input name="activo" type="checkbox" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
           {tOr('inventario.activo', 'Activo')}
         </label>
+      </div>
+
+      <div className="inv-campos">
+        <label className="inv-check">
+          <input name="con-merma" type="checkbox" checked={Boolean(form.con_merma)} onChange={e => setForm(f => ({ ...f, con_merma: e.target.checked }))} />
+          {tOr('inventario.conMerma', 'Con merma de limpieza (al recibir se indica el peso limpio)')}
+        </label>
+        {form.con_merma && (
+          <label className="adm-campo">
+            <span>{tOr('inventario.rendEsperado', 'Rendimiento esperado (%)')}</span>
+            <input name="rendimiento-esp" type="text" inputMode="decimal" autoComplete="off" value={form.rendimiento_esp}
+              onChange={e => { setForm(f => ({ ...f, rendimiento_esp: limpiarMonto(e.target.value) })); setFormErr('') }}
+              onFocus={e => e.target.select()} placeholder="84" />
+          </label>
+        )}
+      </div>
+
+      <div className="inv-pres-lista">
+        <b>{tOr('inventario.presTitulo', 'Presentaciones (como las compras)')}</b>
+        <span className="adm-sub">{tOr('inventario.presAyuda', 'Cada presentación equivale a una cantidad en la unidad base. Ej.: «Botella 32 oz» = 32. El stock siempre se guarda en la unidad base.')}</span>
+        {form.presentaciones.map((p, ix) => (
+          <div key={p.k} className="inv-pres-fila">
+            <label className="adm-campo inv-pres-nombre">
+              <span>{tOr('inventario.presNombre', 'Nombre')}</span>
+              <input name="pres-nombre" value={p.nombre} maxLength={60} onChange={e => cambiarPres(ix, 'nombre', e.target.value)} placeholder={tOr('inventario.presPista', 'Botella 750 ml, Bolsa 5 kg…')} />
+            </label>
+            <label className="adm-campo">
+              <span>{tOr('inventario.presCantidad', 'Cantidad')} ({form.unidad || tOr('inventario.unidadBase', 'unidad base')})</span>
+              <input name="pres-cantidad" type="text" inputMode="decimal" autoComplete="off" value={p.cantidad} onChange={e => cambiarPres(ix, 'cantidad', limpiarCant(e.target.value))} onFocus={e => e.target.select()} placeholder="0" />
+            </label>
+            <label className="adm-campo">
+              <span>{tOr('inventario.presCosto', 'Costo de referencia')} ({MONEDA})</span>
+              <input name="pres-costo" type="text" inputMode="decimal" autoComplete="off" value={p.costo} onChange={e => cambiarPres(ix, 'costo', limpiarMonto(e.target.value))} onFocus={e => e.target.select()} placeholder="0" />
+            </label>
+            <label className="inv-check"><input type="checkbox" checked={Boolean(p.principal)} onChange={() => marcarPrincipal(ix)} />{tOr('inventario.presPrincipal', 'Principal')}</label>
+            <label className="inv-check"><input type="checkbox" checked={p.activo !== false} onChange={e => cambiarPres(ix, 'activo', e.target.checked)} />{tOr('inventario.activo', 'Activo')}</label>
+            {numMonto(p.costo) > 0 && numMonto(p.cantidad) > 0 && (
+              <button type="button" className="ghost" onClick={() => setForm(f => ({ ...f, costo: String(costoDePresentacion({ cantidad: numMonto(p.cantidad), costo: numMonto(p.costo) })) }))}>
+                {tOr('inventario.usarCosto', 'Usar como costo por unidad')}: {MONEDA} {fmtC(costoDePresentacion({ cantidad: numMonto(p.cantidad), costo: numMonto(p.costo) }))}
+              </button>
+            )}
+            <button type="button" className="danger" onClick={() => quitarPres(ix)}>✕ {tOr('inventario.quitarFila', 'Quitar')}</button>
+          </div>
+        ))}
+        <div className="adm-fila">
+          <button type="button" className="success" onClick={anadirPres}>＋ {tOr('inventario.anadirPres', 'Presentación')}</button>
+        </div>
       </div>
       {formErr && <span className="adm-msg warn">{formErr}</span>}
       <div className="adm-fila">
@@ -463,6 +585,10 @@ export default function InventoryPage({ rol, sesion }) {
         <button type="button" role="tab" aria-selected={pestana === 'movimientos'} className={'tab' + (pestana === 'movimientos' ? ' on' : '')} onClick={() => setPestana('movimientos')}>
           {tOr('inventario.tabMovimientos', 'Movimientos')}
         </button>
+        <button type="button" role="tab" aria-selected={pestana === 'mermas'} className={'tab' + (pestana === 'mermas' ? ' on' : '')} onClick={() => setPestana('mermas')}>
+          {tOr('inventario.tabMermas', 'Mermas')}
+        </button>
+        {esAdmin && <>
         <button type="button" role="tab" aria-selected={pestana === 'proveedores'} className={'tab' + (pestana === 'proveedores' ? ' on' : '')} onClick={() => setPestana('proveedores')}>
           {tOr('inventario.tabProveedores', 'Proveedores')}
         </button>
@@ -473,6 +599,7 @@ export default function InventoryPage({ rol, sesion }) {
         </button>
         <button type="button" className="success inv-tab-alta" title={tOr('inventario.deudaAltaTitulo', 'Registrar deuda')} aria-label={tOr('inventario.deudaAltaTitulo', 'Registrar deuda')}
           onClick={() => { setPestana('cuentas'); setCuentaAlta(true) }}>＋</button>
+        </>}
       </div>
 
       {error && (
@@ -488,9 +615,11 @@ export default function InventoryPage({ rol, sesion }) {
           <div className="adm-card-cab">
             <h3>{tOr('inventario.insumosTitulo', 'Insumos')}</h3>
             <span className="sp" />
-            <button type="button" className="primary" disabled={ocupado || Boolean(form)} onClick={abrirNuevo}>
-              ＋ {tOr('inventario.nuevoInsumo', 'Insumo')}
-            </button>
+            {puedeGestionar && (
+              <button type="button" className="primary" disabled={ocupado || Boolean(form)} onClick={abrirNuevo}>
+                ＋ {tOr('inventario.nuevoInsumo', 'Insumo')}
+              </button>
+            )}
           </div>
 
           {form && !form.id && bloqueForm}
@@ -511,15 +640,27 @@ export default function InventoryPage({ rol, sesion }) {
                         <div className="inv-datos">
                           <span className={'inv-stock ' + cls}>{fmt(i.stock)} <small>{i.unidad}</small></span>
                           <span className="inv-nombre">{i.nombre}{!i.activo && <em className="inv-inactivo"> · {tOr('inventario.inactivo', 'inactivo')}</em>}</span>
+                          {(() => {
+                            const eq = equivalencia(i)
+                            if (!eq) return null
+                            const otras = presentacionesActivasDe(i).filter(p => p.id !== eq.pres.id)
+                            return (
+                              <span className="inv-equiv">
+                                ≈ <b>{fmt(eq.n)} × {eq.pres.nombre}</b>{eq.resto > 0 ? ` + ${fmt(eq.resto)} ${i.unidad}` : ''}
+                                {otras.length > 0 && <> · {otras.map(p => `${fmt(round3(num(i.stock) / num(p.cantidad)))} × ${p.nombre}`).join(' · ')}</>}
+                              </span>
+                            )
+                          })()}
                           <span className="inv-dato">{tOr('inventario.minimo', 'Mínimo')}: {fmt(i.stock_min)}</span>
-                          <span className="inv-dato">{MONEDA} {fmt(i.costo)}</span>
+                          <span className="inv-dato">{MONEDA} {fmtC(i.costo)} / {i.unidad}</span>
                           <span className={'inv-chip-estado ' + cls}>
                             {cls === 'bajo' ? '🔴 ' + tOr('inventario.stockBajo', 'Stock bajo') : cls === 'medio' ? '🟠 ' + tOr('inventario.stockCerca', 'Cerca del mínimo') : '🟢 ' + tOr('inventario.stockOk', 'Bien')}
                           </span>
                         </div>
-                        <div className="inv-acciones">
+                        {puedeGestionar && <div className="inv-acciones">
                           <button type="button" className="success" disabled={ocupado} onClick={() => abrirMov(i, 'entrada')}>{tOr('inventario.entrada', 'Entrada')}</button>
                           <button type="button" className="orange" disabled={ocupado} onClick={() => abrirMov(i, 'salida')}>{tOr('inventario.salida', 'Salida')}</button>
+                          <button type="button" className="danger" disabled={ocupado} onClick={() => abrirMov(i, 'merma')}>{tOr('inventario.registrarMerma', 'Registrar merma')}</button>
                           <button type="button" className="ghost" disabled={ocupado} onClick={() => abrirMov(i, 'ajuste')}>{tOr('inventario.ajuste', 'Ajuste')}</button>
                           <button type="button" className="ghost" disabled={ocupado} onClick={() => (enForm ? setForm(null) : abrirEditar(i))}>
                             {enForm ? tOr('inventario.cerrar', 'Cerrar') : tOr('inventario.editar', 'Editar')}
@@ -531,34 +672,72 @@ export default function InventoryPage({ rol, sesion }) {
                                 ? tOr('inventario.seguro', '¿Seguro?')
                                 : tOr('inventario.borrar', 'Borrar')}
                           </button>
-                        </div>
+                        </div>}
 
-                        {enMov && (
-                          <form className="inv-mov" onSubmit={enviarMov}>
-                            <b>{tOr('inventario.mov', 'Registrar')} {etiquetaTipo((mov.tipo || '').toLowerCase())} · {i.nombre}</b>
-                            <div className="inv-mov-campos">
-                              <label className="adm-campo">
-                                <span>{tOr('inventario.cantidad', 'Cantidad')} ({i.unidad})</span>
-                                <input name="cantidad" autoFocus type="text" inputMode="decimal" autoComplete="off" value={mov.cantidad}
-                                  onChange={e => { setMov(m => ({ ...m, cantidad: limpiarCant(e.target.value) })); setMovErr('') }}
-                                  onBlur={() => setMov(m => (m ? { ...m, cantidad: normalizarCant(m.cantidad) } : m))}
-                                  onFocus={e => e.target.select()} placeholder="0" />
-                              </label>
-                              <label className="adm-campo inv-mov-nota">
-                                <span>{tOr('inventario.nota', 'Nota')}</span>
-                                <input name="pista-nota" type="text" value={mov.nota} onChange={e => setMov(m => ({ ...m, nota: e.target.value }))}
-                                  placeholder={tOr('inventario.pistaNota', 'opcional: motivo, proveedor…')} />
-                              </label>
-                            </div>
-                            {movErr && <span className="adm-msg warn">{movErr}</span>}
-                            <div className="adm-fila">
-                              <button type="submit" className="primary" disabled={movEnVio}>
-                                {movEnVio ? tOr('inventario.registrando', 'Registrando…') : tOr('inventario.registrar', 'Registrar')}
-                              </button>
-                              <button type="button" onClick={() => setMov(null)} disabled={movEnVio}>{tOr('inventario.cancelar', 'Cancelar')}</button>
-                            </div>
-                          </form>
-                        )}
+                        {enMov && (() => {
+                          const an = analizarMov(i, mov)
+                          const det = an?.det || {}
+                          const unid = i.unidad
+                          return (
+                            <form className="inv-mov" onSubmit={enviarMov}>
+                              <b>{tOr('inventario.mov', 'Registrar')} {etiquetaTipo((mov.tipo || '').toLowerCase())} · {i.nombre}</b>
+                              <div className="inv-mov-campos">
+                                <CantidadUnidad ins={i} autoFocus etiqueta={`${tOr('inventario.cantidad', 'Cantidad')}${mov.tipo === 'ajuste' ? ' (' + tOr('inventario.stockFinal', 'stock final') + ')' : ''}`}
+                                  valor={mov.cantidad} sel={mov.sel} onValor={v => { setMov(m => ({ ...m, cantidad: v })); setMovErr('') }} onSel={v => setMov(m => ({ ...m, sel: v }))} />
+                                {mov.tipo === 'merma' && (
+                                  <label className="adm-campo">
+                                    <span>{tOr('inventario.motivoTitulo', 'Motivo')}</span>
+                                    <select name="motivo" value={mov.motivo} onChange={e => setMov(m => ({ ...m, motivo: e.target.value }))}>
+                                      {MOTIVOS_MERMA.map(k => <option key={k} value={k}>{tOr('inventario.motivo.' + k, MOTIVO_ETIQUETA[k])}</option>)}
+                                    </select>
+                                  </label>
+                                )}
+                                {mov.tipo === 'entrada' && i.con_merma && (
+                                  <>
+                                    <CantidadUnidad ins={i} conPresentaciones={false} name="limpio" etiqueta={tOr('inventario.pesoLimpio', 'Peso limpio (opcional)')}
+                                      valor={mov.limpio} sel={mov.limpioSel} onValor={v => { setMov(m => ({ ...m, limpio: v })); setMovErr('') }} onSel={v => setMov(m => ({ ...m, limpioSel: v }))} />
+                                    {num(i.rendimiento_esp) > 0 && an?.base > 0 && (
+                                      <button type="button" className="ghost" onClick={() => {
+                                        const sug = round3(an.base * num(i.rendimiento_esp) / 100)
+                                        const sel = mov.limpioSel
+                                        const fac = resolverCantidad({ unidad: i.unidad }, 1, sel).base || 1
+                                        setMov(m => ({ ...m, limpio: String(round3(sug / fac)) }))
+                                      }}>{tOr('inventario.sugerirLimpio', 'Sugerir con')} {fmt(i.rendimiento_esp)} %</button>
+                                    )}
+                                  </>
+                                )}
+                                {mov.tipo === 'entrada' && (
+                                  <label className="adm-campo">
+                                    <span>{tOr('inventario.costoTotal', 'Total pagado (opcional)')} ({MONEDA})</span>
+                                    <input name="costo-total" type="text" inputMode="decimal" autoComplete="off" value={mov.costoTotal}
+                                      onChange={e => setMov(m => ({ ...m, costoTotal: limpiarMonto(e.target.value) }))} onFocus={e => e.target.select()} placeholder="0" />
+                                  </label>
+                                )}
+                                <label className="adm-campo inv-mov-nota">
+                                  <span>{tOr('inventario.nota', 'Nota')}</span>
+                                  <input name="pista-nota" type="text" value={mov.nota} onChange={e => setMov(m => ({ ...m, nota: e.target.value }))}
+                                    placeholder={tOr('inventario.pistaNota', 'opcional: motivo, proveedor…')} />
+                                </label>
+                              </div>
+                              {an && an.stock !== null && !an.error && (
+                                <div className="inv-aviso-calc">
+                                  {an.r.presId && <>{fmt(an.r.cantPres)} × {an.r.pres.nombre} = {fmt(an.base)} {unid} · </>}
+                                  {!an.r.presId && an.r.base !== num(mov.cantidad) && <>{fmt(mov.cantidad)} {mov.sel.slice(2)} = {fmt(an.base)} {unid} · </>}
+                                  {det.limpio !== undefined && <>{tOr('inventario.rendimiento', 'Rendimiento')} {fmt(det.rendimiento)} % · {tOr('inventario.mermaLimpieza', 'Merma de limpieza')} {fmt(det.merma_limpieza)} {unid} · </>}
+                                  {tOr('inventario.nuevoStock', 'Nuevo stock')}: <b>{fmt(an.stock)} {unid}</b>
+                                  {mov.tipo === 'entrada' && an.costo !== num(i.costo) && <> · {tOr('inventario.nuevoCosto', 'Costo por unidad')}: {MONEDA} {fmtC(an.costo)}</>}
+                                </div>
+                              )}
+                              {movErr && <span className="adm-msg warn">{movErr}</span>}
+                              <div className="adm-fila">
+                                <button type="submit" className="primary" disabled={movEnVio}>
+                                  {movEnVio ? tOr('inventario.registrando', 'Registrando…') : tOr('inventario.registrar', 'Registrar')}
+                                </button>
+                                <button type="button" onClick={() => setMov(null)} disabled={movEnVio}>{tOr('inventario.cancelar', 'Cancelar')}</button>
+                              </div>
+                            </form>
+                          )
+                        })()}
 
                         {enForm && bloqueForm}
                       </div>
@@ -580,7 +759,7 @@ export default function InventoryPage({ rol, sesion }) {
           </div>
           <p className="adm-sub">{tOr('inventario.recIntro', 'Vincula cada plato con sus insumos: al cobrar una venta, la base descuenta el stock según la receta.')}</p>
 
-          {!!productosMenu.length && (
+          {!!productosMenu.length && puedeGestionar && (
             <div className="adm-fila inv-receta-barra">
               <button type="button" className="success" disabled={guardandoRec || ocupado || !insumos.length} onClick={anadirLineaDesdeBarra}
                 title={!insumos.length ? tOr('inventario.primeroInsumos', 'Primero crea insumos en la pestaña Insumos.')
@@ -623,23 +802,24 @@ export default function InventoryPage({ rol, sesion }) {
                           {!lineas.length && <span className="adm-vacio">{tOr('inventario.sinLineas', 'Sin líneas todavía: añade la primera. (Dejar la receta vacía también es válido: guárdala sin líneas.)')}</span>}
                           {lineas.map((l, ix) => (
                             <div key={ix} className="inv-linea">
-                              <select name="insumo-id" className="inv-sel-insumo" value={l.insumo_id} onChange={e => cambiarLinea(ix, 'insumo_id', e.target.value)}>
+                              <select name="insumo-id" className="inv-sel-insumo" value={l.insumo_id} disabled={!puedeGestionar} onChange={e => cambiarLinea(ix, 'insumo_id', e.target.value)}>
                                 <option value="">{tOr('inventario.elegirInsumo', 'Elige un insumo')}</option>
                                 {insumos.map(i => (
                                   <option key={i.id} value={i.id}>{i.nombre} ({i.unidad}) · {tOr('inventario.disponibles', 'disponibles')}: {fmt(i.stock)}</option>
                                 ))}
                               </select>
-                              <input name="pista-cantidad" className="inv-cant" type="text" inputMode="decimal" autoComplete="off" value={l.cantidad}
+                              <input name="pista-cantidad" className="inv-cant" type="text" inputMode="decimal" autoComplete="off" value={l.cantidad} disabled={!puedeGestionar}
                                 onChange={e => cambiarLinea(ix, 'cantidad', limpiarCant(e.target.value))}
                                 onBlur={() => cambiarLinea(ix, 'cantidad', normalizarCant(l.cantidad))}
                                 onFocus={e => e.target.select()}
                                 placeholder={tOr('inventario.pistaCantidad', 'cantidad por preparación')} />
-                              <button type="button" className="danger" disabled={guardandoRec} onClick={() => quitarLinea(ix)}>✕</button>
+                              <span className="inv-unid">{insumoPorId.get(l.insumo_id)?.unidad || ''}</span>
+                              {puedeGestionar && <button type="button" className="danger" disabled={guardandoRec} onClick={() => quitarLinea(ix)}>✕</button>}
                             </div>
                           ))}
 
                           <div className="inv-receta-resumen">
-                            <span className="adm-chip">{tOr('inventario.costoTeorico', 'Costo teórico')}: {MONEDA} {fmt(analisisReceta.costo)}</span>
+                            <span className="adm-chip">{tOr('inventario.costoTeorico', 'Costo teórico')}: {MONEDA} {fmtC(analisisReceta.costo)}</span>
                             {analisisReceta.porciones !== null && (
                               <span className={'adm-chip' + (analisisReceta.insuficientes.length ? ' inv-chip-alerta' : '')}>
                                 {analisisReceta.porciones < 1
@@ -650,14 +830,14 @@ export default function InventoryPage({ rol, sesion }) {
                           </div>
 
                           {recErr && <span className="adm-msg warn">{recErr}</span>}
-                          <div className="adm-fila">
+                          {puedeGestionar && <div className="adm-fila">
                             <button type="button" className="primary" disabled={guardandoRec || ocupado} onClick={guardarReceta}>
                               {guardandoRec ? tOr('inventario.guardando', 'Guardando…') : tOr('inventario.guardarReceta', 'Guardar receta')}
                             </button>
                             <button type="button" disabled={guardandoRec} onClick={() => { setProdSel(null); setLineas([]); setRecErr('') }}>
                               {tOr('inventario.cancelar', 'Cancelar')}
                             </button>
-                          </div>
+                          </div>}
                         </div>
                       )}
                     </div>
@@ -716,21 +896,25 @@ export default function InventoryPage({ rol, sesion }) {
                         <span className={'inv-cantidad der inv-cantidad-' + t}>{cantidadConSigno(m)}</span>
                         <span className="der">{fmt(m.stock_after)}</span>
                         <span>{m.usuario_nombre || tOr('inventario.sistema', 'sistema')}</span>
-                        <span className="inv-nota">{m.nota || ''}</span>
+                        <span className="inv-nota">{notaMov(m)}</span>
                       </div>
                     )
                   })}
                 </div>
               )}
-          <p className="adm-sub">{tOr('inventario.movsNota', '«Venta» lo genera el sistema al cobrar (descuenta stock por la receta); Entrada/Salida/Ajuste los registras aquí.')}</p>
+          <p className="adm-sub">{tOr('inventario.movsNota', '«Venta» lo genera el sistema al cobrar (descuenta stock por la receta); Entrada, Salida, Ajuste y Merma los registras aquí.')}</p>
         </section>
       )}
 
-      {pestana === 'proveedores' && (
+      {pestana === 'mermas' && (
+        <MermasTab insumos={insumos} puedeGestionar={puedeGestionar} quien={quien} enBase={enBase} locale={locale} fmt={fmt} onCambio={() => cargar(true)} />
+      )}
+
+      {pestana === 'proveedores' && esAdmin && (
         <ProveedoresTab onPagar={id => { setProvFiltro(id); setPestana('cuentas') }} alta={provAlta} onAltaDone={() => setProvAlta(false)} />
       )}
 
-      {pestana === 'cuentas' && (
+      {pestana === 'cuentas' && esAdmin && (
         <CuentasTab filtroProveedor={provFiltro} onFiltro={setProvFiltro} alta={cuentaAlta} onAltaDone={() => setCuentaAlta(false)} />
       )}
     </div>

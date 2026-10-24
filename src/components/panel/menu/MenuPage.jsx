@@ -528,14 +528,14 @@ export default function MenuPage({ rol }) {
         onFocus={e => e.target.select()} placeholder={tOr('menu.costoPctPlace', 'Costo % del precio')}
         title={tOr('menu.costoPctAyuda', '¿Qué porcentaje del precio será el costo? Ej.: 40 para el 40 %')}
         aria-label={tOr('menu.costoPctPlace', 'Costo % del precio')} />
-      <button type="button" className="info" onClick={aplicarCostoPct}>{tOr('menu.costoPctBtn', 'Asignar costo')}</button>
+      <button type="button" className="success" onClick={aplicarCostoPct}>{tOr('menu.costoPctBtn', 'Asignar costo')}</button>
       <label className="mn-costo-reemp"><input name="costo-reemplazar" type="checkbox" checked={costoReemplazar} onChange={e => setCostoReemplazar(e.target.checked)} /> {tOr('menu.costoPctReemplazar', 'Reemplazar también los que ya tienen costo')}</label>
       <input name="masivo-margen" className="adm-num" type="text" inputMode="numeric" autoComplete="off" value={margenTmp}
         onChange={e => setMargenTmp(e.target.value.replace(/\D/g, '').slice(0, 2))}
         onFocus={e => e.target.select()} placeholder={tOr('menu.masivoMargen', 'Margen %')} aria-label={tOr('menu.masivoMargen', 'Margen %')} />
-      <button type="button" className="info" onClick={simularMargenMasiva} disabled={masivaCarg !== null}>{masivaCarg === 'margen' ? tOr('menu.simulando', 'Simulando…') : tOr('menu.simular', 'Simular')}</button>
+      <button type="button" className="ghost" onClick={simularMargenMasiva} disabled={masivaCarg !== null}>{masivaCarg === 'margen' ? tOr('menu.simulando', 'Simulando…') : tOr('menu.simular', 'Simular')}</button>
       {modo === 'supabase' && (
-        <button type="button" className="info" onClick={simularReceta} disabled={masivaCarg !== null} title={tOr('menu.recetaAyuda', 'Toma el costo teórico calculado desde insumos y recetas de Inventario.')}>
+        <button type="button" className="ghost" onClick={simularReceta} disabled={masivaCarg !== null} title={tOr('menu.recetaAyuda', 'Toma el costo teórico calculado desde insumos y recetas de Inventario.')}>
           {masivaCarg === 'receta' ? tOr('menu.simulando', 'Simulando…') : tOr('menu.recetaBtn', 'Costo desde receta')}
         </button>
       )}
@@ -607,7 +607,7 @@ export default function MenuPage({ rol }) {
               {/* El modo selección vive en la misma fila que mostrar/ocultar: arriba a la derecha quedaba lejos de la lista. */}
               {selActiva ? (
                 <>
-                  <button type="button" className="info" onClick={() => setVHerr(true)}>
+                  <button type="button" className="ghost" onClick={() => setVHerr(true)}>
                     ✎ {t('comun.editar')}{sel.size > 0 && ` (${sel.size})`}
                   </button>
                   <button type="button" className="ghost" onClick={salirSeleccion}>✕ {tOr('items.dejarSeleccionar', 'Dejar de seleccionar')}</button>
@@ -652,7 +652,7 @@ export default function MenuPage({ rol }) {
               <span className="adm-chip">{l.obligatoria ? t('indic.obligatoria') : t('indic.opcional')}</span>
               <span className="adm-chip">{l.max ? t('indic.hasta', { n: l.max }) : t('indic.sinLimite')}</span>
               <span className="cab-acciones">
-                <button type="button" className="info" onClick={() => abrirEditarInd(l)}>{t('comun.editar')}</button>
+                <button type="button" className="ghost" onClick={() => abrirEditarInd(l)}>{t('comun.editar')}</button>
               </span>
             </header>
             <div className="mn-pills">
@@ -687,7 +687,7 @@ export default function MenuPage({ rol }) {
                 <span className="cab-acciones">
                   <button type="button" className="ghost" title={t('menu.subir')} disabled={i === 0} onClick={() => mover(i, -1)}>▲</button>
                   <button type="button" className="ghost" title={t('menu.bajar')} disabled={i === secciones.length - 1} onClick={() => mover(i, 1)}>▼</button>
-                  <button type="button" className="info" onClick={() => abrirEditarGrupo(sec)}>{t('comun.editar')}</button>
+                  <button type="button" className="ghost" onClick={() => abrirEditarGrupo(sec)}>{t('comun.editar')}</button>
                   <button type="button" className="success" onClick={() => abrirNuevoProd(sec.id)}>+ {t('menu.productoMas')}</button>
                 </span>
               )}
@@ -724,7 +724,7 @@ export default function MenuPage({ rol }) {
                         </span>
                         <span className="mn-precio">{money(p.precio)}</span>
                         {conDato && celdaDato(p)}
-                        <button type="button" className="info" onClick={() => abrirEditarProd(p)}>{t('comun.editar')}</button>
+                        <button type="button" className="ghost" onClick={() => abrirEditarProd(p)}>{t('comun.editar')}</button>
                       </li>
                     ))}
                   </ul>

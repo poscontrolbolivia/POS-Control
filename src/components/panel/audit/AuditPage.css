@@ -16,7 +16,7 @@
 .aud-error{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   background:var(--porcobrar-bg);border:1px solid var(--porcobrar-bd);color:var(--porcobrar-ink);
-  border-radius:12px;padding:10px 12px;font-size:.9rem;font-weight:600}
+  border-radius:var(--r-md);padding:10px 12px;font-size:.9rem;font-weight:600}
 
 .aud-muted{color:var(--mut);font-weight:500}
 

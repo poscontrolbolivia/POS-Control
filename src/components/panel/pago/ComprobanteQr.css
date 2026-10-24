@@ -5,3 +5,9 @@
 .cq-omitir{opacity:.7}
 .cq-error{color:var(--danger-ink,#b42318);flex-basis:100%}
 .cq-ver{min-width:36px}
+
+/* Datos fiscales opcionales del cliente, en el menú de cobro. */
+.vd-fiscal { border: 1px solid var(--line, rgba(128,128,128,.35)); border-radius:var(--r-md); padding: 8px 12px 10px; margin: 8px 0; display: grid; gap: 8px; }
+.vd-fiscal legend { font-weight: 700; font-size: .85rem; padding: 0 6px; }
+.vd-fiscal label { display: grid; gap: 3px; font-size: .85rem; }
+.vd-fiscal input { width: 100%; min-width: 0; }

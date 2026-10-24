@@ -50,13 +50,12 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
         <span className={`topbar-rol topbar-rol-${rol}`}>{rolVisto}</span>
         <span className="topbar-user" title={sesion?.usuario}>{sesion?.nombre || sesion?.usuario}</span>
         {sesion?.es_super && (
-          <span className="topbar-rol" style={{ background: 'var(--rol-super)', color: 'var(--on-btn)' }}
+          <span className="topbar-rol topbar-rol-super"
             title={tOr('super.topbar.chipTitle', 'Dueño de la plataforma')}>super</span>
         )}
-        <span className="topbar-rol" title={conectado ? t('topbar.titleConectado') : t('topbar.titleDemo')}
-          style={{ background: conectado ? 'var(--rol-online)' : 'var(--rol-demo)', color: 'var(--on-btn)', borderRadius: 999, padding: '2px 8px', fontWeight: 600 }}>
-          {conectado ? t('topbar.conectado') : t('topbar.demo')}
-        </span>
+        {conectado
+          ? <span className="topbar-punto" role="img" aria-label={t('topbar.conectado')} title={t('topbar.titleConectado')} />
+          : <span className="topbar-rol topbar-estado en-demo" title={t('topbar.titleDemo')}>{t('topbar.demo')}</span>}
       </div>
       <div className="topbar-acc">
         <button type="button" className="topbar-menu" onClick={() => setAbierto(v => !v)} aria-expanded={abierto}

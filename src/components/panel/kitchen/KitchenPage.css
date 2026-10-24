@@ -7,7 +7,7 @@
 /* Contador rojo de la pestaña: lo que falta sacar en esa área, como el badge de una notificación. */
 .ck-n { min-width: 24px; height: 24px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 999px; background: var(--danger); color: var(--on-btn); font-size: .82rem; font-weight: 800; font-style: normal; box-shadow: 0 0 0 2px var(--card); }
 .ck-sacadas { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
-.ck-sacadas em { font-style: normal; font-size: .75rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: var(--btn-green); color: var(--on-btn); }
+.ck-sacadas em { font-style: normal; font-size: .78rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: var(--btn-green); color: var(--on-btn); }
 .ck-conexion { font-size: .9rem; }
 .ck-demo { display: inline-flex; align-items: center; min-height: 40px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .78rem; letter-spacing: .04em; background: var(--libre); color: var(--mut); border: 1px dashed color-mix(in srgb, var(--ac) 55%, var(--line)); }
 .ck-act { min-width: 40px; min-height: 40px; padding: 0 10px; border-radius: 999px; }
@@ -19,12 +19,12 @@
 .cocina .cocina-aviso {
   display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; text-align: center; color: var(--ink); font-weight: 600;
   background: color-mix(in srgb, var(--btn-red) 12%, var(--card)); border: 1px solid color-mix(in srgb, var(--btn-red) 45%, var(--line));
-  border-radius: 10px; padding: 8px 10px;
+  border-radius:var(--r-sm); padding: 8px 10px;
 }
 .cocina .cocina-aviso .ico { min-height: 30px; min-width: 30px; padding: 2px 8px; border-radius: 999px; }
 
 .ck-filas { display: flex; flex-direction: column; gap: 12px; }
-.ck-fila { background: color-mix(in srgb, var(--card) 70%, transparent); border: 1.5px solid var(--line); border-radius: 16px; padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.ck-fila { background: color-mix(in srgb, var(--card) 70%, transparent); border: 1.5px solid var(--line); border-radius:var(--r-lg); padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .ck-fila.area-cocina { border-color: color-mix(in srgb, var(--btn-orange) 45%, var(--line)); }
 .ck-fila.area-barra { border-color: color-mix(in srgb, var(--btn-blue, var(--ac)) 45%, var(--line)); }
 .ck-fila-cab { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
@@ -40,7 +40,7 @@
 .ck-vacio { display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 18px 12px; text-align: center; color: var(--ink); }
 .ck-vacio small, .ck-vacio-mini { color: var(--mut); }
 
-.ck-card { display: flex; flex-direction: column; gap: 6px; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 8px 8px 6px; box-shadow: 0 3px 10px rgba(0,0,0,.05); }
+.ck-card { display: flex; flex-direction: column; gap: 6px; background: var(--card); border: 1.5px solid var(--line); border-radius:var(--r-md); padding: 8px 8px 6px; box-shadow: 0 3px 10px rgba(0,0,0,.05); }
 .ck-card.ambar { border-color: color-mix(in srgb, var(--btn-yellow) 70%, var(--line)); }
 .ck-card.rojo { border-color: color-mix(in srgb, var(--btn-red) 65%, var(--line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--btn-red) 24%, transparent), 0 3px 10px rgba(0,0,0,.05); }
 .ck-card.nueva { animation: ck-pulso 1.2s ease-out 2; }
@@ -57,7 +57,7 @@
 .ck-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .95rem; color: var(--mut); }
 
 .ck-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
-.ck-item { border: 1.5px solid var(--line); border-radius: 12px; background: var(--card-2, var(--card)); overflow: hidden; }
+.ck-item { border: 1.5px solid var(--line); border-radius:var(--r-md); background: var(--card-2, var(--card)); overflow: hidden; }
 .ck-item-fila { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; min-height: 64px; }
 .ck-qty { flex: 0 0 auto; min-width: 46px; height: 46px; padding: 0 6px; display: grid; place-items: center; border-radius: 999px; background: var(--ac); color: var(--on-btn); font-weight: 800; font-size: 1.45rem; }
 .ck-item.listo { opacity: .6; }
@@ -86,12 +86,12 @@
 .ck-motivo.on { border-color: transparent; color: var(--on-btn); background: linear-gradient(135deg, rgba(255,255,255,.2), rgba(255,255,255,0)), var(--btn-red); }
 .ck-motivo-txt { min-height: 44px; font-size: 1rem; }
 
-.ck-panel-sacadas { background: var(--card); border: 1.5px solid var(--btn-green); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 42dvh; overflow-y: auto; }
+.ck-panel-sacadas { background: var(--card); border: 1.5px solid var(--btn-green); border-radius:var(--r-md); padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 42dvh; overflow-y: auto; }
 .ck-panel-sacadas > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ck-panel-sacadas .ico { min-width: 34px; min-height: 34px; border-radius: 50%; padding: 0; }
 .ck-sac-grupo h4 { margin: 0 0 4px; font-size: .9rem; }
 .ck-sac-grupo > ul, .ck-sac > ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.ck-sac { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+.ck-sac { border: 1px solid var(--line); border-radius:var(--r-sm); padding: 6px 8px; }
 .ck-sac-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .ck-sac-cab small { color: var(--mut); }
 .ck-sac > ul > li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .88rem; }
@@ -104,12 +104,12 @@
 }
 
 .ck-devs{display:flex;flex-direction:column;gap:10px;margin:0 0 12px}
-.ck-dev{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:10px 14px;border:2px solid var(--warn);border-radius:18px;background:color-mix(in srgb,var(--warn-solid) 14%,var(--bg))}
+.ck-dev{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:10px 14px;border:2px solid var(--warn);border-radius:var(--r-lg);background:color-mix(in srgb,var(--warn-solid) 14%,var(--bg))}
 .ck-dev b{flex:1 1 100%;font-size:1.05rem}
 .ck-dev-sub{flex:1 1 100%;color:var(--mut);font-size:.88rem}
 .ck-dev input{flex:1 1 200px;min-height:44px;border-radius:999px;padding:6px 16px}
 .ck-dev button{min-height:44px;border-radius:999px}
 
 /* Una línea que explica cada bloque de la cola (áreas, sacadas, devueltos). */
-.ck-ayuda{margin:0 0 8px;padding:7px 10px;background:var(--card-2);border:1px solid var(--line);border-radius:10px;color:var(--mut);font-size:.83rem;font-weight:600;line-height:1.35}
+.ck-ayuda{margin:0 0 8px;padding:7px 10px;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--mut);font-size:.83rem;font-weight:600;line-height:1.35}
 .ck-linea { flex: 1 1 100%; font-size: 1.35rem; font-weight: 800; color: var(--ink); line-height: 1.25; overflow-wrap: anywhere; }

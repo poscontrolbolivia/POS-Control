@@ -3,6 +3,7 @@ import { USAR_SUPABASE } from '../services/config.js'
 import { fijarEmpresa } from '../services/supabaseClient.js'
 import { cargarEstadoInicial, despacharSupabase } from '../services/db.js'
 import { round2 } from '../services/format.js'
+import { round4, resolverCantidad, aplicarEntrada, MOTIVOS_MERMA } from '../services/inventario.js'
 import { repartirPorGrupo } from '../services/printing.js'
 import { notaProtegida } from '../services/indicaciones.js'
 import { unirCuentas } from '../services/subcuentas.js'
@@ -78,7 +79,13 @@ const INSUMOS_DEMO = [
   ['Harina', 'kg', 9, 3, 5.5], ['Azúcar', 'kg', 10, 4, 6], ['Café molido', 'kg', 1.5, 1, 40],
   ['Naranja', 'unidad', 25, 20, 2], ['Cerveza en lata', 'unidad', 48, 24, 8], ['Refresco 2.25 L', 'unidad', 12, 6, 9],
   ['Singani', 'litro', 2, 1, 60], ['Maní', 'kg', 3, 1.5, 16], ['Pan', 'unidad', 30, 12, 2.5],
-].map(([nombre, unidad, stock, stock_min, costo], i) => ({ id: 'ins' + (i + 1), nombre, unidad, stock, stock_min, costo, activo: true }))
+].map(([nombre, unidad, stock, stock_min, costo], i) => ({ id: 'ins' + (i + 1), nombre, unidad, stock, stock_min, costo, activo: true, presentaciones: [], con_merma: false, rendimiento_esp: null }))
+  // Dos insumos de muestra con presentaciones y merma de limpieza (el resto queda sin presentaciones).
+  .map(i => (i.nombre === 'Singani'
+    ? { ...i, presentaciones: [{ id: 'pr-sing-750', nombre: 'Botella 750 ml', cantidad: 0.75, costo: 45, activo: true, principal: true }, { id: 'pr-sing-1', nombre: 'Botella 1 L', cantidad: 1, costo: 60, activo: true, principal: false }] }
+    : i.nombre === 'Carne de res'
+      ? { ...i, con_merma: true, rendimiento_esp: 84, presentaciones: [{ id: 'pr-carne-5', nombre: 'Bolsa 5 kg', cantidad: 5, costo: 150, activo: true, principal: true }] }
+      : i))
 
 // Receta por nombre de plato: es lo que engancha el inventario con la carta (y lo que descuenta
 // stock al cobrar). Se resuelve contra los productos que hay en el estado, no contra los de acá.
@@ -388,6 +395,42 @@ const cocinaResolver = (i, a) => {
   return { ...limpia, estado: previo || 'enviado', motivo: '' }
 }
 
+// INVENTARIO (demo): misma lógica que private.insumo_mover del servidor (presentaciones, rendimiento,
+// costo promedio ponderado sobre lo limpio y merma). a: { id, tipo, cantidad (unidad base) | presId + cantPres,
+// limpio, costoTotal, motivo, nota, usuario }.
+function moverInsumo(s, a) {
+  const ins = (s.insumos || []).find(x => x.id === a.id)
+  if (!ins || !['entrada', 'salida', 'ajuste', 'merma'].includes(a.tipo)) return s
+  const r = resolverCantidad(ins, a.presId ? a.cantPres : a.cantidad, a.presId ? 'p:' + a.presId : 'base')
+  const pres = r.pres
+  if (a.presId && !pres) return s
+  const cant = r.base
+  if (a.tipo === 'ajuste' ? cant < 0 : !(cant > 0)) return s
+  let nota = String(a.nota || '').trim()
+  const det = {}
+  if (pres) {
+    Object.assign(det, { presentacion: pres.nombre, presentacion_id: pres.id, cant_pres: round3(a.cantPres), factor: num(pres.cantidad) })
+    nota = `${round3(a.cantPres)} × ${pres.nombre}` + (nota ? ` — ${nota}` : '')
+  }
+  let stock, costo = num(ins.costo), mov = cant
+  if (a.tipo === 'entrada') {
+    let costoTotal = a.costoTotal
+    if (!(num(costoTotal) > 0) && pres && num(pres.costo) > 0) costoTotal = round2(num(a.cantPres) * num(pres.costo))
+    try {
+      const e = aplicarEntrada(ins, { cantidad: cant, limpio: a.limpio, costoTotal })
+      stock = e.stock; costo = e.costo; mov = e.mov; Object.assign(det, e.detalle)
+    } catch { return s }
+  } else if (a.tipo === 'salida' || a.tipo === 'merma') stock = round3(num(ins.stock) - cant)
+  else stock = cant
+  if (a.tipo === 'merma') det.motivo = MOTIVOS_MERMA.includes(a.motivo) ? a.motivo : 'otro'
+  det.costo_unit = costo
+  const fila = { id: uid(), en: new Date().toISOString(), insumo_id: ins.id, insumo_nombre: ins.nombre, unidad: ins.unidad,
+    tipo: a.tipo, cantidad: mov, stock_after: stock, nota, detalle: det, usuario_nombre: a.usuario || 'demo' }
+  return { ...s,
+    insumos: s.insumos.map(x => (x.id === ins.id ? { ...x, stock, costo } : x)),
+    movimientos: [fila, ...(s.movimientos || [])].slice(0, 800) }
+}
+
 // Al cerrar una cuenta baja el stock de la receta de cada plato, igual que hace cobrar_cuenta en
 // la base (uno o varios movimientos «venta» por insumo, con el stock resultante).
 function descuentoDeVenta(s, c, usuario) {
@@ -470,6 +513,7 @@ function reducer(s, a) {
     }
     case 'qty': return upd(a.cuentaId, c => ({ ...c, items: c.items.flatMap(i => (i.id !== a.itemId ? [i] : i.qty + a.d <= 0 ? [] : [{ ...i, qty: i.qty + a.d }])) }))
     case 'detalle': return upd(a.cuentaId, c => ({ ...c, detalle: a.detalle || '' }))
+    case 'fiscal~': return upd(a.cuentaId, c => ({ ...c, fiscalNombre: a.nombre || '', fiscalNumero: a.numero || '', fiscalCorreo: a.correo || '' }))
     // Solo cambia el comentario: las indicaciones del ítem se conservan siempre.
     case 'nota': return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.id === a.itemId ? { ...i, nota: notaProtegida(i.indicaciones, a.nota) } : i)) }))
     // Un plato que ya salió del área deja devolución, igual que hace el servidor al anularlo.
@@ -647,24 +691,26 @@ function reducer(s, a) {
     // funcione sin Supabase. Las recetas usan insumo_id, como las filas que devuelve el servidor.
     case 'insumo+': {
       const base = { id: uid(), nombre: '', unidad: '', stock: 0, stock_min: 0, costo: 0, activo: true, ...a.insumo }
+      const previo = (s.insumos || []).find(x => x.id === (a.insumo?.id || base.id))
+      let hayPrincipal = false
+      const pres = (Array.isArray(a.insumo?.presentaciones) ? a.insumo.presentaciones : (previo?.presentaciones || []))
+        .filter(p => String(p?.nombre || '').trim() && num(p?.cantidad) > 0)
+        .map(p => {
+          const principal = Boolean(p.principal) && p.activo !== false && !hayPrincipal
+          if (principal) hayPrincipal = true
+          return { id: p.id || uid(), nombre: String(p.nombre).trim(), cantidad: round3(p.cantidad),
+            costo: p.costo === null || p.costo === '' || p.costo === undefined ? null : round2(num(p.costo)), activo: p.activo !== false, principal }
+        })
+      const rend = a.insumo?.rendimiento_esp === '' || a.insumo?.rendimiento_esp == null ? null : num(a.insumo.rendimiento_esp)
       const nuevo = { ...base, id: a.insumo?.id || base.id, nombre: String(base.nombre || '').trim(), unidad: String(base.unidad || '').trim(),
-        stock: round3(num(base.stock)), stock_min: round3(num(base.stock_min)), costo: round2(num(base.costo)) }
+        stock: round3(num(base.stock)), stock_min: round3(num(base.stock_min)), costo: round4(num(base.costo)),
+        presentaciones: pres, con_merma: Boolean(a.insumo?.con_merma), rendimiento_esp: rend > 0 && rend <= 100 ? rend : null }
       const existe = (s.insumos || []).some(x => x.id === nuevo.id)
       return { ...s, insumos: existe ? s.insumos.map(x => (x.id === nuevo.id ? { ...x, ...nuevo } : x)) : [...(s.insumos || []), nuevo] }
     }
     case 'insumo-': return { ...s, insumos: (s.insumos || []).filter(x => x.id !== a.id), recetas: (s.recetas || []).filter(r => r.insumo_id !== a.id) }
-    case 'insumo-mov': {
-      const ins = (s.insumos || []).find(x => x.id === a.id)
-      if (!ins) return s
-      const n = round3(num(a.cantidad))
-      if (!(n > 0)) return s
-      const stock = a.tipo === 'entrada' ? round3(num(ins.stock) + n) : a.tipo === 'salida' ? round3(num(ins.stock) - n) : n
-      const fila = { id: uid(), en: new Date().toISOString(), insumo_id: ins.id, insumo_nombre: ins.nombre,
-        tipo: a.tipo, cantidad: n, stock_after: stock, nota: a.nota || '', usuario_nombre: a.usuario || 'demo' }
-      return { ...s,
-        insumos: s.insumos.map(x => (x.id === ins.id ? { ...x, stock } : x)),
-        movimientos: [fila, ...(s.movimientos || [])].slice(0, 800) }
-    }
+    case 'insumo-mov': return moverInsumo(s, a)
+    case 'insumo-mermas': return (a.lineas || []).reduce((acc, l) => moverInsumo(acc, { ...l, tipo: 'merma', usuario: a.usuario }), s)
     case 'receta~': {
       const limpio = (a.lineas || []).filter(l => l.insumo_id && num(l.cantidad) > 0)
         .map(l => ({ productoId: a.productoId, insumo_id: l.insumo_id, cantidad: round3(num(l.cantidad)) }))
@@ -793,6 +839,7 @@ const BITACORA = {
   'extras': (p, n, a) => ['cuenta_extras', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)),
     { propina: a.propina ?? enCuenta(n, a.cuentaId)?.propina, descuento: a.descuento ?? enCuenta(n, a.cuentaId)?.descuento }],
   'comensales~': (p, n, a) => ['comensales', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { comensales: a.comensales }],
+  'fiscal~': (p, n, a) => ['cuenta_fiscal', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { nombre: a.nombre || '', numero: a.numero || '' }],
   'detalle': (p, n, a) => ['cuenta_detalle', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { detalle: a.detalle || '' }],
 
   'unir': (p, n, a) => ['mesa_unidas', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { mesas: (a.mesaIds || []).map(m => nombreMesa(n, m)).join(', ') }],
@@ -848,6 +895,7 @@ const BITACORA = {
   'insumo+': (p, n, a) => ['insumo_guardar', 'insumo', String(a.insumo?.nombre || '').trim(), { stock: a.insumo?.stock, unidad: a.insumo?.unidad }],
   'insumo-': (p, n, a) => ['insumo_borrar', 'insumo', nombreInsumo(p, a.id), {}],
   'insumo-mov': (p, n, a) => ['insumo_movimiento', 'insumo', nombreInsumo(p, a.id), { tipo: a.tipo, cantidad: a.cantidad }],
+  'insumo-mermas': (p, n, a) => ['insumo_merma', 'insumo', (a.lineas || []).map(l => nombreInsumo(p, l.id)).join(', '), { lineas: (a.lineas || []).length }],
   'receta~': (p, n, a) => ['receta_guardar', 'producto', nombreProducto(n, a.productoId),
     { lineas: (a.lineas || []).filter(l => l.insumo_id && num(l.cantidad) > 0).length }],
 

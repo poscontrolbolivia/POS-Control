@@ -25,6 +25,7 @@ const ACCIONES = {
   cuenta_cobrada: "Cuenta cobrada y cerrada",
   cuenta_descartada: "Cuenta vacía descartada",
   cuenta_detalle: "Detalle de la cuenta (orden o referencia)",
+  cuenta_fiscal: "Datos fiscales del cliente",
   cuenta_dividida: "Cuenta dividida en subcuentas",
   cuenta_extras: "Propina o descuento aplicado a la cuenta",
   cuenta_precuenta: "Pre-cuenta pedida o impresa",
@@ -41,12 +42,14 @@ const ACCIONES = {
   equipo_areas: "Cambiaron las áreas que ve una persona",
   equipo_cambio_rol: "Cambió el rol de una persona del equipo",
   equipo_edicion: "Se editó una persona del equipo",
+  equipo_permisos: "Cambiaron los permisos de una persona",
   equipo_invito: "Se invitó a una persona al equipo",
   equipo_restablecio_clave: "Se restableció la clave de una persona",
   equipo_revoco: "Se quitó el acceso a una persona del equipo",
   exportar_datos: "El negocio exportó sus datos",
   insumo_borrar: "Insumo eliminado",
   insumo_guardar: "Insumo guardado",
+  insumo_merma: "Merma de inventario",
   insumo_movimiento: "Movimiento de inventario",
   item_agregado: "Ítem agregado al pedido",
   item_anulacion_pedida: "Anulación de ítem pedida",
@@ -243,7 +246,7 @@ export default function AuditPage({ rol, sesion }) {
       <section className="adm-card aud-card">
         <div className="adm-card-cab aud-cab">
           <div>
-            <h3>🔍 {tOr('auditoria.titulo', 'Auditoría')}</h3>
+            <h3>{tOr('auditoria.titulo', 'Auditoría')}</h3>
             <p className="adm-sub aud-desc">
               {entries === null
                 ? tOr('auditoria.descInicio', 'Qué movió cada persona en tu negocio. Nada se carga hasta pulsar Refrescar.')
@@ -258,7 +261,7 @@ export default function AuditPage({ rol, sesion }) {
               {cargando ? tOr('auditoria.cargando', 'Cargando…') : tOr('auditoria.refrescar', 'Refrescar')}
             </button>
             {!showingAll && entries !== null && (
-              <button type="button" className="info" onClick={loadAll} disabled={cargando}>
+              <button type="button" className="ghost" onClick={loadAll} disabled={cargando}>
                 {tOr('auditoria.verTodo', 'Ver todo')}
               </button>
             )}

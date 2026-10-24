@@ -6435,13 +6435,15 @@ begin
   for r in select * from jsonb_array_elements(coalesce(p_datos->'cuentas','[]'::jsonb)) loop
     if not coalesce(r->>'tipo','') in ('mesa','directa') then continue; end if;
     insert into public.cuentas (empresa_id, tipo, canal, numero, estado, comensales, propina, descuento, nota, detalle, etiqueta,
-                                cliente_nombre, cliente_tel, abierta_por, abierta_en, cerrada_por, cerrada_en)
+                                cliente_nombre, cliente_tel, fiscal_nombre, fiscal_numero, fiscal_correo,
+                                abierta_por, abierta_en, cerrada_por, cerrada_en)
     values (v_emp, r->>'tipo', case when r->>'canal' = 'llevar' then 'llevar' else null end, (r->>'numero')::int,
             case when coalesce(r->>'estado','abierta') in ('abierta','precuenta','cerrada') then r->>'estado' else 'cerrada' end,
             least(99, greatest(1, coalesce((r->>'comensales')::int, 1))),
             coalesce((r->>'propina')::numeric, 0), coalesce((r->>'descuento')::numeric, 0), r->>'nota',
             left(r->>'detalle', 500), case when r->>'etiqueta' ~ '^[a-z]$' then r->>'etiqueta' else null end,
             left(r->>'cliente_nombre', 80), left(r->>'cliente_tel', 40),
+            left(r->>'fiscal_nombre', 80), left(r->>'fiscal_numero', 30), left(r->>'fiscal_correo', 120),
             nullif(v_map_users->>(r->>'abierta_por'), '')::uuid, coalesce((r->>'abierta_en')::timestamptz, now()),
             nullif(v_map_users->>(r->>'cerrada_por'), '')::uuid, (r->>'cerrada_en')::timestamptz)
     returning id into v_cuenta;
@@ -6522,10 +6524,13 @@ begin
   end loop;
 
   for r in select * from jsonb_array_elements(coalesce(p_datos->'insumos','[]'::jsonb)) loop
-    insert into public.insumos (empresa_id, nombre, unidad, stock, stock_min, costo, activo, creada_en, actualizado_en)
+    insert into public.insumos (empresa_id, nombre, unidad, stock, stock_min, costo, activo, creada_en, actualizado_en,
+                                presentaciones, con_merma, rendimiento_esp)
     values (v_emp, coalesce(nullif(r->>'nombre',''),'Insumo'), coalesce(nullif(r->>'unidad',''),'unidad'),
             coalesce((r->>'stock')::numeric, 0), coalesce((r->>'stock_min')::numeric, 0), coalesce((r->>'costo')::numeric, 0),
-            coalesce((r->>'activo')::boolean, true), coalesce((r->>'creada_en')::timestamptz, now()), (r->>'actualizado_en')::timestamptz)
+            coalesce((r->>'activo')::boolean, true), coalesce((r->>'creada_en')::timestamptz, now()), (r->>'actualizado_en')::timestamptz,
+            case when jsonb_typeof(r->'presentaciones') = 'array' then r->'presentaciones' else '[]'::jsonb end,
+            coalesce((r->>'con_merma')::boolean, false), (r->>'rendimiento_esp')::numeric)
     returning id into v_new;
     if (r->>'id') is not null then v_map_insumos := jsonb_set(v_map_insumos, array[r->>'id'], to_jsonb(v_new)); end if;
   end loop;
@@ -6540,10 +6545,11 @@ begin
 
   for r in select * from jsonb_array_elements(coalesce(p_datos->'insumos_movimientos','[]'::jsonb)) loop
     v_new := nullif(v_map_insumos->>(r->>'insumo_id'), '')::uuid;
-    if v_new is null or r->>'tipo' not in ('entrada','salida','venta','ajuste') then continue; end if;
-    insert into public.insumos_movimientos (empresa_id, insumo_id, tipo, cantidad, stock_after, nota, usuario, usuario_nombre, en)
+    if v_new is null or r->>'tipo' not in ('entrada','salida','venta','ajuste','merma') then continue; end if;
+    insert into public.insumos_movimientos (empresa_id, insumo_id, tipo, cantidad, stock_after, nota, usuario, usuario_nombre, en, detalle)
     values (v_emp, v_new, r->>'tipo', coalesce((r->>'cantidad')::numeric, 0), (r->>'stock_after')::numeric, r->>'nota',
-            nullif(v_map_users->>(r->>'usuario'), '')::uuid, r->>'usuario_nombre', coalesce((r->>'en')::timestamptz, now()));
+            nullif(v_map_users->>(r->>'usuario'), '')::uuid, r->>'usuario_nombre', coalesce((r->>'en')::timestamptz, now()),
+            case when jsonb_typeof(r->'detalle') = 'object' then r->'detalle' else null end);
   end loop;
 
   -- v0.31: el logo y el QR del negocio viajan en el respaldo; se renombran a la carpeta de la empresa nueva
@@ -6829,3 +6835,702 @@ begin
 end $fn$;
 revoke all on function public.descartar_cuenta_vacia(uuid, uuid) from public, anon;
 grant execute on function public.descartar_cuenta_vacia(uuid, uuid) to authenticated;
+
+-- ## I) INVENTARIO v0.44.0: presentaciones, merma y permiso gestionar_inventario
+-- Todo idempotente: se puede volver a ejecutar sin romper nada. Los insumos viejos quedan con su
+-- unidad como unidad base y SIN presentaciones.
+
+-- Presentaciones: lista jsonb dentro del propio insumo (misma RLS que insumos, se guarda y se lee
+-- en la misma RPC, sin tabla extra). Cada elemento: {id, nombre, cantidad (en unidad base),
+-- costo (referencia por presentación, opcional), activo, principal}.
+alter table public.insumos add column if not exists presentaciones jsonb not null default '[]'::jsonb;
+alter table public.insumos add column if not exists con_merma boolean not null default false;
+alter table public.insumos add column if not exists rendimiento_esp numeric(6,2);
+-- El costo por unidad base puede ser muy pequeño (Bs 0,0425 por g): necesita más decimales.
+alter table public.insumos alter column costo type numeric(14,4);
+
+alter table public.insumos_movimientos add column if not exists detalle jsonb;
+do $mig$
+declare c record;
+begin
+  for c in select conname from pg_constraint
+            where conrelid = 'public.insumos_movimientos'::regclass and contype = 'c'
+              and pg_get_constraintdef(oid) ilike '%tipo%'
+  loop
+    execute format('alter table public.insumos_movimientos drop constraint %I', c.conname);
+  end loop;
+end $mig$;
+alter table public.insumos_movimientos add constraint insumos_movimientos_tipo_check
+  check (tipo in ('entrada','salida','venta','ajuste','merma'));
+
+-- Permisos extra por persona (admin siempre los tiene todos). Hoy: ver_inventario y gestionar_inventario.
+alter table public.membresias add column if not exists permisos text[] not null default '{}'::text[];
+
+create or replace function private.tiene_permiso(p_perm text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $fn$
+  select case
+    when private.mi_rol() = 'admin' then true
+    else coalesce((select p_perm = any (m.permisos)
+                     from public.membresias m
+                    where m.empresa_id = private.empresa_activa()
+                      and m.user_id = auth.uid()), false)
+  end;
+$fn$;
+revoke all on function private.tiene_permiso(text) from public, anon, authenticated;
+
+create or replace function private.exigir_permiso(p_perm text)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+begin
+  if private.tiene_permiso(p_perm) then return; end if;
+  if p_perm = 'ver_inventario' and private.tiene_permiso('gestionar_inventario') then return; end if;
+  raise exception 'acción no permitida: falta el permiso %', p_perm;
+end $fn$;
+revoke all on function private.exigir_permiso(text) from public, anon, authenticated;
+
+create or replace function public.mis_permisos(p_empresa_id uuid default null)
+returns text[]
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare v_emp uuid;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero','cocina','barra']::text[]);
+  if private.mi_rol() = 'admin' then
+    return array['ver_inventario','gestionar_inventario']::text[];
+  end if;
+  return coalesce((select m.permisos from public.membresias m
+                    where m.empresa_id = v_emp and m.user_id = auth.uid()), '{}'::text[]);
+end $fn$;
+revoke all on function public.mis_permisos(uuid) from public, anon;
+grant execute on function public.mis_permisos(uuid) to authenticated;
+
+create or replace function public.equipo_poner_permisos(p_usuario_id uuid, p_permisos text[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_pe  text[] := coalesce(p_permisos, '{}'::text[]);
+begin
+  perform private.exigir_rol(array['admin']::text[]);
+  v_emp := private.empresa_activa();
+  if exists (select 1 from unnest(v_pe) x where x is null or x not in ('ver_inventario','gestionar_inventario')) then
+    raise exception 'Permiso inválido';
+  end if;
+  update public.membresias set permisos = v_pe
+   where empresa_id = v_emp and user_id = p_usuario_id and rol <> 'admin';
+  if not found then
+    raise exception 'Solo se asignan permisos a personas que no son administradoras';
+  end if;
+  perform private.auditar(v_emp, 'equipo_permisos',
+    jsonb_build_object('usuario', p_usuario_id::text, 'permisos', to_jsonb(v_pe)));
+end $fn$;
+revoke all on function public.equipo_poner_permisos(uuid, text[]) from public, anon;
+grant execute on function public.equipo_poner_permisos(uuid, text[]) to authenticated;
+
+drop function if exists public.equipo_listar();
+create or replace function public.equipo_listar()
+returns table (usuario_id uuid, nombre text, correo text, rol text, creado_en timestamptz, areas text[], permisos text[])
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+begin
+  perform private.exigir_rol(array['admin']::text[]);
+  v_emp := private.empresa_activa();
+  return query
+    select m.user_id, coalesce(p.display_name, ''), coalesce(u.email::text, ''),
+           m.rol, m.creada_en, m.areas, m.permisos
+      from public.membresias m
+      join auth.users u on u.id = m.user_id
+      left join public.perfiles p on p.user_id = m.user_id
+     where m.empresa_id = v_emp
+     order by m.rol, coalesce(p.display_name, '');
+end $fn$;
+revoke all on function public.equipo_listar() from public, anon;
+grant execute on function public.equipo_listar() to authenticated;
+
+create or replace function public.inventario_listar(p_empresa_id uuid default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_permiso('ver_inventario');
+  return jsonb_build_object(
+    'insumos', coalesce((select jsonb_agg(jsonb_build_object(
+                   'id', i.id, 'nombre', i.nombre, 'unidad', i.unidad,
+                   'stock', i.stock, 'stock_min', i.stock_min,
+                   'costo', i.costo, 'activo', i.activo,
+                   'presentaciones', i.presentaciones, 'con_merma', i.con_merma,
+                   'rendimiento_esp', i.rendimiento_esp)
+                 order by lower(i.nombre))
+                 from public.insumos i where i.empresa_id = v_emp), '[]'::jsonb),
+    'productos', coalesce((select jsonb_agg(jsonb_build_object(
+                   'id', p.id, 'nombre', p.nombre,
+                   'recetas', coalesce((select jsonb_agg(jsonb_build_object(
+                                  'insumo_id', r.insumo_id, 'cantidad', r.cantidad)
+                                order by r.creada_en)
+                                from public.recetas r where r.producto_id = p.id), '[]'::jsonb))
+                 order by lower(p.nombre))
+                 from public.productos p
+                where p.empresa_id = v_emp and p.activo), '[]'::jsonb)
+  );
+end $fn$;
+revoke all on function public.inventario_listar(uuid) from public, anon, authenticated;
+grant execute on function public.inventario_listar(uuid) to authenticated;
+
+create or replace function public.insumo_guardar(
+  p_insumo     jsonb,
+  p_empresa_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp    uuid;
+  v_id     uuid;
+  v_out    uuid;
+  v_nombre text;
+  v_unidad text;
+  v_stock  numeric;
+  v_min    numeric;
+  v_costo  numeric;
+  v_activo boolean;
+  v_cm     boolean;
+  v_rend   numeric;
+  v_tiene  boolean;
+  v_pres   jsonb := '[]'::jsonb;
+  v_el     jsonb;
+  v_pn     text;
+  v_pc     numeric;
+  v_hay_pr boolean := false;
+  v_princ  boolean;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_permiso('gestionar_inventario');
+
+  if p_insumo is null or jsonb_typeof(p_insumo) <> 'object' then
+    raise exception 'Los datos del insumo son inválidos';
+  end if;
+  v_id     := nullif(p_insumo->>'id', '')::uuid;
+  v_nombre := trim(coalesce(p_insumo->>'nombre', ''));
+  if v_nombre = '' then
+    raise exception 'El nombre del insumo es obligatorio';
+  end if;
+  v_unidad := coalesce(nullif(trim(coalesce(p_insumo->>'unidad', '')), ''), 'unidad');
+  v_stock  := coalesce((p_insumo->>'stock')::numeric, 0);
+  v_min    := coalesce((p_insumo->>'stock_min')::numeric, 0);
+  v_costo  := coalesce((p_insumo->>'costo')::numeric, 0);
+  v_activo := coalesce((p_insumo->>'activo')::boolean, true);
+  v_cm     := coalesce((p_insumo->>'con_merma')::boolean, false);
+  v_rend   := nullif(p_insumo->>'rendimiento_esp', '')::numeric;
+  if v_rend is not null and (v_rend <= 0 or v_rend > 100) then
+    raise exception 'El rendimiento esperado debe estar entre 0 y 100';
+  end if;
+
+  v_tiene := p_insumo ? 'presentaciones';
+  if v_tiene then
+    if jsonb_typeof(p_insumo->'presentaciones') <> 'array' then
+      raise exception 'Las presentaciones deben ser una lista';
+    end if;
+    for v_el in select * from jsonb_array_elements(p_insumo->'presentaciones') loop
+      v_pn := trim(coalesce(v_el->>'nombre', ''));
+      v_pc := coalesce((v_el->>'cantidad')::numeric, 0);
+      if v_pn = '' or v_pc <= 0 then
+        raise exception 'Cada presentación necesita nombre y una cantidad mayor que cero';
+      end if;
+      v_princ := coalesce((v_el->>'principal')::boolean, false)
+                 and coalesce((v_el->>'activo')::boolean, true) and not v_hay_pr;
+      if v_princ then v_hay_pr := true; end if;
+      v_pres := v_pres || jsonb_build_array(jsonb_build_object(
+        'id', coalesce(nullif(v_el->>'id', ''), gen_random_uuid()::text),
+        'nombre', v_pn,
+        'cantidad', round(v_pc, 3),
+        'costo', case when nullif(v_el->>'costo', '') is null then null
+                      else round((v_el->>'costo')::numeric, 2) end,
+        'activo', coalesce((v_el->>'activo')::boolean, true),
+        'principal', v_princ));
+    end loop;
+  end if;
+
+  if v_id is not null then
+    begin
+      update public.insumos
+         set nombre = v_nombre, unidad = v_unidad, stock = v_stock,
+             stock_min = v_min, costo = v_costo, activo = v_activo,
+             con_merma = v_cm, rendimiento_esp = v_rend,
+             presentaciones = case when v_tiene then v_pres else presentaciones end,
+             actualizado_en = now()
+       where id = v_id and empresa_id = v_emp
+      returning id into v_out;
+    exception when unique_violation then
+      raise exception 'Ya existe otro insumo con ese nombre en la empresa';
+    end;
+    if v_out is null then
+      raise exception 'El insumo no existe en la empresa activa';
+    end if;
+  else
+    insert into public.insumos (empresa_id, nombre, unidad, stock, stock_min, costo, activo,
+                                con_merma, rendimiento_esp, presentaciones)
+    values (v_emp, v_nombre, v_unidad, v_stock, v_min, v_costo, v_activo,
+            v_cm, v_rend, v_pres)
+    on conflict (empresa_id, lower(nombre)) do update
+       set unidad = excluded.unidad,
+           stock = excluded.stock,
+           stock_min = excluded.stock_min,
+           costo = excluded.costo,
+           activo = excluded.activo,
+           con_merma = excluded.con_merma,
+           rendimiento_esp = excluded.rendimiento_esp,
+           presentaciones = excluded.presentaciones,
+           actualizado_en = now()
+    returning id into v_out;
+  end if;
+
+  begin
+    perform private.auditar(v_emp, 'insumo_guardar', jsonb_build_object(
+      'insumo', v_out::text, 'nombre', v_nombre, 'unidad', v_unidad,
+      'stock', v_stock, 'costo', v_costo, 'edicion', v_id is not null,
+      'presentaciones', jsonb_array_length(v_pres)),
+      'insumo', v_nombre);
+  exception when others then
+    null;
+  end;
+
+  return v_out;
+end $fn$;
+revoke all on function public.insumo_guardar(jsonb, uuid) from public, anon, authenticated;
+grant execute on function public.insumo_guardar(jsonb, uuid) to authenticated;
+
+create or replace function public.insumo_borrar(
+  p_insumo_id  uuid,
+  p_empresa_id uuid default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp    uuid;
+  v_nombre text;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_permiso('gestionar_inventario');
+
+  delete from public.insumos
+   where id = p_insumo_id and empresa_id = v_emp
+  returning nombre into v_nombre;
+  if v_nombre is null then
+    raise exception 'El insumo no existe en la empresa activa';
+  end if;
+
+  perform private.auditar(v_emp, 'insumo_borrar',
+    jsonb_build_object('insumo', p_insumo_id::text, 'nombre', v_nombre),
+    'insumo', v_nombre);
+  return true;
+end $fn$;
+revoke all on function public.insumo_borrar(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.insumo_borrar(uuid, uuid) to authenticated;
+
+-- Movimiento de inventario (lógica única; la usan insumo_movimiento y insumo_mermas_registrar).
+-- Todas las cantidades van en UNIDAD BASE, salvo cuando se manda presentación + cantidad grande:
+-- entonces la conversión la hace el servidor con las presentaciones guardadas del insumo.
+create or replace function private.insumo_mover(
+  p_emp              uuid,
+  p_insumo_id        uuid,
+  p_tipo             text,
+  p_cantidad         numeric,
+  p_nota             text,
+  p_presentacion_id  text,
+  p_cant_pres        numeric,
+  p_limpio           numeric,
+  p_costo_total      numeric,
+  p_motivo           text
+)
+returns numeric
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  i        public.insumos;
+  v_pres   jsonb;
+  v_cant   numeric;
+  v_add    numeric;
+  v_costo  numeric;
+  v_ctot   numeric;
+  v_new    numeric;
+  v_stk0   numeric;
+  v_det    jsonb := '{}'::jsonb;
+  v_nota   text := nullif(trim(coalesce(p_nota, '')), '');
+  v_mot    text;
+  v_mov    numeric;
+begin
+  if coalesce(p_tipo, '') not in ('entrada','salida','ajuste','merma') then
+    raise exception 'El tipo de movimiento debe ser entrada, salida, ajuste o merma';
+  end if;
+
+  select * into i from public.insumos
+   where id = p_insumo_id and empresa_id = p_emp for update;
+  if not found then
+    raise exception 'El insumo no existe en la empresa activa';
+  end if;
+
+  v_cant := p_cantidad;
+  if nullif(p_presentacion_id, '') is not null then
+    select e into v_pres from jsonb_array_elements(i.presentaciones) e
+     where e->>'id' = p_presentacion_id limit 1;
+    if v_pres is null then
+      raise exception 'La presentación no existe en este insumo';
+    end if;
+    if coalesce(p_cant_pres, 0) <= 0 then
+      raise exception 'La cantidad de presentaciones debe ser mayor que cero';
+    end if;
+    v_cant := round(p_cant_pres * (v_pres->>'cantidad')::numeric, 3);
+    v_det := jsonb_build_object('presentacion', v_pres->>'nombre', 'presentacion_id', p_presentacion_id,
+                                'cant_pres', round(p_cant_pres, 3), 'factor', (v_pres->>'cantidad')::numeric);
+    v_nota := trim(trim_scale(round(p_cant_pres, 3))::text || ' × ' || (v_pres->>'nombre')
+                   || coalesce(' — ' || v_nota, ''));
+  end if;
+
+  v_cant := round(coalesce(v_cant, 0), 3);
+  if p_tipo = 'ajuste' then
+    if v_cant < 0 then raise exception 'El stock del ajuste no puede ser negativo'; end if;
+  elsif v_cant <= 0 then
+    raise exception 'La cantidad debe ser mayor que cero';
+  end if;
+
+  v_stk0  := i.stock;
+  v_costo := i.costo;
+  v_mov   := v_cant;
+
+  if p_tipo = 'entrada' then
+    v_add := v_cant;
+    if i.con_merma and p_limpio is not null then
+      if p_limpio <= 0 or round(p_limpio, 3) > v_cant then
+        raise exception 'El peso limpio debe ser mayor que cero y no superar lo recibido';
+      end if;
+      v_add := round(p_limpio, 3);
+      v_det := v_det || jsonb_build_object('bruto', v_cant, 'limpio', v_add,
+                 'merma_limpieza', round(v_cant - v_add, 3),
+                 'rendimiento', round(v_add / v_cant * 100, 2));
+      v_mov := v_add;
+    end if;
+    v_ctot := p_costo_total;
+    if v_ctot is null and v_pres is not null and nullif(v_pres->>'costo', '') is not null then
+      v_ctot := round(p_cant_pres * (v_pres->>'costo')::numeric, 2);
+    end if;
+    if v_ctot is not null and v_ctot > 0 then
+      v_costo := round((greatest(v_stk0, 0) * i.costo + v_ctot) / (greatest(v_stk0, 0) + v_add), 4);
+      v_det := v_det || jsonb_build_object('costo_total', v_ctot);
+    end if;
+    v_new := v_stk0 + v_add;
+  elsif p_tipo in ('salida','merma') then
+    v_new := v_stk0 - v_cant;
+  else
+    v_new := v_cant;
+  end if;
+
+  if p_tipo = 'merma' then
+    v_mot := coalesce(nullif(trim(coalesce(p_motivo, '')), ''), 'otro');
+    if v_mot not in ('limpieza','desecho','vencido','derrame','otro') then v_mot := 'otro'; end if;
+    v_det := v_det || jsonb_build_object('motivo', v_mot);
+  end if;
+  v_det := v_det || jsonb_build_object('costo_unit', v_costo);
+
+  update public.insumos
+     set stock = v_new, costo = v_costo, actualizado_en = now()
+   where id = p_insumo_id and empresa_id = p_emp;
+
+  insert into public.insumos_movimientos
+    (empresa_id, insumo_id, tipo, cantidad, stock_after, nota, detalle, usuario, usuario_nombre)
+  values (p_emp, p_insumo_id, p_tipo, v_mov, v_new, v_nota, v_det, auth.uid(),
+          coalesce((select p.display_name from public.perfiles p where p.user_id = auth.uid()), ''));
+
+  perform private.auditar(p_emp, case when p_tipo = 'merma' then 'insumo_merma' else 'insumo_movimiento' end,
+    jsonb_build_object('insumo', p_insumo_id::text, 'nombre', i.nombre, 'tipo', p_tipo,
+                       'cantidad', v_mov, 'stock_after', v_new, 'detalle', v_det),
+    'insumo', i.nombre);
+  return v_new;
+end $fn$;
+revoke all on function private.insumo_mover(uuid, uuid, text, numeric, text, text, numeric, numeric, numeric, text) from public, anon, authenticated;
+
+drop function if exists public.insumo_movimiento(uuid, text, numeric, text, uuid);
+create or replace function public.insumo_movimiento(
+  p_insumo_id       uuid,
+  p_tipo            text,
+  p_cantidad        numeric default null,
+  p_nota            text    default null,
+  p_empresa_id      uuid    default null,
+  p_presentacion_id text    default null,
+  p_cant_pres       numeric default null,
+  p_limpio          numeric default null,
+  p_costo_total     numeric default null,
+  p_motivo          text    default null
+)
+returns numeric
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_permiso('gestionar_inventario');
+  return private.insumo_mover(v_emp, p_insumo_id, p_tipo, p_cantidad, p_nota,
+                              p_presentacion_id, p_cant_pres, p_limpio, p_costo_total, p_motivo);
+end $fn$;
+revoke all on function public.insumo_movimiento(uuid, text, numeric, text, uuid, text, numeric, numeric, numeric, text) from public, anon, authenticated;
+grant execute on function public.insumo_movimiento(uuid, text, numeric, text, uuid, text, numeric, numeric, numeric, text) to authenticated;
+
+-- Registro rápido de varias mermas del día en una sola operación (todo o nada).
+-- p_lineas: [{insumo_id, cantidad | presentacion_id + cant_pres, motivo, nota}]
+create or replace function public.insumo_mermas_registrar(
+  p_lineas     jsonb,
+  p_empresa_id uuid default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  v_l   jsonb;
+  v_n   integer := 0;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_permiso('gestionar_inventario');
+  if p_lineas is null or jsonb_typeof(p_lineas) <> 'array' or jsonb_array_length(p_lineas) = 0 then
+    raise exception 'Agrega al menos una merma';
+  end if;
+  for v_l in select * from jsonb_array_elements(p_lineas) loop
+    perform private.insumo_mover(v_emp, nullif(v_l->>'insumo_id', '')::uuid, 'merma',
+      nullif(v_l->>'cantidad', '')::numeric, v_l->>'nota',
+      v_l->>'presentacion_id', nullif(v_l->>'cant_pres', '')::numeric,
+      null, null, v_l->>'motivo');
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end $fn$;
+revoke all on function public.insumo_mermas_registrar(jsonb, uuid) from public, anon, authenticated;
+grant execute on function public.insumo_mermas_registrar(jsonb, uuid) to authenticated;
+
+create or replace function public.receta_reemplazar(
+  p_producto_id uuid,
+  p_lineas      jsonb,
+  p_empresa_id  uuid default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp  uuid;
+  v_line jsonb;
+  v_ins  uuid;
+  v_cant numeric;
+  v_n    integer := 0;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_permiso('gestionar_inventario');
+
+  if not exists (select 1 from public.productos p
+                  where p.id = p_producto_id and p.empresa_id = v_emp) then
+    raise exception 'El producto no existe en la empresa activa';
+  end if;
+  if p_lineas is null then
+    p_lineas := '[]'::jsonb;
+  end if;
+  if jsonb_typeof(p_lineas) <> 'array' then
+    raise exception 'Las líneas de la receta deben ser una lista';
+  end if;
+
+  delete from public.recetas where producto_id = p_producto_id and empresa_id = v_emp;
+
+  for v_line in select * from jsonb_array_elements(p_lineas) loop
+    v_ins  := nullif(v_line->>'insumo_id', '')::uuid;
+    v_cant := coalesce((v_line->>'cantidad')::numeric, 0);
+    if v_ins is null or v_cant <= 0 then
+      raise exception 'Cada línea de receta necesita un insumo y una cantidad mayor que cero';
+    end if;
+    if not exists (select 1 from public.insumos i
+                    where i.id = v_ins and i.empresa_id = v_emp) then
+      raise exception 'El insumo de la receta no pertenece a la empresa activa';
+    end if;
+    insert into public.recetas (empresa_id, producto_id, insumo_id, cantidad)
+    values (v_emp, p_producto_id, v_ins, v_cant)
+    on conflict (producto_id, insumo_id) do update
+       set cantidad = excluded.cantidad;
+    v_n := v_n + 1;
+  end loop;
+
+  perform private.auditar(v_emp, 'receta_guardar', jsonb_build_object(
+    'producto', p_producto_id::text, 'lineas', v_n),
+    'producto', (select pr.nombre from public.productos pr where pr.id = p_producto_id));
+  return v_n;
+end $fn$;
+revoke all on function public.receta_reemplazar(uuid, jsonb, uuid) from public, anon, authenticated;
+grant execute on function public.receta_reemplazar(uuid, jsonb, uuid) to authenticated;
+
+create or replace function public.movimientos_listar(
+  p_dias       integer default 7,
+  p_limite     integer default 200,
+  p_empresa_id uuid    default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp  uuid;
+  v_dias integer;
+  v_lim  integer;
+  v_out  jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_permiso('ver_inventario');
+
+  v_dias := least(greatest(coalesce(p_dias, 7), 1), 90);
+  v_lim  := least(greatest(coalesce(p_limite, 200), 1), 500);
+
+  select coalesce(jsonb_agg(q.r order by (q.r->>'en') desc), '[]'::jsonb) into v_out
+    from (
+      select jsonb_build_object('en', m.en,
+                                'insumo_nombre', coalesce(i.nombre, '(insumo eliminado)'),
+                                'unidad', i.unidad,
+                                'tipo', m.tipo, 'cantidad', m.cantidad,
+                                'stock_after', m.stock_after, 'nota', m.nota,
+                                'detalle', m.detalle,
+                                'usuario_nombre', coalesce(nullif(m.usuario_nombre, ''), '—')) as r
+        from public.insumos_movimientos m
+        left join public.insumos i on i.id = m.insumo_id
+       where m.empresa_id = v_emp
+         and m.en >= now() - make_interval(days => v_dias)
+       order by m.en desc
+       limit v_lim
+    ) q;
+  return v_out;
+end $fn$;
+revoke all on function public.movimientos_listar(integer, integer, uuid) from public, anon, authenticated;
+grant execute on function public.movimientos_listar(integer, integer, uuid) to authenticated;
+
+-- Filas para el reporte de merma: mermas manuales + mermas de limpieza (entradas con rendimiento).
+create or replace function public.merma_listar(
+  p_dias       integer default 30,
+  p_empresa_id uuid    default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp  uuid;
+  v_dias integer;
+  v_out  jsonb;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_permiso('ver_inventario');
+  v_dias := least(greatest(coalesce(p_dias, 30), 1), 365);
+  select coalesce(jsonb_agg(q.r order by (q.r->>'en') desc), '[]'::jsonb) into v_out
+    from (
+      select jsonb_build_object('en', m.en, 'insumo_id', m.insumo_id,
+                                'insumo_nombre', coalesce(i.nombre, '(insumo eliminado)'),
+                                'unidad', i.unidad, 'costo', i.costo,
+                                'tipo', m.tipo, 'cantidad', m.cantidad,
+                                'detalle', m.detalle) as r
+        from public.insumos_movimientos m
+        left join public.insumos i on i.id = m.insumo_id
+       where m.empresa_id = v_emp
+         and m.en >= now() - make_interval(days => v_dias)
+         and (m.tipo = 'merma' or (m.tipo = 'entrada' and m.detalle ? 'merma_limpieza'))
+       order by m.en desc
+       limit 5000
+    ) q;
+  return v_out;
+end $fn$;
+revoke all on function public.merma_listar(integer, uuid) from public, anon, authenticated;
+grant execute on function public.merma_listar(integer, uuid) to authenticated;
+
+
+-- ############################################################################
+-- ## J) DATOS FISCALES DEL CLIENTE v0.45.0 (nombre, NIT/RUT/RFC y correo; todo opcional)
+-- ## Es solo un dato de la cuenta: no emite factura. Idempotente.
+-- ############################################################################
+alter table public.cuentas add column if not exists fiscal_nombre text;
+alter table public.cuentas add column if not exists fiscal_numero text;
+alter table public.cuentas add column if not exists fiscal_correo text;
+alter table public.cuentas drop constraint if exists cuentas_fiscal_largo_chk;
+alter table public.cuentas add constraint cuentas_fiscal_largo_chk check (
+  (fiscal_nombre is null or length(fiscal_nombre) <= 80) and
+  (fiscal_numero is null or length(fiscal_numero) <= 30) and
+  (fiscal_correo is null or length(fiscal_correo) <= 120));
+
+create or replace function public.poner_datos_fiscales(
+  p_cuenta_id  uuid,
+  p_nombre     text default null,
+  p_numero     text default null,
+  p_correo     text default null,
+  p_empresa_id uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  c     public.cuentas;
+  v_nom text := left(nullif(btrim(coalesce(p_nombre, '')), ''), 80);
+  v_num text := left(nullif(btrim(coalesce(p_numero, '')), ''), 30);
+  v_cor text := left(nullif(btrim(coalesce(p_correo, '')), ''), 120);
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
+  c := private.load_cuenta(p_cuenta_id, array['abierta','precuenta']::text[]);
+  if v_cor is not null and v_cor !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
+    raise exception 'El correo no es válido';
+  end if;
+  update public.cuentas
+     set fiscal_nombre = v_nom, fiscal_numero = v_num, fiscal_correo = v_cor
+   where id = p_cuenta_id and empresa_id = v_emp;
+  begin
+    perform private.auditar(v_emp, 'cuenta_fiscal', jsonb_build_object(
+      'cuenta', c.id::text, 'nombre', v_nom, 'numero', v_num),
+      'cuenta', 'cuenta ' || coalesce(c.numero::text, left(c.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
+end $fn$;
+revoke all on function public.poner_datos_fiscales(uuid, text, text, text, uuid) from public, anon;
+grant execute on function public.poner_datos_fiscales(uuid, text, text, text, uuid) to authenticated;

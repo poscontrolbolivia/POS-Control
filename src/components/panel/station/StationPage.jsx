@@ -63,7 +63,7 @@ export default function StationPage({ rol, sesion, embebida = false }) {
     <div className={caja}>
       {embebida
         ? <p className="imp-subtitulo">🖨️ {t('estacion.titulo')}</p>
-        : <div className="adm-cab"><h2>🖨️ {t('estacion.titulo')}</h2></div>}
+        : <div className="adm-cab"><h2>{t('estacion.titulo')}</h2></div>}
 
       {modoImpresion(cfg) !== 'estacion' && (
         <div className="adm-aviso est-aviso">

@@ -1,7 +1,7 @@
-.vd{display:grid;grid-template-columns:1fr;gap:12px;padding:12px;width:100%;max-width:1150px;margin:0 auto}
+.vd{display:grid;grid-template-columns:1fr;gap:12px;padding:var(--pagina-pad);width:100%;max-width:var(--pagina-max);margin:0 auto}
 .vd h2,.vd h3{margin:0}
 .vd h3 small{color:var(--mut);font-weight:400}
-.vd-titulo{font-size:1.05rem}
+.vd-titulo{font-size:1.35rem}
 .vd-vacio{color:var(--mut);font-size:.9rem;margin:6px 0}
 .vd-sinpermiso{color:var(--mut)}
 
@@ -10,7 +10,7 @@
 .vd-vistas{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0}
 .vd-vistas .vd-tab{min-height:40px;padding:6px 16px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:.9rem;font-weight:600}
 .vd-vista-n{min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--libre);border:1px solid var(--line);
-  color:var(--mut);font-size:.74rem;font-weight:700;font-style:normal;display:inline-flex;align-items:center;justify-content:center}
+  color:var(--mut);font-size:.78rem;font-weight:700;font-style:normal;display:inline-flex;align-items:center;justify-content:center}
 .vd-vistas .vd-tab.on .vd-vista-n{background:rgba(255,255,255,.35);border-color:transparent;color:var(--on-btn)}
 .vd-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 /* flex:0 0 auto: el button global trae min-width:40px, que anula el «min-width:auto» de los items
@@ -30,7 +30,7 @@
 .vd-prod small{color:var(--mut);font-weight:400}
 .vd-prod:active{border-color:var(--ac);background:var(--libre)}
 
-.vd-panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.vd-panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
 @media (min-width:860px){
   .vd{grid-template-columns:1fr 340px;align-items:start}
   .vd-panel{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
@@ -57,7 +57,7 @@
 .vd-total{display:flex;justify-content:space-between;align-items:center;font-size:1.25rem;margin-top:4px}
 
 .vd-pagos{display:flex;flex-direction:column;gap:10px}
-.vd-pago{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
+.vd-pago{border:1px solid var(--line);border-radius:var(--r-md);padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
 .vd-metodos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .vd-metodo{min-height:54px;font-size:1rem;font-weight:700}
 .vd-monto{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:var(--mut)}
@@ -71,13 +71,13 @@
 .vd-check-cuerpo{display:flex;flex-direction:column;gap:2px;min-width:0}
 .vd-check-cuerpo small{font-weight:400;font-size:.78rem;line-height:1.35;opacity:.8}
 .vd-acciones{display:flex;flex-direction:column;gap:8px}
-.vd-aviso{margin:0;padding:8px 10px;border-radius:10px;background:var(--libre);color:var(--ac);font-weight:600;font-size:.9rem}
+.vd-aviso{margin:0;padding:8px 10px;border-radius:var(--r-sm);background:var(--libre);color:var(--ac);font-weight:600;font-size:.9rem}
 
 .vd-agotados{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
 .vd-agotado{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid var(--porcobrar-bd);
   background:color-mix(in srgb,var(--porcobrar-bg) 55%,var(--card));color:var(--ink);
   border-radius:999px;padding:4px 8px;font-size:.78rem;font-weight:650;overflow-wrap:anywhere}
-.vd-agotado button.vd-agotado-x{width:24px;height:24px;min-width:24px;min-height:24px;padding:0;border:1px solid var(--rojo-bd);border-radius:50%;background:var(--rojo-bg);color:var(--rojo-txt);font-size:.75rem;font-weight:700;line-height:1;cursor:pointer}
+.vd-agotado button.vd-agotado-x{width:24px;height:24px;min-width:24px;min-height:24px;padding:0;border:1px solid var(--rojo-bd);border-radius:50%;background:var(--rojo-bg);color:var(--rojo-txt);font-size:.78rem;font-weight:700;line-height:1;cursor:pointer}
 .vd-agotado button.vd-agotado-x:hover:not(:disabled){background:var(--rojo-hover);border-color:color-mix(in srgb,var(--rojo) 45%,var(--rojo-bd))}
 .vd-acciones button.ghost{--pc:var(--rojo);border:0;border-radius:999px;color:var(--rojo-on);font-weight:650;text-shadow:0 1px 1px rgba(0,0,0,.25);background:var(--gloss),var(--pc);box-shadow:var(--sh-btn) color-mix(in srgb,var(--pc) 38%,transparent)}
 .vd-acciones button.ghost:hover:not(:disabled){background:var(--gloss),var(--pc);filter:brightness(.94);transform:translateY(-1px)}

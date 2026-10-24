@@ -197,7 +197,7 @@ export default function CuentasTab({ filtroProveedor, onFiltro, alta = false, on
         <span className="adm-chip">{visibles.length} {tOr('inventario.chipDeudas', 'deuda(s)')}</span>
         <span className="sp" />
         {provFiltrado && (
-          <button type="button" className="info" onClick={() => onFiltro('')}>
+          <button type="button" className="ghost" onClick={() => onFiltro('')}>
             {nombreProv(provFiltrado.id)} ✕
           </button>
         )}

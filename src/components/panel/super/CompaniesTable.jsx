@@ -175,7 +175,7 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
                 <span className="super-plan-custom">
                   <input name="dias-placeholder" type="number" min="1" max="3650" step="1" inputMode="numeric" value={diasCustom} disabled={ocupadoCuota}
                     placeholder={tOr('super.plan.diasPlaceholder', 'N días')} onChange={ev => setDiasCustom(ev.target.value)} />
-                  <button type="button" className="info" disabled={ocupadoCuota || !diasCustom} onClick={() => aplicarPlan('pago', diasCustom)}>{tOr('super.plan.sumar', 'Sumar días')}</button>
+                  <button type="button" className="ghost" disabled={ocupadoCuota || !diasCustom} onClick={() => aplicarPlan('pago', diasCustom)}>{tOr('super.plan.sumar', 'Sumar días')}</button>
                 </span>
                 <button type="button" className="primary" disabled={ocupadoCuota} onClick={() => aplicarPlan('pago', null)}>{tOr('super.plan.premiumIndef', 'Premium indefinido')}</button>
                 <button type="button" className="orange" disabled={ocupadoCuota || cuota.plan !== 'pago'} onClick={() => aplicarPlan('gratis', null)}>{tOr('super.cuota.aBasico', 'Volver a Básico')}</button>

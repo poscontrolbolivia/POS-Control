@@ -6,6 +6,7 @@ import { despachar } from '../../services/printDispatch.js'
 import { tGlobal, existeClave } from '../../i18n/index.jsx'
 import { round2 } from '../../services/format.js'
 import { formatearMonto } from '../../services/money.js'
+import { etiquetaFiscal, pideDatosFiscales, fiscalVacio, fiscalDe } from '../../services/fiscal.js'
 
 const cap = x => x ? x.charAt(0).toUpperCase() + x.slice(1) : ''
 
@@ -107,8 +108,24 @@ export function lineasPlanas({ cuenta, config = {}, titulo, comanda = false, anc
   centro((config?.nombre || 'POS Control').toUpperCase(), { grande: true })
   centro(config?.sucursal, { negrita: true })
   centro(config?.direccion)
-  centro([config?.telefono && `Tel ${config.telefono}`, config?.nit && `NIT ${config.nit}`].filter(Boolean).join('  ·  '))
+  const idFiscal = etiquetaFiscal(config)
+  centro([config?.telefono && `Tel ${config.telefono}`, config?.nit && `${idFiscal} ${config.nit}`].filter(Boolean).join('  ·  '))
   L.push(sep)
+
+  // Datos del cliente: justo debajo de los datos fiscales del negocio y arriba del detalle.
+  // Llenos salen impresos; vacíos no salen en el comprobante cobrado. En la cuenta que se le da al
+  // cliente para pagar (aún sin cobrar) quedan renglones punteados para llenarlos a mano.
+  const fis = fiscalDe(cuenta)
+  if (!fiscalVacio(fis)) {
+    if (fis.nombre) suelta(`${tGlobal('ticket.clienteNombre')}: ${fis.nombre}`)
+    if (fis.numero) suelta(`${idFiscal}: ${fis.numero}`)
+    if (fis.correo) suelta(`${tGlobal('ticket.clienteCorreo')}: ${fis.correo}`)
+    L.push(sep)
+  } else if (cuenta.id && cuenta.estado !== 'cerrada' && pideDatosFiscales(config)) {
+    const aMano = etq => { const base = `${etq}: `; L.push({ texto: base + '.'.repeat(Math.max(3, ancho - base.length)) }) }
+    aMano(tGlobal('ticket.clienteNombre')); aMano(idFiscal); aMano(tGlobal('ticket.clienteCorreo'))
+    L.push(sep)
+  }
 
   // Salón · mesa (o mostrador) y mesero, un cuerpo más grande que el resto del ticket.
   const mesa = datos.mesa || titulo || (cuenta.canal === 'llevar'

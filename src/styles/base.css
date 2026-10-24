@@ -8,9 +8,13 @@ button{border:1.5px solid var(--chip-bd);background:var(--chip-bg);border-radius
 button:hover:not(:disabled){background:var(--chip-hover)}
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 button:disabled{opacity:.5;cursor:not-allowed}
-/* «ghost» ya no es un botón blanco: lleva color (pizarra) como el resto de los botones de acción. */
-button.ghost{--pc:var(--btn-slate);border:0;color:var(--on-btn);font-weight:650;background:var(--gloss),var(--pc);box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 38%,transparent);text-shadow:0 1px 1px rgba(0,0,0,.25)}
-button.ghost:hover:not(:disabled){filter:brightness(.94);transform:translateY(-1px);background:var(--gloss),var(--pc)}
+/* JERARQUÍA DE BOTONES (igual en toda la app):
+   1) PRINCIPAL  = verde sólido (primary / success): una sola acción clave por pantalla o diálogo.
+   2) SECUNDARIO = «ghost»: fondo de tarjeta con borde; todo lo demás que no es la acción clave.
+   3) DESTRUCTIVO = rojo suave (danger) y rojo sólido solo para confirmar algo irreversible.
+   Amarillo (warning), azul, naranja, violeta y turquesa quedan para casos puntuales de estado. */
+button.ghost{--pc:var(--line-fuerte);border:1.5px solid var(--line-fuerte);background:var(--card);color:var(--ink);font-weight:650;box-shadow:none;text-shadow:none}
+button.ghost:hover:not(:disabled){background:var(--card-2);border-color:var(--ac);transform:none;filter:none}
 button.big{width:100%;padding:16px;font-size:1.1rem}
 /* En los paneles de administración «big» ya no es gigante: mismo tamaño que los demás botones. */
 .adm-panel button.big{width:auto;min-width:160px;padding:9px 22px;font-size:1rem}
@@ -57,12 +61,12 @@ input, select, textarea{font-size:max(16px,1em)}
 .fila{display:flex;align-items:center}
 .sp+*{margin-left:auto}
 .tab{border-radius:var(--r-pill)}
-.lienzo{position:relative;width:100%;background-color:var(--lienzo);border:2px solid var(--line-fuerte);border-radius:14px;overflow:hidden;touch-action:none;
+.lienzo{position:relative;width:100%;background-color:var(--lienzo);border:2px solid var(--line-fuerte);border-radius:var(--r-md);overflow:hidden;touch-action:none;
  background-image:radial-gradient(var(--lienzo-punto) 1.4px,transparent 1.4px);background-size:5% 8.33%}
 .lienzo.edit{outline:3px dashed var(--ac);outline-offset:2px}
 .mesa{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;border:3px solid var(--line-fuerte);cursor:pointer;user-select:none;text-align:center;font-size:clamp(.65rem,1.6vw,.95rem);box-shadow:0 3px 8px rgba(0,0,0,.22)}
-.mesa.cuadrada{border-radius:12px}
-.mesa.rect{border-radius:12px}
+.mesa.cuadrada{border-radius:var(--r-md)}
+.mesa.rect{border-radius:var(--r-md)}
 .mesa.redonda{border-radius:50%}
 .mesa.libre{background:var(--libre-bg);border-color:var(--libre-bd);color:var(--libre-ink)}
 .mesa.ocupada{background:var(--ocupada-bg);border-color:var(--ocupada-bd);color:var(--ocupada-ink)}
@@ -95,8 +99,8 @@ input, select, textarea{font-size:max(16px,1em)}
 .tag.abierta{background:var(--libre-bg);color:var(--libre-ink);border-color:var(--libre-bd)}
 .tag.precuenta{background:var(--porcobrar-bg);color:var(--porcobrar-ink);border-color:var(--porcobrar-bd)}
 .tag.cerrada{background:var(--card-2);color:var(--mut)}
-.modal-fondo{position:fixed;inset:0;z-index:200;background:rgba(8,14,28,.62);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px;animation:modal-in .14s ease-out}
-.modal-caja{width:100%;max-width:760px;max-height:calc(100vh - 32px);overflow-y:auto;background:var(--card);color:var(--ink);border:2px solid var(--line-fuerte);border-radius:18px;padding:18px;box-shadow:var(--sh-2)}
+.modal-fondo{position:fixed;inset:0;z-index:200;background:var(--overlay);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px;animation:modal-in .14s ease-out}
+.modal-caja{width:100%;max-width:760px;max-height:calc(100vh - 32px);overflow-y:auto;background:var(--card);color:var(--ink);border:var(--borde-ventana);border-radius:var(--r-lg);padding:18px;box-shadow:var(--sh-2)}
 @keyframes modal-in{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}}
 @media(max-width:640px){.modal-fondo{padding:0;align-items:flex-end}
 .modal-caja{max-width:none;max-height:94vh;border-radius:18px 18px 0 0;padding:14px}}
@@ -150,3 +154,10 @@ button.ico{background:var(--logo-navy);border:0;color:var(--on-btn)}
 button.ico:hover:not(:disabled){background:var(--logo-navy);filter:brightness(1.15)}
 button.ico.ok{background:var(--logo-green)}
 button.ico.danger{background:var(--rojo)}
+
+/* Pestañas: mismo espacio entre ellas y mismo alto táctil en todas las pantallas. */
+.ck-tabs, .vd-tabs, .mn-tabs, .inv-tabs, .pm-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.vd-tabs{flex-wrap:nowrap}
+.ck-tabs .ck-tab, .vd-tabs .vd-tab, .mn-tabs .tab, .inv-tabs .tab, .pm-tabs .tab{min-height:44px}
+
+.txt-mut{color:var(--mut)}

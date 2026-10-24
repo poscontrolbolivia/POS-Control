@@ -12,6 +12,11 @@ const ROLES = ['admin', 'cajero', 'mesero', 'cocina', 'barra']
 const ROL_ETIQUETA = { admin: 'Administrador', cajero: 'Cajero', mesero: 'Mesero', cocina: 'Cocina', barra: 'Barra' }
 
 const ROL_INLINE = { cocina: { background: 'var(--rol-cocina)', color: 'var(--on-btn)' }, barra: { background: 'var(--rol-barra)', color: 'var(--on-btn)' } }
+// Permisos de inventario que el admin puede dar a otras personas (el admin ya los tiene).
+const PERMISOS_INV = [
+  { id: 'ver_inventario', clave: 'equipo.perm.ver', def: 'Ver inventario' },
+  { id: 'gestionar_inventario', clave: 'equipo.perm.gestionar', def: 'Gestionar inventario' },
+]
 const rolEtiqueta = (rol, tOr) => (rol ? tOr('rol.' + rol, ROL_ETIQUETA[rol] || rol) : '—')
 const MIN_CLAVE = 4
 const CORREO_OK = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -169,6 +174,18 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
     }
   }
 
+  const alternarPermiso = async (m, id) => {
+    if (ocupado) return
+    const actual = Array.isArray(m.permisos) ? m.permisos : []
+    const nuevos = actual.includes(id) ? actual.filter(x => x !== id) : [...actual, id]
+    setAviso(''); setError('')
+    try {
+      await rpc('equipo_poner_permisos', { p_usuario_id: m.usuario_id, p_permisos: nuevos }, { conEmpresa: false })
+      setAviso(tOr('equipo.perm.guardado', 'Permisos actualizados.'))
+      await cargar(true)
+    } catch (err) { setError(textoError(err, tOr)) }
+  }
+
   const alternarArea = async (m, id) => {
     if (ocupado) return
     const actual = Array.isArray(m.areas) ? m.areas : []
@@ -262,6 +279,14 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
                             return <button key={g.id} type="button" className={'eq-area' + (on ? ' on' : '')} aria-pressed={on} disabled={ocupado} onClick={() => alternarArea(m, g.id)}>{g.nombre}</button>
                           })}
                           {!(Array.isArray(m.areas) && m.areas.length) && <small className="eq-areas-todas">{tOr('equipo.areas.todas', 'Todas las áreas')}</small>}
+                        </div>
+                      )}
+                      {m.rol !== 'admin' && (
+                        <div className="eq-areas" role="group" aria-label={tOr('equipo.perm.titulo', 'Permisos de inventario')}>
+                          {PERMISOS_INV.map(p => {
+                            const on = Array.isArray(m.permisos) && m.permisos.includes(p.id)
+                            return <button key={p.id} type="button" className={'eq-area' + (on ? ' on' : '')} aria-pressed={on} disabled={ocupado} onClick={() => alternarPermiso(m, p.id)}>{tOr(p.clave, p.def)}</button>
+                          })}
                         </div>
                       )}
                     </div>
@@ -428,12 +453,24 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
       <div className="eq-lista">
         {usuarios.map(u => (
           <div key={u.usuario} className="eq-fila">
-            <div className="eq-persona"><span className="eq-nombre">{u.nombre}</span></div>
+            <div className="eq-persona">
+              <span className="eq-nombre">{u.nombre}</span>
+              {u.rol !== 'admin' && (
+                <div className="eq-areas" role="group" aria-label={tOr('equipo.perm.titulo', 'Permisos de inventario')}>
+                  {PERMISOS_INV.map(p => {
+                    const act = Array.isArray(u.permisos) ? u.permisos : []
+                    const on = act.includes(p.id)
+                    return <button key={p.id} type="button" className={'eq-area' + (on ? ' on' : '')} aria-pressed={on}
+                      onClick={() => d({ t: 'usuario~', usuario: u.usuario, cambios: { permisos: on ? act.filter(x => x !== p.id) : [...act, p.id] } })}>{tOr(p.clave, p.def)}</button>
+                  })}
+                </div>
+              )}
+            </div>
             <div className="eq-celda"><span className="eq-correo">{u.usuario}</span></div>
             <div className="eq-celda"><span className={'eq-rol eq-rol-' + u.rol} style={ROL_INLINE[u.rol]}>{rolEtiqueta(u.rol, tOr)}</span></div>
             <div className="eq-celda" />
             <div className="eq-acciones">
-              <button type="button" className="info" onClick={() => { setError(''); setClaveFila(c => (c?.usuario === u.usuario ? null : { usuario: u.usuario, clave: generarClave() })) }}>
+              <button type="button" className="ghost" onClick={() => { setError(''); setClaveFila(c => (c?.usuario === u.usuario ? null : { usuario: u.usuario, clave: generarClave() })) }}>
                 {tOr('equipo.clave.abrir', 'Nueva clave')}
               </button>
               <button type="button" className={confirma === u.usuario ? 'danger solid' : 'danger'} onClick={() => quitar(u)}>

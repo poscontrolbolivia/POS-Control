@@ -286,7 +286,7 @@ export default function ReportsPage({ rol, sesion }) {
       <section className="adm-card">
         <div className="adm-card-cab rp-cab">
           <div>
-            <h3>📊 {tOr('reportes.titulo', 'Reportes')}</h3>
+            <h3>{tOr('reportes.titulo', 'Reportes')}</h3>
             <p className="adm-sub rp-rango">{legible(rango.desde)} – {legible(rango.hasta)}
               {cargando && <span className="adm-spinner rp-spin">{tOr('reportes.cargando', 'Cargando…')}</span>}
             </p>

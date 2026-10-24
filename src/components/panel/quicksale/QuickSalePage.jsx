@@ -9,6 +9,7 @@ import { imprimirCuenta, imprimirComandas } from '../../printing/Ticket.jsx'
 import { listasDe, notaDeUnidad, indicacionesDeUnidad, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
 import IndicacionesPrevio from '../order/IndicacionesPrevio.jsx'
 import CobroForm, { imputarPagos, cobroNuevo } from '../pago/CobroForm.jsx'
+import { fiscalVacio, fiscalACuenta, correoValido } from '../../../services/fiscal.js'
 import MesasResumen from '../hall/MesasResumen.jsx'
 import '../pago/ComprobanteQr.css'
 import { ruedaHorizontal } from '../../../services/ruedaHorizontal.js'
@@ -120,12 +121,13 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   }
   const confirmarCobro = () => {
     if (cobro.lineas.some(l => l.subiendo)) return setAviso(t('comp.subiendo'))
+    if (!correoValido(cobro.fiscal?.correo)) return setAviso(t('fiscal.correoInvalido'))
     const { pagos, saldo } = imputarPagos(cobro.lineas, total)
     if (saldo > 0.009) return setAviso(t('venta.faltaTotal', { faltan: m(saldo) }))
     if (!pagos.length) return setAviso(t('venta.sinPago'))
     const numero = s.caja.siguienteTurno
     d({ t: 'abrir-directa', usuario })
-    setPendiente({ numero, lineas: carrito.map(l => ({ p: l.p, qty: l.qty, nota: l.nota, indicaciones: l.indicaciones, extra: l.extra, sel: l.sel })), fase: 0, pagos, imprimir: cobro.imprimir, comanda: cobro.comanda, usuario })
+    setPendiente({ numero, lineas: carrito.map(l => ({ p: l.p, qty: l.qty, nota: l.nota, indicaciones: l.indicaciones, extra: l.extra, sel: l.sel })), fase: 0, pagos, imprimir: cobro.imprimir, comanda: cobro.comanda, fiscal: cobro.fiscal, usuario })
   }
 
   useEffect(() => {
@@ -148,12 +150,13 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
       return
     }
 
-    const { pagos, imprimir, comanda, usuario: usr } = pendiente
+    const { pagos, imprimir, comanda, fiscal, usuario: usr } = pendiente
     const porEnviar = (c.items || []).filter(i => i.estado === 'pendiente')
     // Enviar antes de cobrar: al cerrarse la cuenta el área ya no la devuelve, pero Despacho la
     // sigue mostrando como «por entregar» hasta que el producto sale. Ambos van a la misma cola,
     // así que el envío queda escrito antes del cierre.
     if (porEnviar.length) d({ t: 'enviar', cuentaId: c.id })
+    if (!fiscalVacio(fiscal)) d({ t: 'fiscal~', cuentaId: c.id, nombre: fiscal.nombre.trim(), numero: fiscal.numero.trim(), correo: fiscal.correo.trim() })
     d({ t: 'cobrar', cuentaId: c.id, pagos, usuario: usr })
     const cambio = round2(pagos.reduce((acc, p) => acc + (p.cambio || 0), 0))
     const base = t('venta.cobrada', { n: c.numero }) + (cambio > 0 ? t('venta.cambioSuffix', { monto: m(cambio) }) : '')
@@ -161,7 +164,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
     setPendiente(null)
     setCarrito([])
     setCobro(null)
-    const cuentaCerrada = { ...c, estado: 'cerrada', pagos, cerradaEn: Date.now() }
+    const cuentaCerrada = { ...c, ...(fiscalVacio(fiscal) ? {} : fiscalACuenta(fiscal)), estado: 'cerrada', pagos, cerradaEn: Date.now() }
     // La impresión va diferida y después del cobro: el diálogo nativo de Windows congela el hilo
     // y, con la cola de Supabase todavía por escribir, se perdía la venta completa.
     setTimeout(() => {

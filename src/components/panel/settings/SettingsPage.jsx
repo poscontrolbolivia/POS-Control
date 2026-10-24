@@ -46,6 +46,8 @@ export default function SettingsPage({ rol, sesion }) {
     direccion: s.config?.direccion ?? '',
     telefono: s.config?.telefono ?? '',
     nit: s.config?.nit ?? '',
+    fiscalEtiqueta: s.config?.fiscalEtiqueta ?? '',
+    datosFiscales: s.config?.datosFiscales !== false,
     moneda: s.config?.moneda || MONEDA,
     ivaPct: String(s.config?.ivaPct ?? 0),
     propinaPct: String(s.config?.propinaPct ?? 10),
@@ -121,6 +123,8 @@ export default function SettingsPage({ rol, sesion }) {
       direccion: form.direccion.trim(),
       telefono: form.telefono.trim(),
       nit: form.nit.trim(),
+      fiscalEtiqueta: form.fiscalEtiqueta.trim(),
+      datosFiscales: form.datosFiscales,
       moneda: limpiarMoneda(form.moneda),
       ivaPct, propinaPct, propinaIncluida: form.propinaIncluida, cajaModo: form.cajaModo,
     } })
@@ -163,6 +167,15 @@ export default function SettingsPage({ rol, sesion }) {
             <label className="adm-campo">
               <span>{t('config.nitLabel')}</span>
               <input name="nit" value={form.nit} onChange={set('nit')} maxLength={20} />
+            </label>
+            <label className="adm-campo">
+              <span>{t('config.fiscalEtiqueta')}</span>
+              <input name="fiscalEtiqueta" value={form.fiscalEtiqueta} onChange={set('fiscalEtiqueta')} placeholder="NIT" maxLength={12} />
+              <small style={{ color: 'var(--mut)', fontWeight: 400 }}>{t('config.fiscalEtiquetaAyuda')}</small>
+            </label>
+            <label className="adm-check">
+              <input name="datosFiscales" type="checkbox" checked={form.datosFiscales} onChange={e => setForm({ ...form, datosFiscales: e.target.checked })} />
+              <span>{t('config.datosFiscales')}<small>{t('config.datosFiscalesAyuda')}</small></span>
             </label>
           </div>
           <div className="adm-fila2">

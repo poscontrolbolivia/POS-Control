@@ -143,7 +143,7 @@ async function fetchExtras(empresaId, nombres) {
     suave(sb.from('cuentas_por_pagar').select('*').eq('empresa_id', empresaId).order('fecha', { ascending: false }).limit(500), []),
     suave(sb.from('alertas').select('*').eq('empresa_id', empresaId).order('creada_en', { ascending: false }).limit(300), []),
     // `costo` entra porque el costo de una receta se calcula con el costo de cada insumo.
-    suave(sb.from('insumos').select('id, nombre, stock, stock_min, unidad, costo, activo').eq('empresa_id', empresaId), []),
+    suave(sb.from('insumos').select('id, nombre, stock, stock_min, unidad, costo, activo, presentaciones, con_merma, rendimiento_esp').eq('empresa_id', empresaId), []),
     // Sin las recetas el editor del plato no sabe si el costo lo manda la receta o el peso, y el margen
     // sale con el costo escrito a mano aunque el negocio tenga la receta cargada.
     suave(sb.from('recetas').select('producto_id, insumo_id, cantidad').eq('empresa_id', empresaId), []),
@@ -174,6 +174,9 @@ function armarCuentas(cuentas, items, pagos, cms, nombres) {
     canal: c.tipo === 'directa' ? (c.canal === 'llevar' ? 'llevar' : 'mostrador') : 'mesa',
     clienteNombre: c.cliente_nombre || '',
     clienteTel: c.cliente_tel || '',
+    fiscalNombre: c.fiscal_nombre || '',
+    fiscalNumero: c.fiscal_numero || '',
+    fiscalCorreo: c.fiscal_correo || '',
     numero: c.numero ?? undefined,
     mesaIds: (mesasBy[c.id] || []).map(cm => cm.mesa_id),
     estado: c.estado,
@@ -396,6 +399,9 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     }
     case 'detalle':
       await rpc('poner_detalle_cuenta', { p_cuenta_id: rid(mapa, a.cuentaId), p_detalle: a.detalle || '' })
+      return refrescarNegocio(E)
+    case 'fiscal~':
+      await rpc('poner_datos_fiscales', { p_cuenta_id: rid(mapa, a.cuentaId), p_nombre: a.nombre || null, p_numero: a.numero || null, p_correo: a.correo || null })
       return refrescarNegocio(E)
     case 'nota':
       await rpc('poner_nota', { p_item_id: rid(mapa, a.itemId), p_nota: a.nota || '' })

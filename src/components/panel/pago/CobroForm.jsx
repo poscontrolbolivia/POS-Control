@@ -4,6 +4,7 @@ import { formatearMonto } from '../../../services/money.js'
 import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
 import { urlImagenNegocio } from '../../../services/imageUpload.js'
 import { precalcularCambio } from '../../printing/Ticket.jsx'
+import { etiquetaFiscal, pideDatosFiscales } from '../../../services/fiscal.js'
 import ComprobanteQr from './ComprobanteQr.jsx'
 import PagoQrCard from './PagoQrCard.jsx'
 import './ComprobanteQr.css'
@@ -26,7 +27,7 @@ export function imputarPagos(lineas, total) {
   return { pagos, cambio, saldo }
 }
 
-export const cobroNuevo = (extra = {}) => ({ lineas: [{ metodo: 'efectivo', monto: '' }], imprimir: true, comanda: true, ...extra })
+export const cobroNuevo = (extra = {}) => ({ lineas: [{ metodo: 'efectivo', monto: '' }], imprimir: true, comanda: true, fiscal: { nombre: '', numero: '', correo: '' }, ...extra })
 
 // Menú de cobro ÚNICO: el mismo en Salón, Caja y Venta directa.
 // El padre guarda `cobro` ({ lineas, imprimir, comanda }) y confirma; esto solo lo dibuja.
@@ -44,6 +45,8 @@ export default function CobroForm({ cobro, onChange, total, config, mostrarComan
   const cambioPreview = precalcularCambio(cobro.lineas.map(l => ({ ...l, monto: numMonto(l.monto) })), total)
   const pagadoPreview = round2(cobro.lineas.reduce((acc, l) => acc + (numMonto(l.monto) || 0), 0))
   const falta = round2(total - Math.min(pagadoPreview, total))
+  const fiscal = cobro.fiscal || { nombre: '', numero: '', correo: '' }
+  const setFiscal = (k, v) => onChange({ ...cobro, fiscal: { ...fiscal, [k]: v } })
 
   return (
     <div className="vd-pagos">
@@ -74,6 +77,21 @@ export default function CobroForm({ cobro, onChange, total, config, mostrarComan
         {cambioPreview > 0 && <span className="vd-cambio">{t('venta.cambioLabel')} {m(cambioPreview)}</span>}
         {falta > 0.009 && <span className="vd-falta">{t('venta.faltaLabel')} {m(round2(total - pagadoPreview))}</span>}
       </div>
+      {pideDatosFiscales(config) && (
+        <fieldset className="vd-fiscal">
+          <legend>{t('fiscal.titulo')}</legend>
+          <label>{t('fiscal.nombre')}
+            <input name="fiscalNombre" type="text" autoComplete="off" maxLength={80} value={fiscal.nombre} onChange={e => setFiscal('nombre', e.target.value)} />
+          </label>
+          <label>{etiquetaFiscal(config)}
+            <input name="fiscalNumero" type="text" autoComplete="off" inputMode="text" maxLength={30} value={fiscal.numero} onChange={e => setFiscal('numero', e.target.value)} />
+          </label>
+          <label>{t('fiscal.correo')}
+            <input name="fiscalCorreo" type="email" autoComplete="off" inputMode="email" maxLength={120} value={fiscal.correo} onChange={e => setFiscal('correo', e.target.value)} />
+          </label>
+          <small className="vd-nota-ayuda">{t('fiscal.ayuda')}</small>
+        </fieldset>
+      )}
       <label className="vd-check">
         <input name="imprimir" type="checkbox" checked={cobro.imprimir} onChange={e => onChange({ ...cobro, imprimir: e.target.checked })} />
         {t('venta.imprimirTicket')}

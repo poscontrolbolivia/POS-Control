@@ -28,7 +28,7 @@
 .mn-precio{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
 .mn-fila.inactivo .mn-nombre{color:var(--mut);text-decoration:line-through}
 .mn-fila.agotado .mn-nombre{color:var(--porcobrar-bd)}
-.mn-fila.sel{background:color-mix(in srgb,var(--ac) 9%,var(--card));border-radius:10px}
+.mn-fila.sel{background:color-mix(in srgb,var(--ac) 9%,var(--card));border-radius:var(--r-sm)}
 .mn-fila button.info{min-height:40px;padding:6px 14px}
 /* Crear va al final de la pantalla, debajo de la lista. */
 .mn-crear{gap:10px;padding:10px 0;position:sticky;bottom:0;z-index:5;background:linear-gradient(to top,var(--bg,var(--card)) 70%,transparent)}
@@ -48,7 +48,7 @@
 .mn-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .mn-tabs .tab{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 16px;font-size:.95rem}
 .mn-tab-n{min-width:24px;height:24px;padding:0 6px;border-radius:999px;display:inline-grid;place-items:center;
-  background:var(--libre);color:var(--mut);font-size:.74rem;font-weight:700;font-variant-numeric:tabular-nums}
+  background:var(--libre);color:var(--mut);font-size:.78rem;font-weight:700;font-variant-numeric:tabular-nums}
 .mn-tabs .tab.on .mn-tab-n{background:rgba(255,255,255,.28);color:#fff}
 
 /* Aviso discreto «esto está en otro tipo» con botón para saltar */
@@ -115,7 +115,7 @@
   background:var(--card-2);color:var(--ink);font-weight:700;font-size:.92rem}
 .mn-avanzado > summary::-webkit-details-marker{display:none}
 .mn-avanzado > summary::before{content:'▸';flex:none;width:22px;height:22px;display:inline-grid;place-items:center;
-  border-radius:999px;background:var(--line-fuerte);color:var(--card);font-size:.76rem;line-height:1}
+  border-radius:999px;background:var(--line-fuerte);color:var(--card);font-size:.78rem;line-height:1}
 .mn-avanzado[open] > summary::before{content:'▾'}
 .mn-avanzado > summary:hover{background:var(--libre);border-color:var(--mut)}
 .mn-avanzado > summary:focus-visible{outline:3px solid var(--sel);outline-offset:2px}
@@ -164,7 +164,7 @@
 /* Tabla de simulación */
 .mn-tabla-wrap{max-height:44dvh;overflow:auto;border:1px solid var(--line);border-radius:var(--r-sm)}
 .mn-tabla{width:100%;border-collapse:collapse;font-size:.9rem}
-.mn-tabla th{position:sticky;top:0;background:var(--card-2,var(--card));color:var(--mut);text-transform:uppercase;font-size:.74rem;font-weight:700;text-align:left;padding:8px 10px;border-bottom:2px solid var(--line)}
+.mn-tabla th{position:sticky;top:0;background:var(--card-2,var(--card));color:var(--mut);text-transform:uppercase;font-size:.78rem;font-weight:700;text-align:left;padding:8px 10px;border-bottom:2px solid var(--line)}
 .mn-tabla td{padding:7px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
 .mn-tabla td:first-child{white-space:normal;min-width:120px}
 .mn-tabla tr:last-child td{border-bottom:0}

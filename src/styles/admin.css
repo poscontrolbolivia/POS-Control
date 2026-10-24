@@ -1,17 +1,17 @@
-.adm-panel{max-width:860px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+.adm-panel{max-width:var(--pagina-max);margin:0 auto;padding:var(--pagina-pad);display:flex;flex-direction:column;gap:16px}
 .adm-cab{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .adm-cab h2{margin:0;font-size:1.35rem}
 
 .adm-cab > form,.adm-cab > button,.adm-cab > .cab-acciones{margin-left:auto}
 .adm-sub{margin:0 0 6px;color:var(--mut);font-size:.9rem}
 .adm-aviso{
-  background:var(--card);border:1px solid var(--line);border-radius:14px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
   padding:20px;text-align:center;color:var(--mut);font-size:1rem;
 }
 .adm-vacio{color:var(--mut);font-size:.9rem;padding:8px 0}
 
 .adm-card{
-  background:var(--card);border:1px solid var(--line);border-radius:16px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
   padding:16px;display:flex;flex-direction:column;gap:10px;
   box-shadow:0 4px 14px rgba(0,0,0,.05);
 }
@@ -47,7 +47,7 @@
   min-height:48px;border-style:dashed;color:var(--ac);font-weight:600;
   background:transparent;width:100%;
 }
-.adm-nuevo{padding:10px;background:var(--libre);border-radius:12px}
+.adm-nuevo{padding:10px;background:var(--libre);border-radius:var(--r-md)}
 .adm-config{gap:14px}
 .adm-campo{display:flex;flex-direction:column;gap:6px}
 .adm-campo span{font-size:.85rem;color:var(--mut);font-weight:600}
@@ -57,7 +57,7 @@
 .adm-msg.warn{color:var(--danger)}
 
 .adm-thumb{
-  flex:0 0 auto;width:45px;height:45px;border-radius:10px;overflow:hidden;
+  flex:0 0 auto;width:45px;height:45px;border-radius:var(--r-sm);overflow:hidden;
   background:var(--libre);border:1px solid var(--line);
   display:flex;align-items:center;justify-content:center;
 }
@@ -75,7 +75,7 @@
   position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;
 }
 .adm-img-aviso{
-  width:100%;background:var(--danger-bg);border:1px solid var(--danger-bd);color:var(--danger);border-radius:10px;
+  width:100%;background:var(--danger-bg);border:1px solid var(--danger-bd);color:var(--danger);border-radius:var(--r-sm);
   padding:6px 10px;font-size:.82rem;font-weight:600;
 }
 .adm-spinner{display:inline-flex;align-items:center;gap:8px;color:var(--mut);font-size:.85rem;font-weight:600}
@@ -94,8 +94,8 @@
 .imp-chip.ok{background:var(--ok-bg);color:var(--ok)}
 .imp-chip.err{background:var(--danger-bg);color:var(--danger)}
 .imp-chip.off{background:var(--libre);color:var(--mut)}
-.imp-err{background:var(--danger-bg);border:1px solid var(--danger-bd);color:var(--danger);border-radius:10px;padding:8px 12px;font-size:.85rem;font-weight:600}
-.imp-noporte{background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:12px;padding:12px;font-size:.88rem;line-height:1.45}
+.imp-err{background:var(--danger-bg);border:1px solid var(--danger-bd);color:var(--danger);border-radius:var(--r-sm);padding:8px 12px;font-size:.85rem;font-weight:600}
+.imp-noporte{background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:var(--r-md);padding:12px;font-size:.88rem;line-height:1.45}
 .imp-dato{font-size:.8rem;color:var(--mut)}
 .imp-dato code{background:var(--libre);border-radius:6px;padding:1px 6px}
 
@@ -106,14 +106,14 @@
 }
 
 .imp-grupos{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
-.imp-grupo{display:flex;flex-direction:column;gap:10px;background:var(--card-2);border:1.5px solid var(--line-fuerte);border-radius:14px;padding:12px}
+.imp-grupo{display:flex;flex-direction:column;gap:10px;background:var(--card-2);border:1.5px solid var(--line-fuerte);border-radius:var(--r-md);padding:12px}
 .imp-grupo.tickets{border-style:dashed}
 .imp-grupo-cab{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .imp-nombre{flex:1 1 140px;min-width:0;font-weight:700;font-size:1rem}
 .imp-opciones{display:flex;gap:10px;flex-wrap:wrap}
 .imp-opciones .adm-campo{flex:1 1 130px}
 .imp-secciones{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
-.imp-seccion{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--card-2);border:1.5px solid var(--line);border-radius:10px;padding:6px 10px;font-weight:600}
+.imp-seccion{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--card-2);border:1.5px solid var(--line);border-radius:var(--r-sm);padding:6px 10px;font-weight:600}
 .imp-seccion-multi{flex-direction:column;align-items:stretch;gap:6px}
 .imp-seccion-nombre{font-size:.9rem}
 .imp-multi{flex:1 1 220px;display:flex;flex-direction:column;gap:6px}
@@ -122,7 +122,7 @@
 .imp-op{min-height:34px;padding:5px 12px;font-size:.85rem}
 
 .menu-barra{margin:-4px 0 0}
-.menu-grupo{display:inline-flex;align-items:center;gap:6px;font-size:.9rem;font-weight:600;border:1.5px solid var(--line-fuerte);border-radius:10px;padding:2px 8px;background:var(--card)}
+.menu-grupo{display:inline-flex;align-items:center;gap:6px;font-size:.9rem;font-weight:600;border:1.5px solid var(--line-fuerte);border-radius:var(--r-sm);padding:2px 8px;background:var(--card)}
 .menu-grupo select{border:0;background:transparent;min-height:38px;padding:4px}
 .menu-sec-cab{row-gap:8px}
 .menu-toggle{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;padding:4px 6px;min-height:40px;flex:0 1 auto;text-align:left}
@@ -132,13 +132,13 @@
 .adm-opciones{flex:1 1 220px;min-width:160px}
 
 .adm-masivo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0;padding:10px 12px;
-  border:1.5px dashed var(--ac);border-radius:12px;background:color-mix(in srgb,var(--ac) 8%,var(--card))}
+  border:1.5px dashed var(--ac);border-radius:var(--r-md);background:color-mix(in srgb,var(--ac) 8%,var(--card))}
 .adm-masivo-grupo{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
 .adm-masivo input{min-height:40px}
 .adm-masivo .adm-num{width:118px;flex:0 0 118px;min-width:0}
 .adm-masivo .adm-motivo{flex:0 1 220px;min-width:160px}
 .adm-sel{width:20px;height:20px;min-height:0;flex:0 0 auto}
-.adm-prod.sel{background:color-mix(in srgb,var(--ac) 9%,var(--card));border-radius:10px}
+.adm-prod.sel{background:color-mix(in srgb,var(--ac) 9%,var(--card));border-radius:var(--r-sm)}
 .adm-prod.agotado .adm-prod-nombre{color:var(--porcobrar-bd)}
 .adm-chip-agotado{background:color-mix(in srgb,var(--porcobrar-bg) 55%,var(--card));color:var(--porcobrar-ink);border:1px solid var(--porcobrar-bd)}
 .adm-motivo{min-width:160px;flex:1 1 160px}
@@ -151,9 +151,9 @@
 .adm-campo select,.adm-campo input,.imp-grupo select,.imp-grupo input,.adm-card select,.adm-card input:not([type=checkbox]):not([type=radio]){width:100%;max-width:100%;min-width:0}
 .eq-toggle,.adm-cab>button.eq-toggle{margin-left:0}
 
-.adm-caja-modo{border:1.5px solid var(--line-fuerte);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.adm-caja-modo{border:1.5px solid var(--line-fuerte);border-radius:var(--r-md);padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .adm-caja-modo legend{font-weight:700;padding:0 6px}
-.adm-caja-modo .adm-check.on{outline:2px solid var(--logo-orange);outline-offset:2px;border-radius:10px}
+.adm-caja-modo .adm-check.on{outline:2px solid var(--logo-orange);outline-offset:2px;border-radius:var(--r-sm)}
 
 /* ── Impresoras reestructurada: submenús minimizables propios (reglas NUEVAS, al final).
    Cada submenú es una píldora horizontal (icono + nombre + flecha a la derecha) igual que los

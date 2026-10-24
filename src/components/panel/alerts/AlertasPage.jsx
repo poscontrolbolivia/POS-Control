@@ -322,7 +322,7 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
     <div className="ala">
       <header className="ala-cab">
         <div className="ala-cab-txt">
-          <h2>🔔 {tOr('alertas.titulo', 'Alertas')}</h2>
+          <h2>{tOr('alertas.titulo', 'Alertas')}</h2>
           <p className="ala-sub">
             {tOr('alertas.desc', 'Lo que necesita una acción ahora mismo en el negocio.')}{' '}
             <b>{tOr('alertas.abiertasN', `${nAbiertas} abiertas`, { n: nAbiertas })}</b>
