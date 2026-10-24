@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
 import LanguageSelect from '../../login/LanguageSelect.jsx'
 import ThemeSelect from '../../login/ThemeSelect.jsx'
 import PrintersCard from './PrintersCard.jsx'
-const StationPage = lazy(() => import('../station/StationPage.jsx'))
+import { lazyRetry } from '../../../services/lazyRetry.js'
+const StationPage = lazyRetry(() => import('../station/StationPage.jsx'))
 import UsersPage from '../users/UsersPage.jsx'
 import PlanCard from './PlanCard.jsx'
 import ClosingsHistory from '../cash/ClosingsHistory.jsx'

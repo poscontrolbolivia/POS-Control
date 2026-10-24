@@ -1,4 +1,6 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import { lazyRetry } from '../services/lazyRetry.js'
+import ChunkBoundary from '../components/ChunkBoundary.jsx'
 import { useStore } from '../context/StoreContext.jsx'
 import { puede } from '../services/permissions.js'
 import { suscribirVista } from '../services/notifications.js'
@@ -15,11 +17,11 @@ import { iniciarEstacion, detenerEstacion, estacionRecordada, actualizarConfig, 
 import { gruposDe } from '../services/printing.js'
 import { contarAbiertas } from '../services/alertasApi.js'
 
-const AuditPage = lazy(() => import('../components/panel/audit/AuditPage.jsx'))
-const InventoryPage = lazy(() => import('../components/panel/inventory/InventoryPage.jsx'))
-const ReportsPage = lazy(() => import('../components/panel/reports/ReportsPage.jsx'))
-const AlertasPage = lazy(() => import('../components/panel/alerts/AlertasPage.jsx'))
-const SuperPage = lazy(() => import('../components/panel/super/SuperPage.jsx'))
+const AuditPage = lazyRetry(() => import('../components/panel/audit/AuditPage.jsx'))
+const InventoryPage = lazyRetry(() => import('../components/panel/inventory/InventoryPage.jsx'))
+const ReportsPage = lazyRetry(() => import('../components/panel/reports/ReportsPage.jsx'))
+const AlertasPage = lazyRetry(() => import('../components/panel/alerts/AlertasPage.jsx'))
+const SuperPage = lazyRetry(() => import('../components/panel/super/SuperPage.jsx'))
 
 const VISTAS = { '#salon': 'salon', '#cocina': 'cocina', '#caja': 'caja', '#estacion': 'config', '#venta': 'venta', '#menu': 'menu', '#config': 'config', '#auditoria': 'auditoria', '#inventario': 'inventario', '#reportes': 'reportes', '#alertas': 'alertas' }
 
@@ -113,6 +115,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
           <button className="auth-enlace" type="button" onClick={onVolver}>{tOr('super.banner.volver', 'volver a mi empresa')}</button>
         </div>
       )}
+      <ChunkBoundary resetKey={modulo}>
       <Suspense fallback={<div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}>
         {modulo === 'salon' && <HallPage rol={sesion.rol} sesion={sesion} foco={foco} onVolverCaja={volverCaja} />}
         {modulo === 'caja' && <CashPage rol={sesion.rol} sesion={sesion} onAbrirMesa={abrirDeAlerta} />}
@@ -126,6 +129,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
         {modulo === 'config' && <SettingsPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'super' && sesion.es_super && <SuperPage sesion={sesion} />}
       </Suspense>
+      </ChunkBoundary>
     </div>
   )
 }

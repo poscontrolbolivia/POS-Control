@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useReducer, useState } from 'react'
+import { Suspense, useEffect, useReducer, useState } from 'react'
 import { useStore, nuevoId } from '../../../context/StoreContext.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { soporteSerial, reutilizarImpresoras, suscribirImpresora, fijarBaud } from '../../../services/printer.js'
@@ -9,7 +9,8 @@ import '../../../styles/admin.css'
 
 // La estación (cola + salida por grupo) solo hace falta cuando se imprime desde esa PC:
 // así el estado del agente y la salida de cada grupo aparecen UNA sola vez.
-const StationPage = lazy(() => import('../station/StationPage.jsx'))
+import { lazyRetry } from '../../../services/lazyRetry.js'
+const StationPage = lazyRetry(() => import('../station/StationPage.jsx'))
 
 
 // Submenú minimizable propio de Impresoras: misma forma que los bloques de Configuración

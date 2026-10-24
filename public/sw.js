@@ -8,7 +8,7 @@
  *    la vista indicada en data.url (#salon, #cocina, #caja).
  */
 
-const VERSION = 'v3'
+const VERSION = 'v4'
 const CACHE_SHELL = 'pos-control-shell-' + VERSION
 const CACHE_RECURSOS = 'pos-control-recursos-' + VERSION
 
@@ -84,9 +84,12 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       (async () => {
         const ab = await caches.match(req)
-        if (ab) return ab
+        if (ab && !((ab.headers.get('content-type') || '').includes('text/html') && esAssetCompilado(url))) return ab
         const res = await fetch(req)
-        if (res && res.status === 200 && res.type === 'basic') {
+        // Un asset que ya no existe lo contesta Cloudflare con el index.html (200): NO se guarda,
+        // si no el HTML quedaba cacheado como si fuera el .js y la pantalla no volvía a cargar.
+        const tipo = (res && res.headers.get('content-type')) || ''
+        if (res && res.status === 200 && res.type === 'basic' && !tipo.includes('text/html')) {
           const c = await caches.open(CACHE_RECURSOS)
           c.put(req, res.clone())
         }
