@@ -111,6 +111,12 @@ export function lineasPlanas({ cuenta, config = {}, titulo, comanda = false, anc
   const idFiscal = etiquetaFiscal(config)
   centro([config?.telefono && `Tel ${config.telefono}`, config?.nit && `${idFiscal} ${config.nit}`].filter(Boolean).join('  ·  '))
   L.push(sep)
+  // Título del documento: la cuenta que se le da al cliente para pagar, o el comprobante una vez cobrada.
+  // El arqueo y las devoluciones de Caja (sintéticos) llevan su propio título más abajo.
+  if (!cuenta.sintetica) {
+    centro(tGlobal(cuenta.estado === 'cerrada' ? 'ticket.comprobantePagoTitulo' : 'ticket.cuentaTitulo').toUpperCase(), { negrita: true })
+    L.push(sep)
+  }
 
   // Datos del cliente: justo debajo de los datos fiscales del negocio y arriba del detalle.
   // Llenos salen impresos; vacíos no salen en el comprobante cobrado. En la cuenta que se le da al
@@ -127,17 +133,18 @@ export function lineasPlanas({ cuenta, config = {}, titulo, comanda = false, anc
     L.push(sep)
   }
 
-  // Salón · mesa (o mostrador) y mesero, un cuerpo más grande que el resto del ticket.
+  // Salón · mesa (o mostrador), mesero, orden y fechas: TODO en el mismo tamaño de letra.
+  // Solo el nombre del negocio va un tamaño más grande.
   const mesa = datos.mesa || titulo || (cuenta.canal === 'llevar'
     ? tGlobal('ticket.llevarValor', { n: cuenta.numero ?? '—' })
     : cuenta.tipo === 'directa'
     ? tGlobal('ticket.turnoValor', { n: cuenta.numero ?? '—' })
     : tGlobal('ticket.mesaValor', { mesa: cuenta.mesaTexto || (cuenta.mesaIds || []).join(', ') || '—' }))
-  // Salón y mesa, cada uno en su renglón y en cuerpo doble; el que atiende justo debajo.
-  if (datos.salon) centro(String(datos.salon).toUpperCase(), { grande: true })
-  centro(String(mesa).toUpperCase(), { grande: true })
-  if (cuenta.canal === 'llevar' && (cuenta.clienteNombre || cuenta.clienteTel)) centro([cuenta.clienteNombre, cuenta.clienteTel].filter(Boolean).join(' · '), { grande: true, entero: true })
-  if (cuenta.abiertaPor) centro(tGlobal(cuenta.tipo === 'directa' ? 'ticket.cajeroValor' : 'ticket.meseroValor', { usuario: cuenta.abiertaPor }), { grande: true, entero: true })
+  // Salón y mesa, cada uno en su renglón; el que atiende justo debajo.
+  if (datos.salon) centro(String(datos.salon).toUpperCase())
+  centro(String(mesa).toUpperCase())
+  if (cuenta.canal === 'llevar' && (cuenta.clienteNombre || cuenta.clienteTel)) centro([cuenta.clienteNombre, cuenta.clienteTel].filter(Boolean).join(' · '))
+  if (cuenta.abiertaPor) centro(tGlobal(cuenta.tipo === 'directa' ? 'ticket.cajeroValor' : 'ticket.meseroValor', { usuario: cuenta.abiertaPor }))
   L.push(sep)
 
   const mitad = Math.ceil(ancho / 2)

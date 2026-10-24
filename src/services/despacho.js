@@ -73,3 +73,11 @@ export function badgeDirecta(cuentas = [], productos = [], config = {}) {
   })
   return ids.size
 }
+
+// Suma de los contadores de todas las ventanas de Despacho (cocina, barra, entrega...) para el botón del menú.
+// «Entrega» se cuenta una sola vez: sus ítems también aparecen en el reparto por grupo.
+export function totalDespacho(cuentas = [], productos = [], config = {}) {
+  const por = pendientesPorGrupo(cuentas, productos, config)
+  const sinDirecta = Object.entries(por).filter(([id]) => id !== GRUPO_DIRECTA).reduce((a, [, n]) => a + n, 0)
+  return sinDirecta + badgeDirecta(cuentas, productos, config)
+}

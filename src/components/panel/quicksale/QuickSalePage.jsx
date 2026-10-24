@@ -8,7 +8,7 @@ import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
 import { imprimirCuenta, imprimirComandas } from '../../printing/Ticket.jsx'
 import { listasDe, notaDeUnidad, indicacionesDeUnidad, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
 import IndicacionesPrevio from '../order/IndicacionesPrevio.jsx'
-import CobroForm, { imputarPagos, cobroNuevo } from '../pago/CobroForm.jsx'
+import CobroForm, { imputarPagos, cobroNuevo, cobroInvalido } from '../pago/CobroForm.jsx'
 import { fiscalVacio, fiscalACuenta, correoValido } from '../../../services/fiscal.js'
 import MesasResumen from '../hall/MesasResumen.jsx'
 import '../pago/ComprobanteQr.css'
@@ -66,6 +66,10 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   const [cobro, setCobro] = useState(null)
   const [pendiente, setPendiente] = useState(null)
   const [aviso, setAviso] = useState('')
+  // Cada paso del cobro (cargar un plato, cobrar) se manda UNA sola vez aunque la pantalla se refresque
+  // en medio (cambios de otros dispositivos llegan en vivo y vuelven a ejecutar el efecto).
+  const faseHechaRef = useRef(-1)
+  const cobroHechoRef = useRef(false)
 
   const productos = s.productos.filter(p => p.activo && (secActiva === TODOS || p.seccionId === secActiva))
   const agotados = agotadosHoy(s.config)
@@ -122,10 +126,14 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   const confirmarCobro = () => {
     if (cobro.lineas.some(l => l.subiendo)) return setAviso(t('comp.subiendo'))
     if (!correoValido(cobro.fiscal?.correo)) return setAviso(t('fiscal.correoInvalido'))
+    const invalido = cobroInvalido(cobro.lineas, t)
+    if (invalido) return setAviso(invalido)
     const { pagos, saldo } = imputarPagos(cobro.lineas, total)
     if (saldo > 0.009) return setAviso(t('venta.faltaTotal', { faltan: m(saldo) }))
     if (!pagos.length) return setAviso(t('venta.sinPago'))
     const numero = s.caja.siguienteTurno
+    faseHechaRef.current = -1
+    cobroHechoRef.current = false
     d({ t: 'abrir-directa', usuario })
     setPendiente({ numero, lineas: carrito.map(l => ({ p: l.p, qty: l.qty, nota: l.nota, indicaciones: l.indicaciones, extra: l.extra, sel: l.sel })), fase: 0, pagos, imprimir: cobro.imprimir, comanda: cobro.comanda, fiscal: cobro.fiscal, usuario })
   }
@@ -138,6 +146,8 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
     const idx = Math.floor(pendiente.fase)
 
     if (idx < pendiente.lineas.length) {
+      if (faseHechaRef.current >= idx) return
+      faseHechaRef.current = idx
       const l = pendiente.lineas[idx]
       for (let i = 0; i < l.qty; i++) {
         d({
@@ -150,6 +160,8 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
       return
     }
 
+    if (cobroHechoRef.current) return
+    cobroHechoRef.current = true
     const { pagos, imprimir, comanda, fiscal, usuario: usr } = pendiente
     const porEnviar = (c.items || []).filter(i => i.estado === 'pendiente')
     // Enviar antes de cobrar: al cerrarse la cuenta el área ya no la devuelve, pero Despacho la
@@ -183,6 +195,17 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
       }
     }, 0)
   }, [pendiente, s.cuentas])
+
+  // Si el cobro se queda esperando más de 15 s (la venta no llegó a crearse), se libera la pantalla
+  // en vez de dejarla bloqueada con el carrito.
+  useEffect(() => {
+    if (!pendiente) return undefined
+    const id = setTimeout(() => {
+      setPendiente(null)
+      setAviso(tOr('venta.cobroTrabado', 'No se pudo completar la venta. Revisa el carrito y vuelve a cobrar.'))
+    }, 15000)
+    return () => clearTimeout(id)
+  }, [pendiente?.numero, pendiente?.fase])
 
 
   if (!puede(rol, 'venta_directa')) {

@@ -123,7 +123,7 @@ create table if not exists public.pagos (
   id         uuid primary key default gen_random_uuid(),
   empresa_id uuid not null references public.empresas(id) on delete cascade,
   cuenta_id  uuid not null references public.cuentas(id) on delete cascade,
-  metodo     text not null check (metodo in ('efectivo','qr','tarjeta','mixed')),
+  metodo     text not null check (metodo in ('efectivo','qr','tarjeta','mixed','cheque','vale','cxc','otro')),
   monto      numeric(10,2) not null check (monto >= 0),
   detalle    jsonb not null default '{}'::jsonb,
   creada_por uuid references auth.users(id),
@@ -740,7 +740,9 @@ begin
 
   begin
     perform private.auditar(v_emp, 'item_agregado', jsonb_build_object(
-      'cuenta', v_cuenta.id::text, 'items', v_nuegas),
+      'cuenta', v_cuenta.id::text, 'items', v_nuegas,
+      'dueno', (select pf.display_name from public.perfiles pf where pf.user_id = v_cuenta.abierta_por),
+      'ayuda', (v_cuenta.abierta_por is not null and v_cuenta.abierta_por is distinct from auth.uid())),
       'cuenta_item', nullif(v_nombres, ''));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
@@ -902,7 +904,9 @@ begin
     begin
       perform private.auditar(v_emp, 'comanda_enviada', jsonb_build_object(
         'cuenta', v_cuenta.id::text, 'numero', v_cuenta.numero, 'items', v_n,
-        'parcial', p_item_ids is not null),
+        'parcial', p_item_ids is not null,
+        'dueno', (select pf.display_name from public.perfiles pf where pf.user_id = v_cuenta.abierta_por),
+        'ayuda', (v_cuenta.abierta_por is not null and v_cuenta.abierta_por is distinct from auth.uid())),
         'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
     exception when others then
       null; -- una falla de la bitácora nunca revierte la comanda
@@ -1583,8 +1587,15 @@ begin
 
   for v_pg in select * from jsonb_array_elements(p_pagos) loop
     v_metodo := lower(coalesce(v_pg->>'metodo', ''));
-    if v_metodo not in ('efectivo','qr','tarjeta','mixed') then
+    if v_metodo not in ('efectivo','qr','tarjeta','mixed','cheque','vale','cxc','otro') then
       raise exception 'método de pago inválido: %', v_metodo;
+    end if;
+    -- Cuenta por cobrar: siempre a nombre de una persona registrada en ESTA empresa.
+    if v_metodo = 'cxc' and not exists (
+         select 1 from public.membresias mm
+          where mm.empresa_id = v_emp
+            and mm.user_id::text = coalesce(v_pg->'detalle'->>'trabajador_id', '')) then
+      raise exception 'cuenta por cobrar: elige un trabajador registrado';
     end if;
     v_monto := coalesce(nullif(v_pg->>'monto','')::numeric, 0);
     if v_monto < 0 then
@@ -1751,8 +1762,15 @@ begin
 
   for v_pg in select * from jsonb_array_elements(p_pagos) loop
     v_metodo := lower(coalesce(v_pg->>'metodo', ''));
-    if v_metodo not in ('efectivo','qr','tarjeta','mixed') then
+    if v_metodo not in ('efectivo','qr','tarjeta','mixed','cheque','vale','cxc','otro') then
       raise exception 'método de pago inválido: %', v_metodo;
+    end if;
+    -- Cuenta por cobrar: siempre a nombre de una persona registrada en ESTA empresa.
+    if v_metodo = 'cxc' and not exists (
+         select 1 from public.membresias mm
+          where mm.empresa_id = v_emp
+            and mm.user_id::text = coalesce(v_pg->'detalle'->>'trabajador_id', '')) then
+      raise exception 'cuenta por cobrar: elige un trabajador registrado';
     end if;
     v_monto := coalesce(nullif(v_pg->>'monto','')::numeric, 0);
     if v_monto <= 0 then
@@ -6495,7 +6513,7 @@ begin
   for r in select * from jsonb_array_elements(coalesce(p_datos->'pagos','[]'::jsonb)) loop
     v_cuenta := nullif(v_map_cuentas->>(r->>'cuenta_id'), '')::uuid;
     if v_cuenta is null then continue; end if;
-    if not coalesce(r->>'metodo','') in ('efectivo','qr','tarjeta','mixed') then continue; end if;
+    if not coalesce(r->>'metodo','') in ('efectivo','qr','tarjeta','mixed','cheque','vale','cxc','otro') then continue; end if;
     r := jsonb_set(r, '{detalle}', coalesce(r->'detalle', '{}'::jsonb));
     v_old := r->'detalle'->>'comprobante';
     if v_old is not null then
@@ -7558,5 +7576,38 @@ end $do$;
 -- Para que los DELETE (separar/unir mesas, anular ítems) también lleguen filtrados por empresa.
 alter table public.cuenta_items replica identity full;
 alter table public.cuenta_mesas replica identity full;
+
+commit;
+
+-- ## v0.51 · Más formas de pago (cheque, vale, cuenta por cobrar, otro) y trabajadores para «cuenta por cobrar»
+begin;
+
+alter table public.pagos drop constraint if exists pagos_metodo_check;
+alter table public.pagos add constraint pagos_metodo_check
+  check (metodo in ('efectivo','qr','tarjeta','mixed','cheque','vale','cxc','otro'));
+
+-- Quién puede ser el deudor de una cuenta por cobrar: las personas registradas en esta empresa.
+create or replace function public.trabajadores_cobro()
+returns table (usuario_id uuid, nombre text, rol text)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+begin
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+  v_emp := private.empresa_activa();
+  return query
+    select m.user_id, coalesce(nullif(p.display_name, ''), split_part(u.email::text, '@', 1)), m.rol
+      from public.membresias m
+      join auth.users u on u.id = m.user_id
+      left join public.perfiles p on p.user_id = m.user_id
+     where m.empresa_id = v_emp
+     order by coalesce(nullif(p.display_name, ''), split_part(u.email::text, '@', 1));
+end $fn$;
+revoke all on function public.trabajadores_cobro() from public, anon;
+grant execute on function public.trabajadores_cobro() to authenticated;
 
 commit;

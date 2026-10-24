@@ -423,7 +423,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
                 )}
               </span>
             )))}
-            {admin && (
+            {admin && edit && (
               <button className="tab mas" title={t('salon.nuevaZona')} onClick={altaZona}>
                 ＋ {t('salon.nuevaZona')}
               </button>

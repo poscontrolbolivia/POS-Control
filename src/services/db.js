@@ -186,8 +186,10 @@ function armarCuentas(cuentas, items, pagos, cms, nombres) {
     descuento: N(c.descuento),
     nota: c.nota ?? undefined,
     detalle: c.detalle || '',
+    abiertaPorId: c.abierta_por || undefined,
     abiertaPor: nombres[c.abierta_por] || undefined,
     abiertaEn: ts(c.abierta_en),
+    cerradaPorId: c.cerrada_por || undefined,
     cerradaPor: c.cerrada_por ? (nombres[c.cerrada_por] || undefined) : undefined,
     cerradaEn: ts(c.cerrada_en),
     items: (itemsBy[c.id] || []).map(mapItem),
@@ -349,7 +351,7 @@ function cuentaRecien(cuentas, filtro) {
   return null
 }
 
-const DETALLE_KEYS = ['recibido', 'cambio', 'referencia', 'tarjeta', 'ultimos4', 'concepto', 'comprobante']
+const DETALLE_KEYS = ['recibido', 'cambio', 'referencia', 'tarjeta', 'ultimos4', 'concepto', 'comprobante', 'trabajador_id', 'trabajador_nombre']
 const mapPagos = pagos => (pagos || []).map(p => {
   const detalle = {}
   for (const k of DETALLE_KEYS) if (p[k] !== undefined && p[k] !== null) detalle[k] = p[k]

@@ -592,13 +592,9 @@ export default function InventoryPage({ rol, sesion }) {
         <button type="button" role="tab" aria-selected={pestana === 'proveedores'} className={'tab' + (pestana === 'proveedores' ? ' on' : '')} onClick={() => setPestana('proveedores')}>
           {tOr('inventario.tabProveedores', 'Proveedores')}
         </button>
-        <button type="button" className="success inv-tab-alta" title={tOr('inventario.nuevoProveedor', 'Proveedor')} aria-label={tOr('inventario.nuevoProveedor', 'Proveedor')}
-          onClick={() => { setPestana('proveedores'); setProvAlta(true) }}>＋</button>
         <button type="button" role="tab" aria-selected={pestana === 'cuentas'} className={'tab' + (pestana === 'cuentas' ? ' on' : '')} onClick={() => setPestana('cuentas')}>
           {tOr('inventario.tabCuentas', 'Cuentas por pagar')}
         </button>
-        <button type="button" className="success inv-tab-alta" title={tOr('inventario.deudaAltaTitulo', 'Registrar deuda')} aria-label={tOr('inventario.deudaAltaTitulo', 'Registrar deuda')}
-          onClick={() => { setPestana('cuentas'); setCuentaAlta(true) }}>＋</button>
         </>}
       </div>
 

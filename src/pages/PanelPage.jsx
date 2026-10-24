@@ -17,6 +17,7 @@ import SettingsPage from '../components/panel/settings/SettingsPage.jsx'
 import { iniciarEstacion, detenerEstacion, estacionRecordada, actualizarConfig, autoConfigurarAgente } from '../services/station.js'
 import { gruposDe } from '../services/printing.js'
 import { contarAbiertas } from '../services/alertasApi.js'
+import { totalDespacho } from '../services/despacho.js'
 
 const AuditPage = lazyRetry(() => import('../components/panel/audit/AuditPage.jsx'))
 const InventoryPage = lazyRetry(() => import('../components/panel/inventory/InventoryPage.jsx'))
@@ -61,11 +62,12 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   )
 
   const modulos = []
+  const porSacar = totalDespacho(s.cuentas, s.productos, s.config)
   if (enPantalla) {
-    modulos.push({ id: 'cocina', nombre: tOr('app.mod.cocina', 'Cocina') })
+    modulos.push({ id: 'cocina', nombre: tOr('app.mod.cocina', 'Cocina'), contador: porSacar })
   } else {
     modulos.push({ id: 'salon', nombre: t('app.mod.salon') }, { id: 'caja', nombre: t('app.mod.caja') }, { id: 'venta', nombre: t('app.mod.venta') })
-    if (puede(sesion.rol, 'ver_cocina')) modulos.push({ id: 'cocina', nombre: tOr('app.mod.cocina', 'Cocina') })
+    if (puede(sesion.rol, 'ver_cocina')) modulos.push({ id: 'cocina', nombre: tOr('app.mod.cocina', 'Cocina'), contador: porSacar })
   }
   if (puede(sesion.rol, 'ver_alertas')) modulos.push({ id: 'alertas', nombre: tOr('app.mod.alertas', 'Alertas'), contador: contarAbiertas(s.alertas) })
   if (puede(sesion.rol, 'gestionar_menu')) modulos.push({ id: 'menu', nombre: t('app.mod.menu') })

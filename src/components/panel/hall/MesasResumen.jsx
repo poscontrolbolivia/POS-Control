@@ -3,6 +3,7 @@ import { totalFinal, pagadoCuenta, saldoCuenta } from '../../../context/StoreCon
 import { round2 } from '../../../services/format.js'
 import { useMoneda } from '../../../services/money.js'
 import { useIdioma } from '../../../i18n/index.jsx'
+import './HallPage.css'
 import './MesasResumen.css'
 
 // Lectura de solo lectura del mapa/listado de mesas para la pantalla de Caja.
@@ -114,33 +115,36 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
           })}
         </div>
       ) : (
-        <div className="lienzo mr-lienzo" style={{ aspectRatio: `${W} / ${H}` }}>
-          {mesasZona.map(m => {
-            const cs = cuentasDeMesa(cuentas, m.id), c = cs[0], est = estadoVarias(cs)
-            const total = cs.reduce((a, x) => a + totalFinal(x), 0)
-            const abono = round2(cs.reduce((a, x) => a + pagadoCuenta(x), 0))
-            const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
-            const capT = capacidadCuenta(c, mesas) || (m.cap || 0)
-            const com = c ? (c.comensales ?? 0) : null
-            return (
-              <Fragment key={m.id}>
-                <button
-                  type="button"
-                  className={'mesa mr-mesa ' + m.forma + ' ' + est}
-                  onClick={() => abre(m)}
-                  title={tOr('caja.mesasAbrir', 'Abrir en el salón')}
-                  style={{ left: `${(m.x / W) * 100}%`, top: `${(m.y / H) * 100}%`, width: `${(m.w / W) * 100}%`, height: `${(m.h / H) * 100}%` }}
-                >
-                  <b className="nombre">{m.nombre}</b>
-                  <span className={'pax' + (com !== null && com > capT ? ' alerta' : '')}>👥 {c ? `${com}/${capT}` : m.cap}</span>
-                  {c && <small className="importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
-                  {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
-                </button>
-                {/* Las cuentas divididas se cobran desde abajo del cuadro, pegadas a su mesa. */}
-                {chips(m, cs, { left: `${(m.x / W) * 100}%`, top: `${((m.y + m.h) / H) * 100}%`, width: `${(m.w / W) * 100}%` })}
-              </Fragment>
-            )
-          })}
+        <div className="salon mr-salon">
+          <div className="lienzo-bloque">
+            <div className="lienzo-area" style={{ ['--asp']: String(W / H) }}>
+              <div className="lienzo-wrap">
+                <div className="lienzo" style={{ ['--z']: '1' }}>
+                  {mesasZona.map(m => {
+                    const cs = cuentasDeMesa(cuentas, m.id), c = cs[0], est = estadoVarias(cs)
+                    const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
+                    const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
+                    const num = String(m.nombre).match(/(\d+)\s*$/)?.[1] ?? ''
+                    return (
+                      <Fragment key={m.id}>
+                        <div role="button" tabIndex={0} className={`mesa ${m.forma} ${est}`} title={tOr('caja.mesasAbrir', 'Abrir en el salón')}
+                          onClick={() => abre(m)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') abre(m) }}
+                          style={{ left: `${(m.x / W) * 100}%`, top: `${(m.y / H) * 100}%`, width: `${(m.w / W) * 100}%`, height: `${(m.h / H) * 100}%` }}>
+                          <b className="nombre">{num || m.nombre}</b>
+                          {c && <span className="importe">{money(resto)}</span>}
+                          {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
+                          {!unida && cs.length > 1 && <span className="badge-unida" title={t('pedido.menuDividir')}>✂ ×{cs.length}</span>}
+                          {unida && <span className="badge-unida">🔗 ×{c.mesaIds.length}</span>}
+                        </div>
+                        {/* Las cuentas divididas se cobran desde abajo del cuadro, pegadas a su mesa. */}
+                        {chips(m, cs, { left: `${(m.x / W) * 100}%`, top: `${((m.y + m.h) / H) * 100}%`, width: `${(m.w / W) * 100}%` })}
+                      </Fragment>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

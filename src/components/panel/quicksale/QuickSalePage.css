@@ -58,8 +58,11 @@
 
 .vd-pagos{display:flex;flex-direction:column;gap:10px}
 .vd-pago{border:1px solid var(--line);border-radius:var(--r-md);padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
-.vd-metodos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.vd-metodo{min-height:54px;font-size:1rem;font-weight:700}
+.vd-metodos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.vd-metodo{min-height:48px;font-size:.92rem;font-weight:700;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vd-mas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.vd-mas .vd-metodo{min-height:42px;font-size:.85rem}
+@media (max-width:420px){.vd-metodo{font-size:.82rem;min-height:46px;padding:0 2px}.vd-mas .vd-metodo{font-size:.78rem}}
 .vd-monto{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:var(--mut)}
 .vd-monto input{width:100%}
 .vd-resumen-pago{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.92rem}

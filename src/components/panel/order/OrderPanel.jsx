@@ -8,7 +8,7 @@ import { imprimirCuenta, imprimirComandas } from '../../printing/Ticket.jsx'
 import { nombreDeArea } from '../../../services/printing.js'
 import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
 import { VerComprobante } from '../pago/ComprobanteQr.jsx'
-import CobroForm, { imputarPagos, cobroNuevo } from '../pago/CobroForm.jsx'
+import CobroForm, { imputarPagos, cobroInvalido, cobroNuevo } from '../pago/CobroForm.jsx'
 import '../pago/ComprobanteQr.css'
 import { listasDe, notaDeUnidad, indicacionesDeUnidad, componerNota, comentarioDe, MAX_NOTA, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
 import IndicacionesPrevio from './IndicacionesPrevio.jsx'
@@ -339,6 +339,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
     // Datos del cliente: se guardan en la cuenta antes de cobrar para que salgan en el comprobante.
     if (fis && !fiscalIgual(fis, fiscalDe(c))) d({ t: 'fiscal~', cuentaId: c.id, nombre: fis.nombre.trim(), numero: fis.numero.trim(), correo: fis.correo.trim() })
     const base = round2(baseCobro)
+    const invalido = cobroInvalido(pagos.lineas, t)
+    if (invalido) return avisar(invalido)
     const { pagos: pg, saldo: falta } = imputarPagos(lineasDeCobro(base), base)
     if (falta > 0.009) return avisar(t('pedido.faltaParaCobrar', { faltan: money(falta), total: money(base) }))
     if (!pg.length) return avisar(t('pedido.sinPagos'))
@@ -361,6 +363,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   // Abono libre: se recibió menos que el saldo y no hay platos marcados.
   const abonoLibre = () => {
     if (pagos.lineas.some(l => l.subiendo)) return avisar(t('comp.subiendo'))
+    const invalido = cobroInvalido(pagos.lineas, t)
+    if (invalido) return avisar(invalido)
     const { pagos: pg, saldo: falta } = imputarPagos(pagos.lineas, round2(saldo))
     if (!pg.length) return avisar(t('pedido.sinPagos'))
     if (falta <= 0.009) return avisar(t('pedido.abonoCubreTodo'))
@@ -639,11 +643,6 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
                   {i.estado === 'anulacion' && <em> · {tOr('estadoItem.anulacion', 'Anulación pedida')}</em>}
                   {i.nota && <em> · {i.nota}</em>}
                   {i.motivo && (i.estado === 'anulado' || i.estado === 'anulacion') && <em> · {i.motivo}</em>}
-                  {Array.isArray(i.areas) && i.areas.length > 0 && (
-                    <span className="pm-chip pm-chip-area" title={tOr('areas.title', 'Áreas donde se imprime este artículo')}>
-                      🖨 {i.areas.map(a => nombreArea(a, tOr, s.config)).join(' + ')}
-                    </span>
-                  )}
                 </span>
                 {modo === 'mover' && marcados.includes(i.id) && i.qty > 1 ? (
                   <span className="qty qty-partir" title={tOr('pedido.moverCantidad', 'Unidades a mover')}>

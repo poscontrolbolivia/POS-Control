@@ -178,9 +178,6 @@ export default function PrintersCard({ rol, sesion }) {
 
       {/* Alta siempre a la vista: sin esta barra había que adivinar qué submenú escondía el botón de crear. */}
       <div className="adm-fila imp-alta-barra">
-        <button type="button" className="success" onClick={() => { setConf(null); cambiarSub('grupos'); setNuevo('') }}>
-          ＋ {tOr('impresoras.altaGrupo', 'Grupo de comanda')}
-        </button>
         <button type="button" className="primary" onClick={() => { setConf(null); setNuevo(null); cambiarSub('donde') }}>
           ＋ {tOr('impresoras.altaImpresora', 'Conectar impresora')}
         </button>

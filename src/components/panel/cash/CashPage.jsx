@@ -175,7 +175,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
   const imprimirResumen = async () => {
     const { tickets, ventas } = resumen
     const cuentaSintetica = {
-      tipo: 'directa', numero: numeroActual, mesaIds: [], estado: 'cerrada',
+      tipo: 'directa', sintetica: true, numero: numeroActual, mesaIds: [], estado: 'cerrada',
       abiertaPor: turno.abiertoPor, abiertaEn: turno.abiertoEn, cerradaEn: Date.now(),
       propina: 0, descuento: 0,
       items: tickets.map(c => ({
@@ -192,7 +192,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
       await imprimirCuenta({
         config: s.config, titulo: t('caja.devTitulo', { n: numeroActual }),
         cuenta: {
-          tipo: 'directa', numero: numeroActual, mesaIds: [], estado: 'cerrada', abiertaPor: turno.abiertoPor, abiertaEn: turno.abiertoEn, cerradaEn: Date.now(), propina: 0, descuento: 0, pagos: [],
+          tipo: 'directa', sintetica: true, numero: numeroActual, mesaIds: [], estado: 'cerrada', abiertaPor: turno.abiertoPor, abiertaEn: turno.abiertoEn, cerradaEn: Date.now(), propina: 0, descuento: 0, pagos: [],
           items: dv.map(x => ({ nombre: `${x.qty}x ${x.nombre} · ${x.mesa} · ${x.confirmadaEn ? t('caja.devOk', { quien: x.confirmadaPor || '—' }) : t('caja.devSinConfirmar')}`, precio: round2(x.monto), qty: 1, estado: 'pendiente' })),
         },
       })
