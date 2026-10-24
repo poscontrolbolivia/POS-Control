@@ -90,3 +90,6 @@
 
 /* Qué es esta pantalla, en una línea: mostrador vs Caja. */
 .vd-ayuda{margin:0 0 6px;color:var(--mut);font-size:.84rem;font-weight:600;line-height:1.35}
+
+/* Con el mapa de mesas a la vista, la pantalla usa todo el ancho (igual que el Salón) para que el mapa mida lo mismo. */
+.vd:has(.mr-salon){max-width:none}

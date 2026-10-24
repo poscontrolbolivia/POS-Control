@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import { USAR_SUPABASE } from '../services/config.js'
 import { fijarEmpresa, sb } from '../services/supabaseClient.js'
-import { cargarEstadoInicial, despacharSupabase, refrescarCuentas } from '../services/db.js'
+import { cargarEstadoInicial, despacharSupabase, refrescarCuentas, refrescarCuentasIds } from '../services/db.js'
 import { round2 } from '../services/format.js'
 import { round4, resolverCantidad, aplicarEntrada, MOTIVOS_MERMA } from '../services/inventario.js'
 import { repartirPorGrupo } from '../services/printing.js'
@@ -962,6 +962,10 @@ const SUP_VACIO = {
   usuariosDemo: [], costos: [], proveedores: [], deudas: [], alertas: [], insumos: [], recetas: [], movimientos: [], bitacora: [], _supCargando: true,
 }
 
+// Carta, mesas y extras casi no cambian: se bajan completos al entrar y cada 30 min. El resto del día solo se
+// pide lo que se mueve (cuentas y caja), que es lo que gasta pocos datos.
+const COMPLETA_CADA_MS = 30 * 60 * 1000
+
 function useSupabaseStore(empresaId) {
   const [s, setS] = useState(null)
   const [error, setError] = useState('')
@@ -969,6 +973,7 @@ function useSupabaseStore(empresaId) {
   const colaRef = useRef(Promise.resolve())
   const mapaRef = useRef(new Map())
   const versionRef = useRef(0)
+  const completaRef = useRef(0)
   const avisa = useCallback(m => setError(textoError(typeof m === 'string' ? { message: m } : m)), [])
 
   useEffect(() => {
@@ -981,7 +986,7 @@ function useSupabaseStore(empresaId) {
     if (!empresaId) return
     fijarEmpresa(empresaId)
     cargarEstadoInicial(empresaId)
-      .then(e => { if (!vivo) return; estadoRef.current = { ...e, _empresaId: empresaId }; setS(estadoRef.current) })
+      .then(e => { if (!vivo) return; completaRef.current = Date.now(); estadoRef.current = { ...e, _empresaId: empresaId }; setS(estadoRef.current) })
       .catch(err => { if (vivo) setError('No se pudo cargar la empresa: ' + textoError(err)) })
     return () => { vivo = false }
   }, [empresaId])
@@ -994,8 +999,10 @@ function useSupabaseStore(empresaId) {
         if (!vivo || !estadoRef.current) return
         try {
           const prev = estadoRef.current
-          const fresco = await cargarEstadoInicial(empresaId)
+          const completa = Date.now() - completaRef.current > COMPLETA_CADA_MS
+          const fresco = completa ? await cargarEstadoInicial(empresaId, prev) : await refrescarCuentas(prev)
           if (!vivo) return
+          if (completa) completaRef.current = Date.now()
           avisarCierresRemotos(prev, fresco)
           estadoRef.current = { ...fresco, _empresaId: empresaId }
           setS(estadoRef.current)
@@ -1007,9 +1014,10 @@ function useSupabaseStore(empresaId) {
     return () => { vivo = false; window.removeEventListener('pos-reanudar', alReanudar) }
   }, [empresaId])
 
-  // TIEMPO REAL: cuando cualquier dispositivo abre, edita, envía o cobra una cuenta, los demás
-  // lo ven en ~1 segundo. Si el canal en vivo no está disponible, se sondea cada 12 s (y con él
-  // conectado, cada 90 s solo como red de seguridad). El refresco es liviano: solo cuentas y caja.
+  // TIEMPO REAL: cuando cualquier dispositivo abre, edita, envía o cobra una cuenta, los demás lo ven en ~1 segundo.
+  // El aviso de la base dice QUÉ cuenta cambió y solo esa se vuelve a bajar (unos pocos KB). Si no se puede saber
+  // cuál (o llegan avisos raros) se refresca la ventana del turno. Con el canal en vivo, la red de seguridad corre
+  // cada 10 min; sin canal, cada 15 s. Al volver a la app lo cubre «pos-reanudar» (sesión), sin pedirlo dos veces.
   useEffect(() => {
     if (!empresaId || !sb) return undefined
     let vivo = true
@@ -1017,47 +1025,68 @@ function useSupabaseStore(empresaId) {
     let timer = null
     let tSeguro = null
     let canal = null
+    const idsPend = new Set()
+    let todoPend = false
     const pedir = () => { clearTimeout(timer); timer = setTimeout(ligero, 350) }
+    const pedirTodo = () => { todoPend = true; pedir() }
     function ligero() {
       colaRef.current = colaRef.current.then(async () => {
         if (!vivo || !estadoRef.current) return
         const v0 = versionRef.current
+        const ids = [...idsPend]
+        const todo = todoPend || !ids.length
+        idsPend.clear(); todoPend = false
+        const devolver = () => { ids.forEach(i => idsPend.add(i)); if (todo) todoPend = true }
         try {
           const prev = estadoRef.current
-          const fresco = await refrescarCuentas(prev)
+          const fresco = todo ? await refrescarCuentas(prev) : await refrescarCuentasIds(prev, ids)
           if (!vivo) return
           // Si el usuario hizo algo mientras tanto, manda su acción; se vuelve a pedir enseguida.
-          if (versionRef.current !== v0) { pedir(); return }
+          if (versionRef.current !== v0) { devolver(); pedir(); return }
           avisarCierresRemotos(prev, fresco)
           estadoRef.current = { ...fresco, _empresaId: empresaId }
           setS(estadoRef.current)
-        } catch {  }
+        } catch { todoPend = true }
       })
+    }
+    // Qué cuentas toca cada aviso. Si un ítem o pago se movió de cuenta, también se vuelve a pedir la cuenta
+    // donde estaba (se busca en memoria), para que no quede el ítem duplicado en las dos.
+    const alAviso = tabla => p => {
+      const n = p?.new || {}, o = p?.old || {}
+      const ids = []
+      if (tabla === 'cuentas') ids.push(n.id || o.id)
+      else {
+        ids.push(n.cuenta_id || o.cuenta_id)
+        const fila = tabla === 'cuenta_items' || tabla === 'pagos' ? (n.id || o.id) : null
+        if (fila) {
+          const dueña = (estadoRef.current?.cuentas || []).find(c => (tabla === 'pagos' ? c.pagos : c.items || []).some?.(x => x.id === fila))
+          if (dueña) ids.push(dueña.id)
+        }
+      }
+      const validos = ids.filter(Boolean)
+      if (!validos.length) todoPend = true
+      validos.forEach(i => idsPend.add(i))
+      pedir()
+    }
+    const programar = () => {
+      clearTimeout(tSeguro)
+      tSeguro = setTimeout(() => { if (vivo) { if (!document.hidden) pedirTodo(); programar() } }, conectado ? 600000 : 15000)
     }
     try {
       canal = sb.channel('cuentas-' + empresaId)
       for (const tabla of ['cuentas', 'cuenta_items', 'cuenta_mesas', 'pagos']) {
-        canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla, filter: `empresa_id=eq.${empresaId}` }, pedir)
+        canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla, filter: `empresa_id=eq.${empresaId}` }, alAviso(tabla))
       }
       canal.subscribe(st => {
         conectado = st === 'SUBSCRIBED'
-        if (conectado) pedir() // al (re)conectar se ponen al día los cambios que pudieron perderse
+        programar()
+        if (conectado) pedirTodo() // al (re)conectar se ponen al día los cambios que pudieron perderse
       })
     } catch { conectado = false }
-    const alVolver = () => { if (!document.hidden) pedir() }
-    document.addEventListener('visibilitychange', alVolver)
-    window.addEventListener('focus', alVolver)
-    window.addEventListener('online', pedir)
-    const programar = () => {
-      tSeguro = setTimeout(() => { if (vivo) { if (!document.hidden) pedir(); programar() } }, conectado ? 90000 : 12000)
-    }
     programar()
     return () => {
       vivo = false
       clearTimeout(timer); clearTimeout(tSeguro)
-      document.removeEventListener('visibilitychange', alVolver)
-      window.removeEventListener('focus', alVolver)
-      window.removeEventListener('online', pedir)
       try { if (canal) sb.removeChannel(canal) } catch {  }
     }
   }, [empresaId])
@@ -1116,7 +1145,28 @@ export function StoreProvider({ children }) {
 
   const supActivo = Boolean(sesion?.empresaId && USAR_SUPABASE)
   const [sDemo, dDemo] = useReducer(reducerDemo, null, () => { try { return migrar(JSON.parse(localStorage.getItem(KEY))) } catch { return inicial } })
-  useEffect(() => { if (!supActivo) localStorage.setItem(KEY, JSON.stringify(sDemo)) }, [sDemo, supActivo])
+  // El demo guarda en este equipo (no usa la base), pero sin frenar la pantalla: los cambios seguidos se
+  // agrupan en un solo guardado (300 ms) y se guarda al instante al ocultar o cerrar la página.
+  const demoRef = useRef(sDemo)
+  demoRef.current = sDemo
+  const pendDemo = useRef(null)
+  const guardarDemo = useCallback(() => {
+    clearTimeout(pendDemo.current)
+    pendDemo.current = null
+    try { localStorage.setItem(KEY, JSON.stringify(demoRef.current)) } catch { /* sin espacio: no se interrumpe el trabajo */ }
+  }, [])
+  useEffect(() => {
+    if (supActivo) return
+    clearTimeout(pendDemo.current)
+    pendDemo.current = setTimeout(guardarDemo, 300)
+  }, [sDemo, supActivo, guardarDemo])
+  useEffect(() => {
+    const alCerrar = () => { if (pendDemo.current) guardarDemo() }
+    const alOcultar = () => { if (document.visibilityState === 'hidden') alCerrar() }
+    window.addEventListener('pagehide', alCerrar)
+    document.addEventListener('visibilitychange', alOcultar)
+    return () => { window.removeEventListener('pagehide', alCerrar); document.removeEventListener('visibilitychange', alOcultar); alCerrar() }
+  }, [guardarDemo])
   const sup = useSupabaseStore(supActivo ? sesion.empresaId : null)
 
   const valor = supActivo

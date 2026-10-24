@@ -11,12 +11,17 @@
  *    la vista indicada en data.url (#salon, #cocina, #caja).
  */
 
-const VERSION = 'v5'
+const VERSION = 'v6'
 const CACHE_SHELL = 'pos-control-shell-' + VERSION
 const CACHE_RECURSOS = 'pos-control-recursos-' + VERSION
 // Sin versión a propósito: las fotos sobreviven a las actualizaciones de la app (si no, cada versión
 // nueva obligaría a bajarlas todas otra vez y se gastarían megas).
 const CACHE_IMAGENES = 'pos-control-imagenes-v1'
+// Tipografías de Google: se bajan una vez por dispositivo y después salen del teléfono (también sin internet).
+const CACHE_FUENTES = 'pos-control-fuentes-v1'
+const esFuente = (url) => url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com'
+// Si la red tarda más de esto al abrir la app, se usa la copia guardada y la nueva se descarga detrás.
+const DOC_ESPERA_MS = 2500
 const IMG_MAX_ENTRADAS = 600
 const IMG_REVISAR_MS = 60 * 60 * 1000
 const esImagenStorage = (url) => url.pathname.startsWith('/storage/v1/object/public/pos-imagenes/')
@@ -95,7 +100,7 @@ self.addEventListener('activate', (e) => {
       const claves = await caches.keys()
       // Se borran las cachés de versiones anteriores (si no, el icono viejo sobrevive a
       // la actualización y la PWA instalada sigue mostrando la marca antigua).
-      await Promise.all(claves.filter((k) => k.startsWith('pos-control-') && k !== CACHE_SHELL && k !== CACHE_RECURSOS && k !== CACHE_IMAGENES).map((k) => caches.delete(k)))
+      await Promise.all(claves.filter((k) => k.startsWith('pos-control-') && k !== CACHE_SHELL && k !== CACHE_RECURSOS && k !== CACHE_IMAGENES && k !== CACHE_FUENTES).map((k) => caches.delete(k)))
       await self.clients.claim()
     })()
   )
@@ -107,6 +112,17 @@ self.addEventListener('fetch', (e) => {
 
   const url = new URL(req.url)
   if (esImagenStorage(url)) { e.respondWith(imagenConCache(e)); return }
+  if (esFuente(url)) {
+    // El CSS de fuentes se revisa detrás (stale-while-revalidate); los archivos de fuente no cambian: cache-first.
+    e.respondWith((async () => {
+      const cache = await caches.open(CACHE_FUENTES)
+      const guardada = await cache.match(req)
+      const traer = fetch(req).then(res => { if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()); return res })
+      if (guardada) { if (url.hostname === 'fonts.googleapis.com') e.waitUntil(traer.catch(() => {})); return guardada }
+      return traer
+    })())
+    return
+  }
   if (url.origin !== self.location.origin) return // no tocar orígenes externos
   if (esDev(url)) return // en desarrollo: siempre red, sin caché
 
@@ -114,14 +130,16 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate' || req.destination === 'document') {
     e.respondWith(
       (async () => {
+        const c = await caches.open(CACHE_SHELL)
+        const guardada = () => c.match('/index.html').then(r => r || c.match('/'))
+        const red = fetch(req).then(res => { if (res && res.ok) c.put('/index.html', res.clone()); return res })
         try {
-          const res = await fetch(req)
-          const c = await caches.open(CACHE_SHELL)
-          c.put('/index.html', res.clone())
-          return res
+          // Red lenta: tras 2,5 s se abre con la copia guardada; la versión nueva sigue bajando y se guarda.
+          const copia = await guardada()
+          if (!copia) return await red
+          return await Promise.race([red, new Promise(r => setTimeout(() => r(copia), DOC_ESPERA_MS))])
         } catch {
-          const c = await caches.open(CACHE_SHELL)
-          return (await c.match('/index.html')) || (await c.match('/')) || Response.error()
+          return (await guardada()) || Response.error()
         }
       })()
     )

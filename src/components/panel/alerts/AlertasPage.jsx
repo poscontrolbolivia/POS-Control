@@ -18,7 +18,7 @@ const ETIQUETA_PRIO = { 1: '1 · Urgente', 5: '5 · Normal', 9: '9 · Baja' }
 
 const MAX_TITULO = 80
 const MAX_MENSAJE = 240
-const REFRESCAR_MS = 20000
+const REFRESCAR_MS = 60000
 const AVISO_MS = 4000
 const URGENTE = 2
 const BAJA = 8
@@ -96,7 +96,7 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
     if (enBase) traer()
     const tick = async () => {
       setAhora(Date.now())
-      if (enBase) setFrescas(await cargarAlertas())
+      if (enBase && !document.hidden) setFrescas(await cargarAlertas())
     }
     const id = setInterval(tick, REFRESCAR_MS)
     window.addEventListener('pos-reanudar', tick)

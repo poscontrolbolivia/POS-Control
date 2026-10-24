@@ -25,6 +25,15 @@ const ReportsPage = lazyRetry(() => import('../components/panel/reports/ReportsP
 const AlertasPage = lazyRetry(() => import('../components/panel/alerts/AlertasPage.jsx'))
 const SuperPage = lazyRetry(() => import('../components/panel/super/SuperPage.jsx'))
 
+// Los módulos que no se abren al entrar se descargan en reposo, cuando el panel ya está dibujado:
+// al tocar la pestaña ya están y no hay «cargando».
+const PRECARGAS = {
+  inventario: () => import('../components/panel/inventory/InventoryPage.jsx'),
+  reportes: () => import('../components/panel/reports/ReportsPage.jsx'),
+  alertas: () => import('../components/panel/alerts/AlertasPage.jsx'),
+  auditoria: () => import('../components/panel/audit/AuditPage.jsx'),
+}
+
 const VISTAS = { '#salon': 'salon', '#cocina': 'cocina', '#caja': 'caja', '#estacion': 'config', '#venta': 'venta', '#menu': 'menu', '#config': 'config', '#auditoria': 'auditoria', '#inventario': 'inventario', '#reportes': 'reportes', '#alertas': 'alertas' }
 
 // Enlaces profundos de impresión: #estacion (la PC de la estación), #grupo-<id> y los nombres de
@@ -76,6 +85,15 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   if (puede(sesion.rol, 'ver_auditoria')) modulos.push({ id: 'auditoria', nombre: tOr('app.mod.auditoria', 'Auditoría') })
   modulos.push({ id: 'config', nombre: t('app.mod.config') })
   if (sesion.es_super) modulos.push({ id: 'super', nombre: tOr('app.mod.super', 'Super') })
+
+  const idsModulos = modulos.map(m => m.id).join(',')
+  useEffect(() => {
+    const ids = idsModulos.split(',').filter(id => PRECARGAS[id])
+    if (!ids.length) return undefined
+    const lanzar = () => ids.forEach((id, i) => setTimeout(() => PRECARGAS[id]().catch(() => {}), i * 400))
+    const h = typeof requestIdleCallback === 'function' ? requestIdleCallback(lanzar, { timeout: 4000 }) : setTimeout(lanzar, 1500)
+    return () => { if (typeof cancelIdleCallback === 'function' && typeof requestIdleCallback === 'function') cancelIdleCallback(h); else clearTimeout(h) }
+  }, [idsModulos])
 
   const [foco, setFoco] = useState(null)
   // `desde` le dice al Salón de dónde vino el toque: desde Caja abre la cuenta en modo cobro.

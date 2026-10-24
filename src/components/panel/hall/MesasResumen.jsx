@@ -1,14 +1,15 @@
-import { Fragment, useMemo, useState } from 'react'
-import { totalFinal, pagadoCuenta, saldoCuenta } from '../../../context/StoreContext.jsx'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useStore, totalFinal, pagadoCuenta, saldoCuenta } from '../../../context/StoreContext.jsx'
 import { round2 } from '../../../services/format.js'
 import { useMoneda } from '../../../services/money.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import './HallPage.css'
 import './MesasResumen.css'
+import { W, H, ASP_BASE, leerZoom, estiloMesa, calcularAsp } from './mapaMesas.js'
 
 // Lectura de solo lectura del mapa/listado de mesas para la pantalla de Caja.
 // No abre pedidos ni edita: al pulsar una mesa llama a onOpen (que navega al Salón).
-const W = 1000, H = 600, TODAS = 'todas'
+const TODAS = 'todas'
 
 const estadoMesa = c => (!c ? 'libre' : c.estado === 'precuenta' ? 'porcobrar' : c.items.some(i => i.estado === 'enviado') ? 'enviada' : 'ocupada')
 const estadoVarias = cs => {
@@ -38,6 +39,19 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
   const { t, tOr } = useIdioma()
   const [vista, setVista] = useState(iniciaVista)
   const [zona, setZona] = useState(TODAS)
+  // Mismo mapa que el Salón: misma proporción, mismo tamaño de mesa y el zoom que se dejó allí.
+  const { s } = useStore()
+  const zoom = leerZoom(s._empresaId ?? 'demo')
+  const bloque = useRef(null)
+  const [asp, setAsp] = useState(ASP_BASE)
+  useEffect(() => {
+    const calc = () => { const a = calcularAsp(bloque.current); if (a !== null) setAsp(prev => (Math.abs(prev - a) > 0.01 ? a : prev)) }
+    calc()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(calc) : null
+    if (ro && bloque.current) ro.observe(bloque.current)
+    window.addEventListener('resize', calc)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', calc) }
+  }, [vista])
 
   const cambiarVista = v => { setVista(v); try { localStorage.setItem('pos-caja-mesas-vista', v) } catch { /* noop */ } }
 
@@ -116,10 +130,10 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
         </div>
       ) : (
         <div className="salon mr-salon">
-          <div className="lienzo-bloque">
-            <div className="lienzo-area" style={{ ['--asp']: String(W / H) }}>
+          <div className="lienzo-bloque" ref={bloque}>
+            <div className="lienzo-area" style={{ ['--asp']: String(asp) }}>
               <div className="lienzo-wrap">
-                <div className="lienzo" style={{ ['--z']: '1' }}>
+                <div className="lienzo" style={{ ['--z']: String(zoom) }}>
                   {mesasZona.map(m => {
                     const cs = cuentasDeMesa(cuentas, m.id), c = cs[0], est = estadoVarias(cs)
                     const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
@@ -129,7 +143,7 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
                       <Fragment key={m.id}>
                         <div role="button" tabIndex={0} className={`mesa ${m.forma} ${est}`} title={tOr('caja.mesasAbrir', 'Abrir en el salón')}
                           onClick={() => abre(m)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') abre(m) }}
-                          style={{ left: `${(m.x / W) * 100}%`, top: `${(m.y / H) * 100}%`, width: `${(m.w / W) * 100}%`, height: `${(m.h / H) * 100}%` }}>
+                          style={estiloMesa(m, asp)}>
                           <b className="nombre">{num || m.nombre}</b>
                           {c && <span className="importe">{money(resto)}</span>}
                           {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
@@ -137,7 +151,7 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
                           {unida && <span className="badge-unida">🔗 ×{c.mesaIds.length}</span>}
                         </div>
                         {/* Las cuentas divididas se cobran desde abajo del cuadro, pegadas a su mesa. */}
-                        {chips(m, cs, { left: `${(m.x / W) * 100}%`, top: `${((m.y + m.h) / H) * 100}%`, width: `${(m.w / W) * 100}%` })}
+                        {chips(m, cs, { left: `${(m.x / W) * 100}%`, top: `${((m.y + m.h) / H) * 100}%`, width: estiloMesa(m, asp).width })}
                       </Fragment>
                     )
                   })}

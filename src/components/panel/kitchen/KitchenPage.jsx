@@ -8,7 +8,10 @@ import Aviso from '../../ui/Aviso.jsx'
 import './KitchenPage.css'
 import { hora } from '../../../services/format.js'
 
-const SONDEO_MS = 4000
+// Con el tiempo real conectado, el sondeo es solo una red de seguridad (cada minuto); sin él, cada 5 s.
+// Con la pantalla oculta no se pide nada. Antes: cada 4 s siempre (unas 20 000 peticiones al día).
+const SONDEO_MS = 5000
+const SONDEO_SEGURO_MS = 60000
 const AMARILLO_MIN = 5
 const URGENTE_MIN = 10
 const PERMITIDOS = ['cocina', 'barra', 'admin', 'cajero', 'mesero']
@@ -40,6 +43,24 @@ function lotes(items) {
     const ultimo = out[out.length - 1]
     const en = i.enviadoEn || 0
     if (ultimo && en - ultimo.desde <= BRECHA_LOTE_MS) ultimo.items.push(i)
+    else out.push({ desde: en, items: [i] })
+  })
+  return out
+}
+
+// Un envío = una tanda de la comanda. Si a una mesa que ya está en cocina se le agrega pedido, los platos
+// nuevos entran en la MISMA comanda pero como una tanda aparte («Adición n») con su propio cronómetro,
+// para que Despacho no confunda lo nuevo con lo que lleva rato en preparación. El orden dentro de la
+// comanda es fijo (hora de envío y, en empate, el orden en que se vieron por primera vez): un plato que
+// sale NO cambia de sitio.
+function agruparTandas(items, orden) {
+  const lista = [...(items || [])].sort((x, y) =>
+    (ms(x.enviada_en) || 0) - (ms(y.enviada_en) || 0) || (orden.get(x.id) ?? 1e9) - (orden.get(y.id) ?? 1e9))
+  const out = []
+  lista.forEach(i => {
+    const en = ms(i.enviada_en) || 0
+    const ultima = out[out.length - 1]
+    if (ultima && en - ultima.desde <= BRECHA_LOTE_MS) ultima.items.push(i)
     else out.push({ desde: en, items: [i] })
   })
   return out
@@ -152,9 +173,11 @@ export default function KitchenPage({ rol, sesion }) {
   // servidor, a la cola y a una recarga completa de la empresa (unos 4 s). `optRef` recuerda lo que el
   // usuario ya hizo hasta que el servidor lo confirme, para que un refresco antiguo no lo desmarque.
   const optRef = useRef(new Map())
+  const ordenRef = useRef(new Map())
   const enVueloRef = useRef(new Map())
   const repetirRef = useRef(false)
   const realtimeRef = useRef(false)
+  const devsEnRef = useRef(0)
   realtimeRef.current = realtime
   const vistaRef = useRef(vista)
   vistaRef.current = vista
@@ -194,6 +217,7 @@ export default function KitchenPage({ rol, sesion }) {
       const nuevoRecien = {}
       const sig = { ...colasRef.current }
       res.forEach(([a, lista0]) => {
+        lista0.forEach(c => (c.items || []).forEach(it => { if (!ordenRef.current.has(it.id)) ordenRef.current.set(it.id, ordenRef.current.size) }))
         const lista = conOptimistas(lista0, a)
         sig[a] = lista
         const enviados = new Set()
@@ -207,7 +231,13 @@ export default function KitchenPage({ rol, sesion }) {
 
       const real = areas.find(x => x !== SIN_AREA)
       if (!conectado) setDevs(devsDemo(sRef.current, real))
-      else if (real) rpc('devoluciones_de_area', { p_area: real }).then(r => setDevs(Array.isArray(r) ? r : [])).catch(() => {})
+      else if (real) {
+        // Las devoluciones cambian poco: con el tiempo real conectado se piden como mucho cada 30 s.
+        if (!realtimeRef.current || Date.now() - devsEnRef.current > 30000) {
+          devsEnRef.current = Date.now()
+          rpc('devoluciones_de_area', { p_area: real }).then(r => setDevs(Array.isArray(r) ? r : [])).catch(() => {})
+        }
+      }
       else setDevs([])
       if (Object.keys(nuevoRecien).length) setRecien(r => ({ ...r, ...nuevoRecien }))
       setAhora(Date.now())
@@ -228,9 +258,11 @@ export default function KitchenPage({ rol, sesion }) {
     areasVisibles.forEach(a => { vistosRef.current[a] = null })
     cargarRef.current?.()
     if (!conectado) return undefined
-    const poll = setInterval(() => cargarRef.current?.(), SONDEO_MS)
-    return () => clearInterval(poll)
-  }, [conectado, permitido, areasVisibles])
+    const poll = setInterval(() => { if (!document.hidden) cargarRef.current?.() }, realtime ? SONDEO_SEGURO_MS : SONDEO_MS)
+    const alVolver = () => { if (!document.hidden) cargarRef.current?.() }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => { clearInterval(poll); document.removeEventListener('visibilitychange', alVolver) }
+  }, [conectado, permitido, areasVisibles, realtime])
 
   useEffect(() => {
     if (conectado || !permitido) return
@@ -468,22 +500,49 @@ export default function KitchenPage({ rol, sesion }) {
     const pendientes = (c.items || []).filter(i => i.estado === 'enviado').length
     const nueva = recien[clave] && ahora - recien[clave] < 8000
     const { salon, mesero } = datosCuenta(c)
+    const tandas = agruparTandas(c.items, ordenRef.current)
     const cuando = c.desde || ms(c.enviada_en)
-    // Una sola línea en texto plano: Salón · Mesa X · Mesero · enviado a las HH:MM
-    const linea = [salon, tituloMesa(c), mesero, cuando ? tOr('cocina.enviadoA', `enviado a las ${hora(cuando)}`, { h: hora(cuando) }) : ''].filter(Boolean).join(' · ')
+    // Encabezado de la comanda: «Salón: x  Mesa: x  Enviado por: x». En mostrador / para llevar no hay mesa:
+    // el canal ya sale como salón y no se repite como «Mesa: Mostrador».
+    const campos = [
+      [tOr('cocina.lblSalon', 'Salón'), salon],
+      [tOr('cocina.lblMesa', 'Mesa'), c.mesa ? tituloMesa(c) : ''],
+      [tOr('cocina.lblEnviadoPor', 'Enviado por'), mesero],
+    ].filter(([, v]) => v)
     return (
       <article key={clave} className={'ck-card' + nivel(c.desde) + (nueva ? ' nueva' : '')}>
         <header className="ck-cab">
-          <span className="ck-linea">{linea}</span>
+          <div className="ck-linea">
+            {campos.map(([k, v]) => <span key={k} className="ck-campo"><small>{k}:</small> <b>{v}</b></span>)}
+          </div>
           {Number(c.comensales) > 0 && <span className="ck-tag" title={tOr('cocina.comensales', 'Comensales')}>👥 {c.comensales}</span>}
           <span className="ck-sp" />
-          <span className={'ck-timer' + nivel(c.desde)} title={c.desde ? `${tOr('cocina.entro', 'Entró a las')} ${hora(c.desde)}` : ''}>⏱ {cronometro(c.desde, ahora)}</span>
+          <span className={'ck-timer' + nivel(c.desde)} title={cuando ? `${tOr('cocina.entro', 'Entró a las')} ${hora(cuando)}` : ''}>⏱ {cronometro(c.desde, ahora)}</span>
         </header>
         <div className="ck-meta">
-          <span />
-          {pendientes > 0 && <span className="ck-tag pend">{tOr('cocina.porSalir', `Por salir: ${pendientes}`, { n: pendientes })}</span>}
+          {pendientes > 0 ? <span className="ck-tag pend">{tOr('cocina.porSalir', `Por salir: ${pendientes}`, { n: pendientes })}</span> : <span />}
+          {cuando > 0 && <span className="ck-hora"><small>{tOr('cocina.lblHora', 'Hora')}:</small> <b>{hora(cuando)}</b></span>}
         </div>
-        <ul className="ck-items">{(c.items || []).map(it => renderItem(it, c))}</ul>
+        {tandas.map((tn, ix) => {
+          const pend = tn.items.filter(i => i.estado !== 'listo')
+          const tiempos = pend.map(i => ms(i.enviada_en)).filter(Boolean)
+          const desdeT = tiempos.length ? Math.min(...tiempos) : null
+          return (
+            <section key={ix} className="ck-tanda">
+              {tandas.length > 1 && (
+                <div className={'ck-tanda-cab' + (pend.length ? nivel(desdeT) : ' hecha')}>
+                  <b>{ix === 0 ? tOr('cocina.pedidoInicial', 'Pedido inicial') : `➕ ${tOr('cocina.adicion', `Adición ${ix}`, { n: ix })}`}</b>
+                  {tn.desde > 0 && <small>{hora(tn.desde)}</small>}
+                  <span className="ck-sp" />
+                  {pend.length > 0
+                    ? <span className={'ck-timer mini' + nivel(desdeT)}>⏱ {cronometro(desdeT, ahora)}</span>
+                    : <small className="ck-tanda-ok">✓ {tOr('cocina.tandaCompleta', 'Completa')}</small>}
+                </div>
+              )}
+              <ul className="ck-items">{tn.items.map(it => renderItem(it, c))}</ul>
+            </section>
+          )
+        })}
       </article>
     )
   }

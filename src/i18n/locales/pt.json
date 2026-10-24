@@ -1868,5 +1868,12 @@
   "cocina.totalUnidades": "{n} para sair",
   "cocina.sinIndicacion": "Sem indicação",
   "cocina.totalVacio": "Nada pendente para somar.",
-  "comun.masPuntos": "Mais…"
+  "comun.masPuntos": "Mais…",
+  "cocina.pedidoInicial": "Pedido inicial",
+  "cocina.adicion": "Adição {n}",
+  "cocina.tandaCompleta": "Completa",
+  "cocina.lblSalon": "Salão",
+  "cocina.lblMesa": "Mesa",
+  "cocina.lblEnviadoPor": "Enviado por",
+  "cocina.lblHora": "Hora"
 }

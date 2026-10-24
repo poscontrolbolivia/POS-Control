@@ -1,9 +1,25 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import es from './locales/es.json'
-import en from './locales/en.json'
-import pt from './locales/pt.json'
 
-const DICCIONARIOS = { es, en, pt }
+// Español va en el paquete principal (es el idioma de respaldo). Inglés y portugués se descargan solo
+// cuando alguien los usa: el arranque baja unos 200 kB y el service worker los guarda para después.
+const CARGADORES = {
+  en: () => import('./locales/en.json'),
+  pt: () => import('./locales/pt.json'),
+}
+const DICCIONARIOS = { es }
+const enCarga = {}
+
+function cargarIdioma(id) {
+  if (DICCIONARIOS[id]) return Promise.resolve()
+  if (!CARGADORES[id]) return Promise.reject(new Error('idioma desconocido'))
+  if (!enCarga[id]) {
+    enCarga[id] = CARGADORES[id]()
+      .then(m => { DICCIONARIOS[id] = m.default })
+      .finally(() => { delete enCarga[id] })
+  }
+  return enCarga[id]
+}
 const IDIOMAS = ['es', 'en', 'pt']
 const IDIOMA_DEFECTO = 'es'
 
@@ -16,6 +32,8 @@ export const IDIOMAS_INFO = [
 ]
 
 let idiomaActual = leerPreferencia()
+// Si la preferencia es en/pt, la descarga arranca ya, en paralelo con el resto de la app.
+if (idiomaActual !== IDIOMA_DEFECTO) cargarIdioma(idiomaActual).catch(() => {})
 
 function normalizarIdioma(v) {
   return IDIOMAS.includes(v) ? v : IDIOMA_DEFECTO
@@ -68,12 +86,23 @@ const Ctx = createContext(null)
 
 export function IdiomaProvider({ children }) {
   const [idiom, setIdiom] = useState(leerPreferencia)
+  // Idioma que se ve: cambia solo cuando su diccionario ya llegó, así no hay parpadeo en español.
+  const [visible, setVisible] = useState(() => (DICCIONARIOS[idiom] ? idiom : null))
 
   useEffect(() => {
-    idiomaActual = idiom
+    let vivo = true
     escribirPreferencia(idiom)
-    if (typeof document !== 'undefined') document.documentElement.lang = idiom
+    const aplicar = () => { if (vivo) setVisible(DICCIONARIOS[idiom] ? idiom : IDIOMA_DEFECTO) }
+    if (DICCIONARIOS[idiom]) aplicar()
+    else cargarIdioma(idiom).then(aplicar, aplicar)
+    return () => { vivo = false }
   }, [idiom])
+
+  useEffect(() => {
+    if (!visible) return
+    idiomaActual = visible
+    if (typeof document !== 'undefined') document.documentElement.lang = visible
+  }, [visible])
 
   useEffect(() => {
     const sincronizar = () => {
@@ -91,14 +120,16 @@ export function IdiomaProvider({ children }) {
   }, [])
 
   const setIdioma = useCallback(nuevo => setIdiom(normalizarIdioma(nuevo)), [])
-  const t = useCallback((clave, params) => traducirEn(idiom, clave, params), [idiom])
+  const idiomaVisible = visible || IDIOMA_DEFECTO
+  const t = useCallback((clave, params) => traducirEn(idiomaVisible, clave, params), [idiomaVisible])
 
   const tOr = useCallback(
-    (clave, alternativa, params) => (existeClave(clave) ? traducirEn(idiom, clave, params) : alternativa),
-    [idiom],
+    (clave, alternativa, params) => (existeClave(clave) ? traducirEn(idiomaVisible, clave, params) : alternativa),
+    [idiomaVisible],
   )
 
   const valor = useMemo(() => ({ idiom, setIdioma, t, tOr, idiomas: IDIOMAS_INFO }), [idiom, setIdioma, t, tOr])
+  if (!visible) return null
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>
 }
 

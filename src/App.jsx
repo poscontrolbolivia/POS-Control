@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useStore, leerSesionSup, guardarSesionSup } from './context/StoreContext.jsx'
 import { USAR_SUPABASE } from './services/config.js'
@@ -6,10 +6,17 @@ import { sb, fijarEmpresa, fijarEmpresaSesion, rpc } from './services/supabaseCl
 import { salirDeEmpresa } from './services/super/superApi.js'
 import { iniciarGuardiaSesion } from './services/session.js'
 import PwaBanners from './components/PwaBanners.jsx'
+import { lazyRetry } from './services/lazyRetry.js'
 import LoginPage from './pages/LoginPage.jsx'
-import PanelPage from './pages/PanelPage.jsx'
-import TerminosPage from './pages/TerminosPage.jsx'
-import PrivacidadPage from './pages/PrivacidadPage.jsx'
+
+// El login sale primero y liviano; el panel (y las páginas legales) se descargan aparte. Mientras la
+// persona escribe su usuario, el panel se baja en segundo plano, así al entrar ya está listo.
+const cargarPanel = () => import('./pages/PanelPage.jsx')
+const PanelPage = lazyRetry(cargarPanel)
+const TerminosPage = lazyRetry(() => import('./pages/TerminosPage.jsx'))
+const PrivacidadPage = lazyRetry(() => import('./pages/PrivacidadPage.jsx'))
+const enReposo = fn => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 2500 }) : setTimeout(fn, 800))
+if (typeof window !== 'undefined') enReposo(() => { cargarPanel().catch(() => {}) })
 
 export default function App() {
   return (
@@ -79,6 +86,7 @@ function Rutas() {
   return (
     <>
     <PwaBanners />
+    <Suspense fallback={<div className="auth-aviso" role="status" aria-live="polite" style={{ padding: '8px 16px' }}>…</div>}>
     <Routes>
       <Route path="/terminos" element={<TerminosPage />} />
       <Route path="/privacidad" element={<PrivacidadPage />} />
@@ -91,6 +99,7 @@ function Rutas() {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
     </>
   )
 }

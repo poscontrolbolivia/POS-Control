@@ -110,7 +110,10 @@
 
 /* Una línea que explica cada bloque de la cola (áreas, sacadas, devueltos). */
 .ck-ayuda{margin:0 0 8px;padding:7px 10px;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--mut);font-size:.83rem;font-weight:600;line-height:1.35}
-.ck-linea { flex: 1 1 100%; font-size: 1.12rem; font-weight: 800; color: var(--ink); line-height: 1.25; overflow-wrap: anywhere; }
+.ck-linea { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 1.12rem; color: var(--ink); line-height: 1.25; overflow-wrap: anywhere; }
+.ck-campo small, .ck-hora small { color: var(--mut); font-weight: 700; font-size: .85em; }
+.ck-campo b, .ck-hora b { font-weight: 800; }
+.ck-hora { font-variant-numeric: tabular-nums; font-size: 1rem; color: var(--ink); white-space: nowrap; }
 
 /* Total por producto: el resumen de toda la cola, para cuando las comandas no caben en pantalla. */
 .ck-total-btn em { background: var(--ac); }
@@ -126,3 +129,14 @@
 .ck-total-nombre { font-size: 1.15rem; line-height: 1.2; overflow-wrap: anywhere; }
 .ck-total-notas { list-style: none; margin: 0; padding: 0 0 0 54px; display: flex; flex-direction: column; gap: 2px; font-size: .98rem; font-weight: 600; color: var(--ink); }
 .ck-total-notas b { display: inline-block; min-width: 1.6em; font-weight: 800; }
+
+/* Tandas de una comanda: el pedido inicial y cada adición, cada una con su cronómetro. */
+.ck-tanda { display: flex; flex-direction: column; gap: 5px; }
+.ck-tanda + .ck-tanda { margin-top: 4px; }
+.ck-tanda-cab { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--ac) 14%, var(--card)); border: 1.5px solid color-mix(in srgb, var(--ac) 45%, var(--line)); font-size: .95rem; }
+.ck-tanda-cab small { color: var(--mut); font-weight: 700; }
+.ck-tanda-cab.ambar { background: color-mix(in srgb, var(--btn-yellow) 24%, var(--card)); border-color: color-mix(in srgb, var(--btn-yellow) 70%, var(--line)); }
+.ck-tanda-cab.rojo { background: color-mix(in srgb, var(--btn-red) 14%, var(--card)); border-color: color-mix(in srgb, var(--btn-red) 60%, var(--line)); }
+.ck-tanda-cab.hecha { background: color-mix(in srgb, var(--btn-green) 12%, var(--card)); border-color: color-mix(in srgb, var(--btn-green) 45%, var(--line)); }
+.ck-tanda-ok { color: var(--ok-ink) !important; }
+.ck-timer.mini { font-size: .95rem; padding: 2px 8px; }

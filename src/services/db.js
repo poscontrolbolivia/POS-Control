@@ -77,10 +77,10 @@ async function selectAll(query) {
   return data || []
 }
 
-async function fetchCuentas(empresaId, caja) {
+async function fetchCuentas(empresaId, caja, desdeMs) {
 
   const aperturas = [caja.turno?.abiertoEn, ...(caja.historial || []).map(t => t.abiertoEn)].filter(Boolean)
-  const window = aperturas.length ? Math.min(...aperturas) : new Date(hoyISO()).getTime()
+  const window = desdeMs || (aperturas.length ? Math.min(...aperturas) : new Date(hoyISO()).getTime())
   const iso = new Date(window).toISOString()
   const orFilter = `estado.neq.cerrada,cerrada_en.gte.${iso}`
   const cuentas = await selectAll(sb.from('cuentas').select('*').eq('empresa_id', empresaId).or(orFilter))
@@ -238,13 +238,14 @@ export async function detalleCierre(turnoId) {
   }
 }
 
-export async function cargarEstadoInicial(empresaId) {
+export async function cargarEstadoInicial(empresaId, previo = null) {
   if (!sb) throw new Error('Supabase no está configurado')
 
   await fijarEmpresaSesion(empresaId)
   const nombres = await fetchNombres()
 
   const cajaP = fetchCaja(empresaId)
+  let desdeCarga
   const [empresas, zonas, mesas, secciones, productos, cajaT, dataCuentas, numeradas, extras] = await Promise.all([
     selectAll(sb.from('empresas').select('*').eq('id', empresaId)),
     selectAll(sb.from('zonas').select('*').eq('empresa_id', empresaId).order('orden')),
@@ -252,14 +253,21 @@ export async function cargarEstadoInicial(empresaId) {
     selectAll(sb.from('secciones_menu').select('*').eq('empresa_id', empresaId).order('orden')),
     selectAll(sb.from('productos').select('*').eq('empresa_id', empresaId).order('nombre')),
     cajaP,
-    cajaP.then(t => fetchCuentas(empresaId, { turno: t.abierto ? mapTurno(t.abierto, nombres) : null, historial: t.historial.map(x => mapTurno(x, nombres)) })),
+    // Al entrar se baja todo el historial reciente; en las recargas completas (con estado previo) solo la ventana corta.
+    cajaP.then(t => {
+      const caja = { turno: t.abierto ? mapTurno(t.abierto, nombres) : null, otros: (t.otros || []).map(x => mapTurno(x, nombres)), historial: t.historial.map(x => mapTurno(x, nombres)) }
+      desdeCarga = previo ? marcaCierres(previo.cuentas, desdeReciente(caja)) : undefined
+      return fetchCuentas(empresaId, caja, desdeCarga)
+    }),
 
     selectAll(sb.from('cuentas').select('numero').eq('empresa_id', empresaId).eq('tipo', 'directa').is('canal', null).gte('abierta_en', hoyISO()).order('numero', { ascending: false }).limit(1)),
     fetchExtras(empresaId, nombres),
   ])
   const emp = empresas[0]
   if (!emp) throw new Error('No tienes acceso a esta empresa (o no existe)')
-  const cuentas = armarCuentas(dataCuentas.cuentas, dataCuentas.items, dataCuentas.pagos, dataCuentas.cms, nombres)
+  let cuentas = armarCuentas(dataCuentas.cuentas, dataCuentas.items, dataCuentas.pagos, dataCuentas.cms, nombres)
+  if (previo) cuentas = juntarCuentas(previo.cuentas, cuentas, desdeCarga)
+  extrasT = Date.now()
   const devoluciones = await fetchDevoluciones(empresaId, cajaT, nombres)
   return {
     config: { nombre: emp.nombre, moneda: emp.moneda, ivaPct: N(emp.iva_pct), propinaPct: N(emp.propina_pct), ...(emp.config && typeof emp.config === 'object' ? emp.config : {}) },
@@ -277,23 +285,49 @@ export async function cargarEstadoInicial(empresaId) {
   }
 }
 
-async function refrescarNegocio(estado) {
+// Ventana de cuentas que sí cambian: desde que abrió el turno más antiguo que sigue abierto (o desde hoy si no hay).
+// Las cuentas cobradas en turnos anteriores ya están en memoria y no se vuelven a bajar.
+const desdeReciente = caja => {
+  const t = [caja?.turno?.abiertoEn, ...((caja?.otros) || []).map(x => x.abiertoEn)].filter(Number.isFinite)
+  return t.length ? Math.min(...t) : new Date(hoyISO()).getTime()
+}
+// Las cuentas ya cobradas no cambian: además de acotar al turno, solo se piden las cobradas desde la última
+// cobrada que ya tenemos (menos 5 min de margen por si dos cobros se confirman casi a la vez). Las cuentas
+// abiertas se piden siempre. Así, tras cada toque se baja lo abierto y lo recién cobrado, no el turno entero.
+const marcaCierres = (cuentas, desdeTurno) => {
+  const c = (cuentas || []).filter(x => x.estado === 'cerrada' && Number.isFinite(x.cerradaEn)).map(x => x.cerradaEn)
+  return c.length ? Math.max(desdeTurno, Math.max(...c) - 300000) : desdeTurno
+}
+const juntarCuentas = (previas, nuevas, desde) => {
+  const ids = new Set(nuevas.map(x => x.id))
+  return [...(previas || []).filter(x => !ids.has(x.id) && x.estado === 'cerrada' && (x.cerradaEn || 0) < desde), ...nuevas]
+}
+
+// Carta, proveedores, deudas, alertas e insumos casi no cambian entre un toque y el siguiente: tras una acción
+// de pedido se vuelven a pedir como mucho cada minuto (antes, en cada toque).
+let extrasT = 0
+const EXTRAS_FRESCOS_MS = 60000
+
+async function refrescarNegocio(estado, { extras = true } = {}) {
   const empresaId = estado._empresaId
+  const conExtras = extras || Date.now() - extrasT > EXTRAS_FRESCOS_MS
+  const desde = marcaCierres(estado.cuentas, desdeReciente(estado.caja))
   // «nombres» se usa dentro de la propia lista de consultas: se pide primero la promesa y los extras
   // esperan a ella (antes se leía la variable aún sin crear → «Cannot access … before initialization»).
-  const nombresP = fetchNombres()
-  const [cajaT, data, nombres, extras] = await Promise.all([
+  const nombresP = conExtras ? fetchNombres() : fetchNombresCache()
+  const [cajaT, data, nombres, ex] = await Promise.all([
     fetchCaja(empresaId),
-    fetchCuentas(empresaId, estado.caja),
+    fetchCuentas(empresaId, estado.caja, desde),
     nombresP,
-    nombresP.then(n => fetchExtras(empresaId, n)),
+    conExtras ? nombresP.then(n => fetchExtras(empresaId, n)) : null,
   ])
+  if (conExtras) extrasT = Date.now()
   return {
     ...estado,
-    cuentas: armarCuentas(data.cuentas, data.items, data.pagos, data.cms, nombres),
+    cuentas: juntarCuentas(estado.cuentas, armarCuentas(data.cuentas, data.items, data.pagos, data.cms, nombres), desde),
     devoluciones: await fetchDevoluciones(empresaId, cajaT, nombres),
     caja: armarCaja(cajaT.abierto, cajaT.historial, nombres, undefined, estado.caja, cajaT.otros),
-    ...extras,
+    ...(ex || {}),
   }
 }
 
@@ -311,12 +345,44 @@ async function fetchNombresCache() {
 export async function refrescarCuentas(estado) {
   const empresaId = estado._empresaId
   const [nombres, cajaT] = await Promise.all([fetchNombresCache(), fetchCaja(empresaId)])
-  const data = await fetchCuentas(empresaId, estado.caja)
+  // Ventana corta: solo lo abierto y lo cobrado desde que abrió el turno en curso. Lo cobrado en turnos
+  // anteriores ya está en memoria y no cambia: no se vuelve a bajar en cada cambio de cualquier dispositivo.
+  const abiertos = [cajaT.abierto, ...(cajaT.otros || [])].filter(Boolean).map(x => new Date(x.abierto_en).getTime()).filter(Number.isFinite)
+  const desde = marcaCierres(estado.cuentas, abiertos.length ? Math.min(...abiertos) : new Date(hoyISO()).getTime())
+  const data = await fetchCuentas(empresaId, estado.caja, desde)
+  const nuevas = armarCuentas(data.cuentas, data.items, data.pagos, data.cms, nombres)
   return {
     ...estado,
-    cuentas: armarCuentas(data.cuentas, data.items, data.pagos, data.cms, nombres),
+    cuentas: juntarCuentas(estado.cuentas, nuevas, desde),
     caja: armarCaja(cajaT.abierto, cajaT.historial, nombres, undefined, estado.caja, cajaT.otros),
   }
+}
+
+// Refresco POR CUENTA para el tiempo real: el aviso de la base dice qué cuenta cambió y solo se baja esa
+// (con sus ítems, pagos y mesas). Un toque en una mesa ya no vuelve a descargar todas las cuentas del turno.
+export async function refrescarCuentasIds(estado, ids) {
+  const empresaId = estado._empresaId
+  const lista = [...new Set(ids)].filter(Boolean)
+  if (!lista.length) return estado
+  const nombres = await fetchNombresCache()
+  const [cuentas, items, pagos, cms] = await Promise.all([
+    selectAll(sb.from('cuentas').select('*').eq('empresa_id', empresaId).in('id', lista)),
+    selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', lista).order('creada_en')),
+    selectAll(sb.from('pagos').select('*').in('cuenta_id', lista).order('creada_en')),
+    selectAll(sb.from('cuenta_mesas').select('*').in('cuenta_id', lista)),
+  ])
+  const nuevas = new Map(armarCuentas(cuentas, items, pagos, cms, nombres).map(c => [c.id, c]))
+  const pedidas = new Set(lista)
+  const usadas = new Set()
+  // Cada cuenta conserva su sitio en la lista; las nuevas van al final; las que ya no existen se quitan.
+  const resto = (estado.cuentas || []).flatMap(c => {
+    if (!pedidas.has(c.id)) return [c]
+    const n = nuevas.get(c.id)
+    if (!n) return []
+    usadas.add(c.id)
+    return [n]
+  })
+  return { ...estado, cuentas: [...resto, ...[...nuevas.values()].filter(c => !usadas.has(c.id))] }
 }
 
 // Después de tocar precios o costos conviene recargar también la carta: el mapa
@@ -381,74 +447,74 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       try { dbId = await rpc('abrir_cuenta', { p_mesa_id: a.mesaId, p_comensales: a.comensales || 1 }) }
       catch (e) {
         // Otro aparato abrió esa mesa justo antes: no es un error, solo se sincroniza y se ve su cuenta.
-        if (/ya tiene una cuenta abierta/i.test(e?.message || '')) return refrescarNegocio(E)
+        if (/ya tiene una cuenta abierta/i.test(e?.message || '')) return refrescarNegocio(E, { extras: false })
         throw e
       }
       const locId = (a._nuevos?.cuentas || [])[0]
       if (locId && locId !== dbId) mapa.set(locId, dbId)
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
     case 'abrir-descartar':
       await rpc('descartar_cuenta_vacia', { p_cuenta_id: rid(mapa, a.cuentaId) })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'abrir-directa': {
       const dbId = await rpc('abrir_venta_directa', {})
       const locId = (a._nuevos?.cuentas || [])[0]
       if (locId && locId !== dbId) mapa.set(locId, dbId)
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
     case 'abrir-llevar': {
       const dbId = await rpc('abrir_para_llevar', { p_nombre: a.nombre, p_telefono: a.tel || null })
       const locId = (a._nuevos?.cuentas || [])[0]
       if (locId && locId !== dbId) mapa.set(locId, dbId)
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
     case 'llevar~':
       await rpc('editar_cliente_llevar', { p_cuenta_id: rid(mapa, a.cuentaId), p_nombre: a.nombre, p_telefono: a.tel || null })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'llevar-mesa':
       await rpc('pasar_llevar_a_mesa', { p_cuenta_id: rid(mapa, a.cuentaId), p_mesa_id: a.mesaId, p_comensales: a.comensales || 1 })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'item+': {
 
       const itemsDb = await rpc('agregar_items', { p_cuenta_id: rid(mapa, a.cuentaId), p_items: [{ producto_id: a.p.id, qty: 1, ...(a.nota ? { nota: a.nota } : {}), ...(a.indicaciones ? { indicaciones: a.indicaciones } : {}), ...(a.sel?.length ? { sel: a.sel } : {}) }] })
       const c = cuentaRecien(estado.cuentas, x => x.id === a.cuentaId || x.id === rid(mapa, a.cuentaId))
       if (c) remapItems(mapa, c.items, itemsDb)
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
     case 'qty': {
       await rpc('cambiar_qty_item', { p_item_id: rid(mapa, a.itemId), p_delta: a.d })
       if (a.d < 0) { const real = mapa.get(a.itemId); if (real) mapa.delete(a.itemId) }
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
     case 'detalle':
       await rpc('poner_detalle_cuenta', { p_cuenta_id: rid(mapa, a.cuentaId), p_detalle: a.detalle || '' })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'fiscal~':
       await rpc('poner_datos_fiscales', { p_cuenta_id: rid(mapa, a.cuentaId), p_nombre: a.nombre || null, p_numero: a.numero || null, p_correo: a.correo || null })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'nota':
       await rpc('poner_nota', { p_item_id: rid(mapa, a.itemId), p_nota: a.nota || '' })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'enviar':
       await rpc('enviar_items', { p_cuenta_id: rid(mapa, a.cuentaId) })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'anular':
       await rpc('anular_item', { p_item_id: rid(mapa, a.itemId), p_motivo: a.motivo || '' })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'precuenta':
       await rpc('pre_cuenta', { p_cuenta_id: rid(mapa, a.cuentaId) })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'reabrir':
       await rpc('reabrir_cuenta', { p_cuenta_id: rid(mapa, a.cuentaId) })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'extras':
 
       await rpc('aplicar_extras', { p_cuenta_id: rid(mapa, a.cuentaId), p_propina: a.propina ?? null, p_descuento: a.descuento ?? null })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'comensales~':
       await rpc('actualizar_comensales', { p_cuenta_id: rid(mapa, a.cuentaId), p_comensales: a.comensales })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'cobrar': {
       const ticket = await rpc('cobrar_cuenta', {
         p_cuenta_id: rid(mapa, a.cuentaId),
@@ -457,32 +523,32 @@ export async function despacharSupabase(estado, a, ctx = {}) {
         p_descuento: a.descuento ?? null,
       })
       ctx.onTicket?.(ticket)
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
     case 'abonar':
       await rpc('abonar_cuenta', {
         p_cuenta_id: rid(mapa, a.cuentaId),
         p_pagos: mapPagos(a.pagos.map(p => ({ ...p, ...(a.concepto ? { concepto: a.concepto } : {}) }))),
       })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'unir':
       await rpc('unir_mesas', { p_cuenta_id: rid(mapa, a.cuentaId), p_mesa_ids: a.mesaIds })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'dividir': {
       const dbId = await rpc('dividir_cuenta', { p_cuenta_id: rid(mapa, a.cuentaId) })
       const locId = (a._nuevos?.cuentas || [])[0]
       if (locId && locId !== dbId) mapa.set(locId, dbId)
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
     case 'separar': {
       const dbId = await rpc('separar_mesa', { p_cuenta_id: rid(mapa, a.cuentaId), p_mesa_id: a.mesaId })
       const locId = (a._nuevos?.cuentas || [])[0]
       if (locId && locId !== dbId) mapa.set(locId, dbId)
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
     case 'unir-sub':
       await rpc('unir_subcuentas', { p_cuenta_id: rid(mapa, a.cuentaId), p_cuenta_ids: (a.cuentaIds || []).map(x => rid(mapa, x)) })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'mover-parcial': {
       const dbDest = await rpc('mover_item_parcial', {
         p_item_id: rid(mapa, a.itemId),
@@ -494,7 +560,7 @@ export async function despacharSupabase(estado, a, ctx = {}) {
         const locId = (a._nuevos?.cuentas || [])[0]
         if (locId && locId !== dbDest) mapa.set(locId, dbDest)
       }
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
     case 'mover': {
       const dbDest = await rpc('mover_items', {
@@ -507,24 +573,24 @@ export async function despacharSupabase(estado, a, ctx = {}) {
         const locId = (a._nuevos?.cuentas || [])[0]
         if (locId && locId !== dbDest) mapa.set(locId, dbDest)
       }
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
 
     case 'intercambiar': {
       await rpc('mover_items', { p_cuenta_id: rid(mapa, a.cuentaA), p_item_ids: [rid(mapa, a.itemA)], p_cuenta_destino_id: rid(mapa, a.cuentaB) })
       await rpc('mover_items', { p_cuenta_id: rid(mapa, a.cuentaB), p_item_ids: [rid(mapa, a.itemB)], p_cuenta_destino_id: rid(mapa, a.cuentaA) })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     }
 
     case 'turno+':
       await rpc('abrir_turno', { p_fondo: a.fondo || 0 })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'turno-':
       await rpc('cerrar_turno', { p_contado: a.contado || 0 })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
     case 'caja-mov+':
       await rpc('registrar_movimiento_caja', { p_tipo: a.tipo, p_monto: a.monto, p_motivo: a.motivo || null })
-      return refrescarNegocio(E)
+      return refrescarNegocio(E, { extras: false })
 
     case 'mesa+': {
       const { error } = await sb.from('mesas').insert({

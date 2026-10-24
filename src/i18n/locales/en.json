@@ -1868,5 +1868,12 @@
   "cocina.totalUnidades": "{n} to send out",
   "cocina.sinIndicacion": "No option",
   "cocina.totalVacio": "Nothing pending to add up.",
-  "comun.masPuntos": "More…"
+  "comun.masPuntos": "More…",
+  "cocina.pedidoInicial": "Initial order",
+  "cocina.adicion": "Addition {n}",
+  "cocina.tandaCompleta": "Done",
+  "cocina.lblSalon": "Hall",
+  "cocina.lblMesa": "Table",
+  "cocina.lblEnviadoPor": "Sent by",
+  "cocina.lblHora": "Time"
 }

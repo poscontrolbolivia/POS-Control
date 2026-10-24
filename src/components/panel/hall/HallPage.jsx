@@ -8,8 +8,8 @@ import { planZonaBorrar, accionesBorrarZona, SIN_SALON, BORRAR_MESAS } from '../
 import OrderPanel from '../order/OrderPanel.jsx'
 import { ruedaHorizontal } from '../../../services/ruedaHorizontal.js'
 import './HallPage.css'
+import { W, H, ASP_BASE, ZOOM_MIN, ZOOM_MAX, ZOOM_PASO, CLAVE_ZOOM, leerZoom, estiloMesa, calcularAsp } from './mapaMesas.js'
 
-const W = 1000, H = 600
 const TODAS = 'todas'
 const LLEVAR = 'llevar'
 
@@ -17,10 +17,7 @@ const LARGO_ZONA = 80, LARGO_MESA = 60, CAP_MIN = 1, CAP_MAX = 50
 const COM_MIN = 1, COM_MAX = 99
 const TAM_MIN = 60
 const PASO_TAM = 25
-const ZOOM_MIN = 0.6, ZOOM_MAX = 2.5, ZOOM_PASO = 0.25
 const MAX_PX_MOVIL = 768
-const ASP_BASE = W / H
-const ASP_MAX = 2.6
 
 const estadoMesa = c => (!c ? 'libre' : c.estado === 'precuenta' ? 'porcobrar' : c.items.some(i => i.estado === 'enviado') ? 'enviada' : 'ocupada')
 
@@ -101,16 +98,9 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
 
   // Zoom del lienzo: escale de TODO el mapa (mesas, textos y rejilla) sin cambiar las coordenadas guardadas.
   // Se recuerda por negocio en este equipo, igual que la vista lista/mapa: si no, al salir de «Editar salón» volvía al 100 %.
-  const CLAVE_ZOOM = 'pos-salon-zoom'
   // En la demo no hay empresa real: sin este nombre, el zoom se guardaba bajo la clave «undefined».
   const claveZoom = s._empresaId ?? 'demo'
-  const [zoom, setZoom] = useState(() => {
-    try {
-      const guardado = JSON.parse(localStorage.getItem(CLAVE_ZOOM) || 'null')
-      const z = guardado?.[claveZoom]
-      return typeof z === 'number' && z >= ZOOM_MIN && z <= ZOOM_MAX ? z : 1
-    } catch { return 1 }
-  })
+  const [zoom, setZoom] = useState(() => leerZoom(claveZoom))
   // El paso se aplica sobre el valor actual (no sobre el del render): dos toques seguidos en ＋
   // sumaban el mismo paso dos veces y el segundo quedaba perdido.
   const limitarZoom = z => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100))
@@ -152,13 +142,9 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   const zonas = useMemo(() => ordenarZonas(s.zonas), [s.zonas])
   useEffect(() => {
     const calc = () => {
-      const bl = bloque.current
-      const area = bl?.firstElementChild
-      if (!bl || !area || !bl.clientWidth) return
-      const desc = parseFloat(getComputedStyle(area).getPropertyValue('--lienzo-descuento')) || 330
-      const alto = Math.max(200, window.innerHeight - desc)
-      const a = Math.max(ASP_BASE, Math.min(ASP_MAX, bl.clientWidth / alto))
-      setAsp(prev => (Math.abs(prev - a) > 0.01 ? Math.round(a * 100) / 100 : prev))
+      const a = calcularAsp(bloque.current)
+      if (a === null) return
+      setAsp(prev => (Math.abs(prev - a) > 0.01 ? a : prev))
     }
     calc()
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(calc) : null
@@ -192,7 +178,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   }, [llevarSelId, llevarSel?.id])
   useEffect(() => {
     if (!enLlevar || modo !== 'supabase') return undefined
-    const id = setInterval(() => { if (!document.hidden) window.dispatchEvent(new Event('pos-reanudar')) }, 20000)
+    const id = setInterval(() => { if (!document.hidden) window.dispatchEvent(new Event('pos-reanudar')) }, 60000)
     return () => clearInterval(id)
   }, [enLlevar, modo])
   const cuentaSel = sel ? cuentaActiva(s, sel) : null
@@ -602,7 +588,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
             return (
               <div key={m.id} className={`mesa ${m.forma} ${est}${sel === m.id ? ' sel' : ''}${mueve?.id === m.id ? ' arrastrando' : ''}`}
                 title={sub}
-                onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) abrirMesa(m.id) }} style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%`, width: `${(p.w / W) * 100 * (ASP_BASE / asp)}%`, height: `${(p.h / H) * 100}%` }}>
+                onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) abrirMesa(m.id) }} style={estiloMesa(p, asp)}>
                 <b className="nombre">{num || m.nombre}</b>
                 {c && <span className="importe">{money(resto)}</span>}
                 {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
