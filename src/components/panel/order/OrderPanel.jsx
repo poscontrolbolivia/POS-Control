@@ -7,11 +7,12 @@ import { useIdioma } from '../../../i18n/index.jsx'
 import { imprimirCuenta, imprimirComandas } from '../../printing/Ticket.jsx'
 import { nombreDeArea } from '../../../services/printing.js'
 import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
-import ComprobanteQr, { VerComprobante } from '../pago/ComprobanteQr.jsx'
-import PagoQrCard from '../pago/PagoQrCard.jsx'
+import { VerComprobante } from '../pago/ComprobanteQr.jsx'
+import CobroForm, { imputarPagos, cobroNuevo } from '../pago/CobroForm.jsx'
 import '../pago/ComprobanteQr.css'
 import { listasDe, notaDeUnidad, indicacionesDeUnidad, componerNota, comentarioDe, MAX_NOTA, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
 import IndicacionesPrevio from './IndicacionesPrevio.jsx'
+import { ruedaHorizontal } from '../../../services/ruedaHorizontal.js'
 import './OrderPanel.css'
 import { round2, hora, limpiarMonto, numMonto } from '../../../services/format.js'
 
@@ -40,7 +41,6 @@ function Thumb({ producto, nombreFallback }) {
   )
 }
 
-const METODOS = ['efectivo', 'qr', 'tarjeta', 'otro']
 const PIN_ADMIN_DEMO = '1234'
 
 const MOTIVOS = ['error', 'cambio', 'agotado', 'demora', 'cortesia', 'otro']
@@ -100,7 +100,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const [aUnirCtas, setAUnirCtas] = useState([])
   const [desc, setDesc] = useState(null)
   const [prop, setProp] = useState(null)
-  const [detalle, setDetalle] = useState('')
+  const [confirmar, setConfirmar] = useState(null)
+  const [destZona, setDestZona] = useState('')
   const [pagos, setPagos] = useState(null)
   const [sinTurno, setSinTurno] = useState(null)
   const [borrando, setBorrando] = useState(null)
@@ -111,33 +112,22 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const [menu, setMenu] = useState(false)
   const [modo, setModo] = useState(null)
   const [previa, setPrevia] = useState(null)
-  const [verQr, setVerQr] = useState(false)
   const [cliente, setCliente] = useState({ nombre: '', tel: '' })
   const avisoTimer = useRef(null)
   useEffect(() => { if (cuentaInicial) setCuentaSelId(cuentaInicial) }, [cuentaInicial])
   // Refs de los campos «Monto» por id de línea de pago: con índices, borrar una línea
   // descoloca el foco; con id siempre apuntamos al input correcto.
-  const montoRefs = useRef({})
-  const focoPendiente = useRef(null)
-  const confirmarRef = useRef(null)
   const avisar = msg => { setAviso(msg); clearTimeout(avisoTimer.current); avisoTimer.current = setTimeout(() => setAviso(''), 6000) }
   useEffect(() => () => clearTimeout(avisoTimer.current), [])
   useEffect(() => { setCuentaSelId(null); setModo(null); setMenu(false); setPrevia(null) }, [mesa?.id])
   // Para llevar: el panel se abre con la prop `cuenta` (mesa es undefined), así que el
   // prerrecargado del cliente mira `cuenta?.id`, no `mesa?.id`.
   useEffect(() => { setCliente({ nombre: cuenta?.clienteNombre || '', tel: cuenta?.clienteTel || '' }) }, [cuenta?.id])
-  // Enter en el último monto crea la línea nueva; el foco salta a ella cuando ya está montada.
-  useEffect(() => {
-    if (!pagos || !focoPendiente.current) return
-    const el = montoRefs.current[focoPendiente.current]
-    if (el) { el.focus(); focoPendiente.current = null }
-  }, [pagos])
-
   const hermanas = mesa ? cuentasDeMesa(s, mesa.id) : []
   const c = cuenta ?? hermanas.find(x => x.id === cuentaSelId) ?? hermanas[0]
   const sufijo = c?.tipo === 'mesa' && hermanas.length > 1 && c.etiqueta ? c.etiqueta : ''
   const titulo = c?.canal === 'llevar' ? tOr('pedido.llevarCabecera', `Pedido ${c.numero ?? ''}`, { n: c.numero }) + (c.clienteNombre ? ' · ' + c.clienteNombre : '') : c?.tipo === 'directa' ? t('pedido.turnoNumero', { n: c.numero }) : ((mesa?.nombre ?? t('pedido.cuenta')) + sufijo)
-  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setAUnirCtas([]); setPartes({}); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null); focoPendiente.current = null }
+  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setAUnirCtas([]); setPartes({}); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null); setConfirmar(null); setDestZona('') }
   const cerrar = () => {
     // Cualquier cuenta de mesa que quede en blanco se descarta al salir, la abrieron un toque de más
     // o sobró de una división: una mesa «activa» sin platos no sirve para nada y ensucia Caja.
@@ -159,7 +149,6 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const pctProp = Number(s.config?.propinaPct) || 0
   const propinaIncluida = Boolean(s.config?.propinaIncluida) && pctProp > 0
   const manualProp = useRef(new Set())
-  useEffect(() => { setDetalle(c?.detalle || '') }, [c?.id, c?.detalle])
   const baseProp = c ? Math.max(0, totalCuenta(c) - (c.descuento || 0)) : 0
   const propinaAuto = Math.round(baseProp * pctProp) / 100
   useEffect(() => {
@@ -222,7 +211,9 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   // Mesa en blanco: abierta de un toque por error o sobrante de una división. Sin ítems NI anulados,
   // que es justo lo que el servidor acepta para borrar (descartar_cuenta_vacia).
   const mesaVacia = !enCobro && editable && c.tipo === 'mesa' && c.estado === 'abierta' && !(c.items || []).length && !(c.pagos || []).length
-  const cerrarVacia = () => { d({ t: 'abrir-descartar', cuentaId: c.id }); avisar(tOr('pedido.mesaVaciaCerrada', 'La mesa estaba vacía: se cerró.')) }
+  // Cuenta en blanco (mesa o pedido para llevar): se puede cerrar con un toque desde las acciones.
+  const cuentaVacia = c.estado === 'abierta' && (c.tipo === 'mesa' || c.canal === 'llevar') && !(c.items || []).length && !(c.pagos || []).length
+  const cerrarVacia = () => { d({ t: 'abrir-descartar', cuentaId: c.id }); reset(); onClose() }
   const estadoVisto = tOr('estado.' + c.estado, c.estado)
 
   // Nombre/teléfono del pedido para llevar: guarda con el action 'llevar~' ya existente,
@@ -239,13 +230,21 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
     const hnas = s.cuentas.filter(y => y.estado !== 'cerrada' && y.mesaIds.some(m => x.mesaIds.includes(m))).length
     return x.mesaIds.map(nombreMesa).join(' + ') + (hnas > 1 && x.etiqueta ? x.etiqueta : '')
   }
-  const destinos = [
+  const zonaDe = mesaId => s.mesas.find(m => m.id === mesaId)?.zona ?? ''
+  const destinosTodos = [
     ...s.cuentas.filter(x => x.id !== c.id && x.estado !== 'cerrada' && x.tipo === 'mesa')
       .sort((x, y) => nombreDeCuenta(x).localeCompare(nombreDeCuenta(y), undefined, { numeric: true }))
-      .map(x => ({ key: 'c:' + x.id, nombre: nombreDeCuenta(x), label: `${nombreDeCuenta(x)} · ${money(totalCuenta(x))}`, cuenta: x })),
+      .map(x => ({ key: 'c:' + x.id, nombre: nombreDeCuenta(x), zona: zonaDe(x.mesaIds[0]), label: `${nombreDeCuenta(x)} · ${money(totalCuenta(x))}`, cuenta: x })),
     ...s.mesas.filter(m => !s.cuentas.some(x => x.estado !== 'cerrada' && x.mesaIds.includes(m.id)))
-      .map(m => ({ key: 'm:' + m.id, nombre: m.nombre, label: `${m.nombre} · ${t('pedido.libre')}`, mesaId: m.id })),
+      .sort((x, y) => String(x.nombre).localeCompare(String(y.nombre), undefined, { numeric: true }))
+      .map(m => ({ key: 'm:' + m.id, nombre: m.nombre, zona: m.zona ?? '', label: `${m.nombre} · ${t('pedido.libre')}`, mesaId: m.id })),
   ]
+  // Primero se elige el salón y después la mesa de ese salón: con 100 mesas una sola lista no se podía usar.
+  const salonesDest = [...(s.zonas || [])].sort((a, b) => (a.orden || 0) - (b.orden || 0))
+  const haySinSalon = destinosTodos.some(x => !x.zona || !salonesDest.some(z => z.id === x.zona))
+  const zonaPropia = mesa ? zonaDe(mesa.id) : ''
+  const zonaElegida = destZona !== '' ? destZona : (salonesDest.some(z => z.id === zonaPropia) ? zonaPropia : (salonesDest[0]?.id ?? '__sin'))
+  const destinos = destinosTodos.filter(x => (zonaElegida === '__sin' ? (!x.zona || !salonesDest.some(z => z.id === x.zona)) : x.zona === zonaElegida))
   const destinoSel = destinos.find(x => x.key === destino)
   const cuentaDestino = destinoSel?.cuenta || null
   const itemsDestino = (cuentaDestino?.items || []).filter(i => i.estado !== 'anulado')
@@ -313,69 +312,59 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
 
   const listo = pasoPedido(c)
   const iPaso = PASOS.indexOf(listo)
-  // Cobrar nunca depende de «Marcar listo»: el paso solo se muestra, no corta nada.
+  // El menú de cobro es el mismo de Venta directa. Con platos marcados se cobra solo esa parte (abono).
+  const baseCobro = marcados.length ? Math.min(saldo, totalSeleccion) : saldo
   const iniciarCobro = () => {
     if (!s.caja?.turno) { setSinTurno({ fondo: '' }); return }
     setMarcados([])
-    setPagos([{ id: nuevoId(), metodo: 'efectivo', monto: String(saldo.toFixed(2)) }])
+    setPagos(cobroNuevo({ comanda: false }))
   }
   const abrirTurnoYCobrar = () => {
     const f = numMonto(sinTurno.fondo)
     d({ t: 'turno+', fondo: round2(f), usuario })
     setSinTurno(null)
     setMarcados([])
-    setPagos([{ id: nuevoId(), metodo: 'efectivo', monto: String(saldo.toFixed(2)) }])
+    setPagos(cobroNuevo({ comanda: false }))
   }
-  const sumaPagos = round2((pagos || []).reduce((t2, p) => t2 + numMonto(p.monto), 0))
-  const pendiente = round2(Math.max(0, saldo - sumaPagos))
-  // Total del cobro separado por método (Efectivo / QR / …): se ve en pantalla antes de confirmar.
-  const desgloseMetodos = Object.entries((pagos || []).reduce((acc, p) => {
-    const v = numMonto(p.monto)
-    if (v > 0) acc[p.metodo] = round2((acc[p.metodo] || 0) + v)
-    return acc
-  }, {}))
-  const cambio = round2(Math.max(0, sumaPagos - saldo))
-  const lineas = () => pagos.filter(p => numMonto(p.monto) > 0).map(p => ({ metodo: p.metodo, monto: numMonto(p.monto), ...(p.metodo === 'qr' && p.comprobante ? { comprobante: p.comprobante } : {}) }))
-  const subiendoFoto = () => pagos.some(p => p.subiendo)
+  // Una sola línea sin monto = el total exacto (el campo lo muestra de ejemplo).
+  const lineasDeCobro = base => {
+    const ls = pagos.lineas
+    return ls.length === 1 && !numMonto(ls[0].monto) ? [{ ...ls[0], monto: String(base.toFixed(2)) }] : ls
+  }
   const confirmarCobro = () => {
-    if (subiendoFoto()) return avisar(t('comp.subiendo'))
-    if (pendiente > 0.009) return avisar(t('pedido.faltaParaCobrar', { faltan: money(pendiente), total: money(saldo) }))
-    const l = lineas()
-    if (!l.length) return avisar(t('pedido.sinPagos'))
-    d({ t: 'cobrar', cuentaId: c.id, pagos: l, ...(marcados.length ? { concepto: conceptoSeleccion } : {}), propina: c.propina || 0, descuento: c.descuento || 0, usuario })
-    cerrar()
-  }
-  // El abono deja la cuenta abierta con su saldo: es lo que permite cobrar 2 cervezas
-  // y que la mesa siga pedida, o que uno del grupo se vaya pagando su parte.
-  const confirmarAbono = () => {
-    if (subiendoFoto()) return avisar(t('comp.subiendo'))
-    const l = lineas()
-    if (!l.length) return avisar(t('pedido.sinPagos'))
-    if (pendiente <= 0.009) return avisar(t('pedido.abonoCubreTodo'))
-    d({ t: 'abonar', cuentaId: c.id, pagos: l, ...(marcados.length ? { concepto: conceptoSeleccion } : {}), usuario })
-    setPagos(null); setMarcados([])
-    avisar(t('pedido.abonadoOk', { monto: money(sumaPagos), saldo: money(round2(saldo - sumaPagos)) }))
-  }
-  // Enter en un monto: con saldo cubierto va a la línea vacía sin usar (si existe) o confirma;
-  // si falta dinero, baja a la siguiente línea y, si era la última, crea una nueva.
-  // Nota: se mantiene type="text" + inputMode="decimal" (con type=number el teclado saltaba y no dejaba escribir).
-  const agregarPago = () => {
-    const nid = nuevoId()
-    focoPendiente.current = nid
-    setPagos(ps => [...ps, { id: nid, metodo: 'efectivo', monto: '' }])
-  }
-  const enterMonto = (i, p) => {
-    if (pendiente <= 0.009) {
-      const vacia = pagos.find(x => x.id !== p.id && x.monto === '')
-      if (vacia) { montoRefs.current[vacia.id]?.focus(); return }
-      confirmarRef.current?.focus()
+    if (pagos.lineas.some(l => l.subiendo)) return avisar(t('comp.subiendo'))
+    const base = round2(baseCobro)
+    const { pagos: pg, saldo: falta } = imputarPagos(lineasDeCobro(base), base)
+    if (falta > 0.009) return avisar(t('pedido.faltaParaCobrar', { faltan: money(falta), total: money(base) }))
+    if (!pg.length) return avisar(t('pedido.sinPagos'))
+    const concepto = marcados.length ? { concepto: conceptoSeleccion } : {}
+    if (base < round2(saldo) - 0.009) {
+      d({ t: 'abonar', cuentaId: c.id, pagos: pg, ...concepto, usuario })
+      setPagos(null); setMarcados([])
+      avisar(t('pedido.abonadoOk', { monto: money(base), saldo: money(round2(saldo - base)) }))
       return
     }
-    const sig = pagos[i + 1]
-    if (sig) { montoRefs.current[sig.id]?.focus(); return }
-    if (numMonto(p.monto) <= 0) return
-    agregarPago()
+    d({ t: 'cobrar', cuentaId: c.id, pagos: pg, ...concepto, propina: c.propina || 0, descuento: c.descuento || 0, usuario })
+    if (pagos.imprimir) {
+      const cerrada = { ...c, estado: 'cerrada', pagos: [...(c.pagos || []), ...pg], cerradaEn: Date.now() }
+      const datos = datosImpresion()
+      // Diferido: el diálogo de impresión de Windows congela el hilo y no debe frenar el cobro.
+      setTimeout(() => { imprimirCuenta({ cuenta: cerrada, config: s.config, titulo: t('pedido.ticketTitulo', { titulo }), datos }).catch(() => { }) }, 0)
+    }
+    cerrar()
   }
+  // Abono libre: se recibió menos que el saldo y no hay platos marcados.
+  const abonoLibre = () => {
+    if (pagos.lineas.some(l => l.subiendo)) return avisar(t('comp.subiendo'))
+    const { pagos: pg, saldo: falta } = imputarPagos(pagos.lineas, round2(saldo))
+    if (!pg.length) return avisar(t('pedido.sinPagos'))
+    if (falta <= 0.009) return avisar(t('pedido.abonoCubreTodo'))
+    const recibido = round2(pg.reduce((a, x) => a + x.monto, 0))
+    d({ t: 'abonar', cuentaId: c.id, pagos: pg, usuario })
+    setPagos(null); setMarcados([])
+    avisar(t('pedido.abonadoOk', { monto: money(recibido), saldo: money(round2(saldo - recibido)) }))
+  }
+  const sumaRecibida = pagos ? round2(pagos.lineas.reduce((a, l) => a + numMonto(l.monto), 0)) : 0
 
   const datosImpresion = () => ({ salon: (s.zonas || []).find(z => z.id === mesa?.zona)?.nombre, mesa: titulo, orden: ordenDelDia(s.cuentas, c) })
 
@@ -429,7 +418,14 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
     if (aUnir.length) d({ t: 'unir', cuentaId: c.id, mesaIds: aUnir })
     cerrarUnir()
   }
-  const hayMenu = editable && (vivos.length > 0 || (puedeUnir && c.tipo === 'mesa'))
+  const puedeDividir = !enCobro && editable && puedeUnir && c.tipo === 'mesa' && hermanas.length < 8
+  const quitarSinEnviar = () => {
+    c.items.filter(i => i.estado === 'pendiente').forEach(i => d({ t: 'anular', cuentaId: c.id, itemId: i.id, motivo: 'pendiente' }))
+    setMarcados([]); setConfirmar(null)
+  }
+  const reenviarComanda = async () => { setConfirmar(null); await reimprimirComanda() }
+  const hayMenu = editable && (vivos.length > 0 || (puedeUnir && c.tipo === 'mesa') || puedeDividir)
+  const tituloMenu = c.tipo === 'mesa' ? tOr('pedido.opcionesMesa', 'Opciones de mesa') : tOr('pedido.opcionesPedido', 'Opciones del pedido')
 
   const agotados = agotadosHoy(s.config)
   const puedeMenu = puede(rol, 'gestionar_menu')
@@ -473,11 +469,14 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
             )}
             {hayMenu && (
               <div className="pm-mas">
-                <button type="button" className="pm-mas-btn" aria-haspopup="menu" aria-expanded={menu} title={t('pedido.masOpciones')} aria-label={t('pedido.masOpciones')} onClick={() => setMenu(v => !v)}>⋯</button>
+                <button type="button" className="pm-mas-btn" aria-haspopup="menu" aria-expanded={menu} title={tituloMenu} aria-label={tituloMenu} onClick={() => setMenu(v => !v)}>⋯ <span className="pm-mas-txt">{tituloMenu}</span></button>
                 {menu && (
                   <>
                     <div className="pm-mas-fondo" onClick={() => setMenu(false)} />
                     <ul className="pm-mas-menu" role="menu">
+                      {puedeDividir && <li><button type="button" role="menuitem" onClick={dividir}>✂ {tOr('pedido.menuDividir', 'Dividir mesa')}</button></li>}
+                      {puede(rol, 'marcar_listo') && c.items.some(i => i.estado === 'enviado') && <li><button type="button" role="menuitem" onClick={() => { setMenu(false); d({ t: 'listo', cuentaId: c.id, lista: true, usuario }) }}>✔ {tOr('pedido.marcarListo', 'Marcar listo')}</button></li>}
+                      {puede(rol, 'marcar_listo') && listo === 'listo' && <li><button type="button" role="menuitem" onClick={() => { setMenu(false); d({ t: 'listo', cuentaId: c.id, lista: false, usuario }) }}>↺ {tOr('pedido.deshacerListo', 'Deshacer listo')}</button></li>}
                       {vivos.length > 0 && <li><button type="button" className="peligro" role="menuitem" onClick={() => abrirModo('eliminar')}>🗑 {t('pedido.menuEliminar')}</button></li>}
                       {puedeMover && vivos.length > 0 && <li><button type="button" role="menuitem" onClick={() => abrirModo('mover')}>↔ {t('pedido.menuMover')}</button></li>}
                       {puedeUnir && c.tipo === 'mesa' && (c.mesaIds.length < s.mesas.length || hermanasOtras.length > 0) && <li><button type="button" role="menuitem" onClick={() => { setMenu(false); setAUnir([]); setAUnirCtas([]); setUniendo(true) }}>🔗 {t('pedido.menuUnir')}</button></li>}
@@ -491,7 +490,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
             )}
           </span>
         )}
-        <ol className="pm-pasos" aria-label={tOr('pedido.pasosAyuda', 'Prep → tomando pedido · Parcial/Listo → cocina · Cuenta → pre-cuenta · Pagada → cobrada')}>
+        <ol className="pm-pasos" aria-label={tOr('pedido.pasosTitulo', 'Estado del pedido')}>
           {PASOS.map((p, k) => (
             <li key={p} data-paso={p} aria-current={k === iPaso ? 'step' : undefined}
               className={'pm-paso ' + (k < iPaso ? 'hecho' : k === iPaso ? 'actual' : 'futuro')}>
@@ -501,9 +500,6 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
           ))}
         </ol>
       </div>
-      <p className="pm-ayuda">{enCobro
-        ? tOr('caja.modoCobroAyuda', 'Vista de cobro: la cuenta con lo que falta pagar. «✎ Editar mesa» abre la vista del mesero.')
-        : tOr('pedido.pasosAyuda', 'Prep → tomando pedido · Parcial/Listo → cocina · Cuenta → pre-cuenta · Pagada → cobrada')}</p>
       {!cuenta && hermanas.length > 1 && (
         <div className="barra pm-subcuentas" role="tablist">
           {hermanas.map(x => (
@@ -590,7 +586,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
               {busca && <button type="button" className="ghost pm-busca-x" onClick={() => setBusca('')} aria-label={t('comun.cancelar')}>✕</button>}
             </div>
             {/* Los grupos corren hacia los lados: con diez secciones la carta quedaba empujada fuera de la pantalla. */}
-            <div className="barra pm-tabs" role="tablist">
+            <div className="barra pm-tabs" role="tablist" ref={ruedaHorizontal}>
               <button type="button" role="tab" aria-selected={secActiva === TODOS} className={secActiva === TODOS ? 'tab on' : 'tab'} onClick={() => { setSec(TODOS); setBusca('') }}>{tOr('pedido.todas', 'Todos')}</button>
               {secciones.map(x => <button key={x.id} type="button" role="tab" aria-selected={x.id === secActiva} className={x.id === secActiva ? 'tab on' : 'tab'} onClick={() => { setSec(x.id); setBusca('') }}>{x.nombre}</button>)}
             </div>
@@ -606,7 +602,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
             )}
             {/* La carta entra por una tira que se desliza hacia la izquierda con su barra, como en el
                 mostrador: con «Todos» hay decenas de platos y un recuadro dejaba el resto sin alcanzar. */}
-            {!!enCarta.length && <div className="grid pm-productos" ref={tira}>
+            {!!enCarta.length && <div className="grid pm-productos" ref={el => { tira.current = el; ruedaHorizontal(el) }}>
               {enCarta.map(p => (
                 <button key={p.id} className={'prod' + (agotados[p.id] ? ' agotado' : '')} onClick={() => agregarProd(p)}
                   title={agotados[p.id] ? t('agotado.bloqueado', { nombre: p.nombre, motivo: agotados[p.id].motivo ? t('agotado.motivoSep', { motivo: agotados[p.id].motivo }) : '' }) : undefined}>
@@ -713,7 +709,15 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
           {modo === 'mover' && puedeMover && editable && (
             <div className="pm-caja pm-mover">
               <b>{t('pedido.moverTitulo')}</b>
-              <label className="pm-campo">{t('pedido.destino')}
+              {(salonesDest.length > 1 || haySinSalon) && (
+                <label className="pm-campo">{tOr('pedido.destinoSalon', 'Salón')}
+                  <select name="destino-salon" value={zonaElegida} onChange={e => { setDestZona(e.target.value); setDestino(''); setCanje('') }}>
+                    {salonesDest.map(z => <option key={z.id} value={z.id}>{z.nombre}</option>)}
+                    {haySinSalon && <option value="__sin">{t('salon.sinZona')}</option>}
+                  </select>
+                </label>
+              )}
+              <label className="pm-campo">{tOr('pedido.destinoMesa', 'Mesa')}
                 <select name="destino" value={destino} onChange={e => { setDestino(e.target.value); setCanje('') }}>
                   <option value="">{t('pedido.elegirMesa')}</option>
                   {destinos.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
@@ -737,14 +741,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
             </div>
           )}
 
-          {(editable || c.detalle) && (
-            <label className="pm-detalle">
-              <span>{t('pedido.detalleCuenta')}</span>
-              <textarea name="detalle-cuenta-hint" rows={2} maxLength={500} value={detalle} readOnly={!editable} placeholder={t('pedido.detalleCuentaHint')}
-                onChange={e => setDetalle(e.target.value)}
-                onBlur={() => { if (editable && detalle.trim() !== (c.detalle || '')) d({ t: 'detalle', cuentaId: c.id, detalle: detalle.trim() }) }} />
-            </label>
-          )}
+          {c.detalle && <p className="pm-sub">📝 {c.detalle}</p>}
 
           {puedePropina && ajustes && (
             <div className="barra" style={{ fontSize: '.85rem' }}>
@@ -815,87 +812,50 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
 
           {pagos ? (
             <div className="pm-caja">
-              <b style={{ fontSize: '.85rem' }}>{t('pedido.pagosTitulo', { saldo: money(saldo) })}</b>
-              <div className="barra" style={{ margin: 0, flexWrap: 'wrap' }}>
-                <span className="pm-pista-cobro">{t('pedido.pistaSeleccion')}</span>
-                {marcados.length > 0 && (
-                  <button type="button" className="slate" style={chico} onClick={() => setPagos(ps => ps.map((x, j) => j === 0 ? { ...x, monto: String(totalSeleccion.toFixed(2)) } : x))}>
-                    {t('pedido.ponerSeleccion', { monto: money(totalSeleccion) })}
-                  </button>
-                )}
-              </div>
-              {pagos.map((p, i) => (
-                <div key={p.id}>
-                <div className="barra" style={{ margin: 0 }}>
-                  <select name="metodo" value={p.metodo} onChange={e => setPagos(ps => ps.map((x, j) => j === i ? { ...x, metodo: e.target.value } : x))}>{METODOS.map(m => <option key={m} value={m}>{tOr('metodo.' + m, m)}</option>)}</select>
-                  <input name="monto" type="text" inputMode="decimal" autoComplete="off" value={p.monto} style={{ flex: 1 }}
-                    ref={el => { if (el) montoRefs.current[p.id] = el; else delete montoRefs.current[p.id] }}
-                    onChange={e => setPagos(ps => ps.map((x, j) => j === i ? { ...x, monto: limpiarMonto(e.target.value) } : x))}
-                    onBlur={() => setPagos(ps => ps.map((x, j) => j === i && x.monto !== '' ? { ...x, monto: numMonto(x.monto).toFixed(2) } : x))}
-                    onFocus={e => e.target.select()} placeholder={t('comun.monto')}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); enterMonto(i, p) } }} />
-                  {pagos.length > 1 && <button className="x" onClick={() => setPagos(ps => ps.filter((_, j) => j !== i))}>✕</button>}
-                </div>
-                {p.metodo === 'qr' && (
-                  <div className="barra" style={{ margin: '4px 0 0' }}>
-                    <button className="slate" style={chico} onClick={() => setVerQr(true)}>📱 {tOr('pedido.mostrarQr', 'Mostrar QR del negocio')}</button>
-                  </div>
-                )}
-                {p.metodo === 'qr' && <ComprobanteQr valor={p.comprobante} onCambio={v => setPagos(ps => ps.map((x, j) => (j === i ? { ...x, ...v } : x)))} />}
-                </div>
-              ))}
-              <div className="barra">
-                <button className="success" style={chico} onClick={agregarPago}>{tOr('pedido.agregarOtroPago', 'Agregar otro pago')}</button>
-                <span className="sp" />
-                {pendiente > 0 ? <small>{t('pedido.falta', { monto: money(pendiente) })}</small> : <small>{t('pedido.cambio', { monto: money(cambio) })}</small>}
-              </div>
-              {desgloseMetodos.length > 1 && (
-                <div className="pm-desglose" aria-label={tOr('pedido.desgloseTitulo', 'Cobro por método')}>
-                  {desgloseMetodos.map(([m, v]) => <span key={m}>{tOr('metodo.' + m, m)}: <b>{money(v)}</b></span>)}
-                </div>
-              )}
-              <div className="barra">
-                <button ref={confirmarRef} className="success" disabled={pendiente > 0.009} onClick={confirmarCobro}>{t('pedido.confirmarCobro')}</button>
-                {pendiente > 0.009 && sumaPagos > 0 && <button className="warning" onClick={confirmarAbono}>{t('pedido.abonar', { monto: money(sumaPagos) })}</button>}
+              {seleccion.length === 0 && <small className="pm-pista-cobro">{t('pedido.pistaSeleccion')}</small>}
+              {seleccion.length > 0 && <small className="pm-pista-cobro">{conceptoSeleccion}</small>}
+              <CobroForm cobro={pagos} onChange={setPagos} total={round2(baseCobro)} config={s.config} />
+              <div className="barra pm-acciones">
+                <button className="success" onClick={confirmarCobro}>{t('pedido.confirmarCobro')}</button>
+                {!marcados.length && sumaRecibida > 0.009 && sumaRecibida < round2(saldo) - 0.009 && <button className="warning" onClick={abonoLibre}>{t('pedido.abonar', { monto: money(sumaRecibida) })}</button>}
                 <button className="danger" onClick={() => { setPagos(null); setMarcados([]) }}>{t('comun.cancelar')}</button>
-                {cambio > 0 && <button className="slate" onClick={imprimirTicketCuenta}>{t('pedido.imprimirTicket')}</button>}
               </div>
             </div>
           ) : !sinTurno && (
-            <div className="barra pm-acciones">
-              {mesaVacia && <button className="danger solid" onClick={cerrarVacia}>✕ {tOr('pedido.cerrarVacia', 'Cerrar mesa vacía')}</button>}
-              {/* Dividir (crear subcuenta) estaba escondido tras el ⋯: se saca a la fila de acciones
-                  siempre visible, porque un «＋» de alta no debe quedar tras un submenú cerrado. */}
-              {editable && puedeUnir && c.tipo === 'mesa' && hermanas.length < 8 && (
-                <button type="button" className="info" onClick={dividir}>✂ {t('pedido.menuDividir')}</button>
+            <>
+              {confirmar && (
+                <div className="pm-caja pm-confirmar" role="alertdialog">
+                  <b>{confirmar === 'reenviar'
+                    ? tOr('pedido.confirmarReenviar', '¿Seguro que quiere reenviar la comanda a despacho?')
+                    : tOr('pedido.confirmarQuitarSinEnviar', '¿Seguro que quiere quitar los productos sin enviar?')}</b>
+                  {confirmar === 'reenviar' && <small>{tOr('pedido.confirmarReenviarAyuda', 'Se usa si la impresora falló y la comanda no salió: se imprime otra vez.')}</small>}
+                  <div className="barra pm-acciones">
+                    <button className={confirmar === 'reenviar' ? 'info' : 'danger solid'} onClick={confirmar === 'reenviar' ? reenviarComanda : quitarSinEnviar}>{t('comun.confirmar')}</button>
+                    <button className="ghost" onClick={() => setConfirmar(null)}>{t('comun.cancelar')}</button>
+                  </div>
+                </div>
               )}
-              {editable && hayPendientes && <button className="orange" onClick={enviarCocina}>🔥 {t('pedido.enviarCocina')}</button>}
-              {puede(rol, 'marcar_listo') && editable && c.items.some(i => i.estado === 'enviado') && (
-                <button className="info" onClick={() => d({ t: 'listo', cuentaId: c.id, lista: true, usuario })}>✔ {tOr('pedido.marcarListo', 'Marcar listo')}</button>
+              {!confirmar && (
+                <div className="barra pm-acciones">
+                  {/* 1 · cuenta en blanco */}
+                  {cuentaVacia && <button className="danger solid" onClick={cerrarVacia}>✕ {c.tipo === 'mesa' ? tOr('pedido.cerrarVacia', 'Cerrar mesa vacía') : tOr('pedido.cerrarPedidoVacio', 'Cerrar pedido vacío')}</button>}
+                  {/* 2 · con productos sin enviar */}
+                  {c.estado === 'abierta' && hayPendientes && <button className="orange" onClick={enviarCocina}>🔥 {tOr('pedido.enviarDespacho', 'Enviar a despacho')}</button>}
+                  {c.estado === 'abierta' && hayPendientes && <button className="danger" onClick={() => setConfirmar('quitar')}>🗑 {tOr('pedido.quitarSinEnviar', 'Quitar productos sin enviar')}</button>}
+                  {/* 3 · todo enviado a despacho */}
+                  {c.estado === 'abierta' && !hayPendientes && vivos.length > 0 && <button className="violet" onClick={sacarCuenta}>🧾 {tOr('pedido.sacarCuenta', 'Sacar cuenta')}</button>}
+                  {c.estado === 'abierta' && !hayPendientes && c.items.some(i => i.estado === 'enviado') && <button className="info" onClick={() => setConfirmar('reenviar')}>↻ {tOr('pedido.reenviarComanda', 'Reenviar comanda a despacho')}</button>}
+                  {/* 4 · cuenta ya sacada */}
+                  {c.estado === 'precuenta' && puede(rol, 'cobrar') && <button className="success" onClick={iniciarCobro}>💵 {t('pedido.cobrar')}</button>}
+                  {c.estado === 'precuenta' && <button className="slate" onClick={imprimirTicketCuenta}>🖨 {tOr('pedido.reimprimirCuenta', 'Reimprimir cuenta')}</button>}
+                  {c.estado === 'precuenta' && <button className="warning" onClick={() => d({ t: 'reabrir', cuentaId: c.id })}>↺ {c.tipo === 'mesa' ? tOr('pedido.reabrirMesa', 'Reabrir mesa') : tOr('pedido.reabrirPedido', 'Reabrir pedido')}</button>}
+                </div>
               )}
-              {puede(rol, 'marcar_listo') && editable && listo === 'listo' && (
-                <button className="slate" onClick={() => d({ t: 'listo', cuentaId: c.id, lista: false, usuario })}>↺ {tOr('pedido.deshacerListo', 'Deshacer listo')}</button>
-              )}
-              {/* La cuenta (pre-cuenta) también se saca desde Caja: el cajero la imprime sin volver a la vista del mesero. */}
-              {(editable || enCobro) && c.items.length > 0 && c.estado === 'abierta' && <button className="violet" onClick={sacarCuenta}>🧾 {tOr('pedido.sacarCuenta', 'Sacar cuenta')}</button>}
-              {c.estado === 'precuenta' && <button className="warning" onClick={() => d({ t: 'reabrir', cuentaId: c.id })}>{t('pedido.reabrir')}</button>}
-              {puede(rol, 'cobrar') && c.items.length > 0 && (
-                <button className="success" onClick={iniciarCobro}>💵 {t('pedido.cobrar')}</button>
-              )}
-              {c.items.length > 0 && c.estado !== 'abierta' && <button className="slate" onClick={imprimirTicketCuenta}>🖨 {tOr('pedido.reimprimirCuenta', 'Reimprimir cuenta')}</button>}
-              {!enCobro && c.items.some(i => i.estado === 'enviado') && <button className="info" onClick={reimprimirComanda}>↻ {t('pedido.reimprimirComanda')}</button>}
-            </div>
+            </>
           )}
           <p className="pm-sub" style={{ marginTop: 6 }}>{t('pedido.pagadoEstado', { pagado: money(pagadoCuenta(c)), estado: estadoVisto })}</p>
         </section>
       </div>
-      {verQr && (
-        <div className="pm-previa-fondo" onClick={() => setVerQr(false)}>
-          <div className="pm-previa" role="dialog" aria-label={tOr('pago.qrTitulo', 'QR de pago')} onClick={e => e.stopPropagation()}>
-            <PagoQrCard config={s.config} monto={saldo} empresaNombre={s.config?.nombre} onCerrar={() => setVerQr(false)} />
-          </div>
-        </div>
-      )}
       {previa && (
         <IndicacionesPrevio producto={previa.p} listas={previa.listas}
           onClose={() => setPrevia(null)} onConfirm={confirmarPrevia} />

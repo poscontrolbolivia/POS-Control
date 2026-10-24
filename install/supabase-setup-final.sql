@@ -6788,3 +6788,44 @@ select case
   then 'success'
   else 'ERROR: crear_super / quitar_super quedaron abiertas a anon o authenticated'
 end as resultado;
+
+-- ############################################################################
+-- ## v0.43 · Cerrar un pedido «para llevar» que quedó en blanco
+-- ############################################################################
+-- Igual que una mesa abierta por error: sin ítems y sin pagos se descarta con un toque.
+create or replace function public.descartar_cuenta_vacia(
+  p_cuenta_id  uuid,
+  p_empresa_id uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  c     public.cuentas;
+  v_mesas text;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
+  select * into c from public.cuentas where id = p_cuenta_id and empresa_id = v_emp for update;
+  if not found then return; end if;
+  if c.estado <> 'abierta' then return; end if;
+  if c.tipo <> 'mesa' and c.canal is distinct from 'llevar' then return; end if;
+  if exists (select 1 from public.cuenta_items i where i.cuenta_id = c.id) then return; end if;
+  if exists (select 1 from public.pagos p where p.cuenta_id = c.id) then return; end if;
+  select string_agg(m.nombre, ', ') into v_mesas
+    from public.cuenta_mesas cm join public.mesas m on m.id = cm.mesa_id
+   where cm.cuenta_id = c.id;
+  delete from public.cuentas where id = c.id and empresa_id = v_emp;
+  begin
+    perform private.auditar(v_emp, 'cuenta_descartada', jsonb_build_object(
+      'cuenta', c.id::text, 'numero', c.numero, 'mesa', v_mesas),
+      'cuenta', coalesce(v_mesas, 'cuenta ' || left(c.id::text, 8)));
+  exception when others then
+    null;
+  end;
+end $fn$;
+revoke all on function public.descartar_cuenta_vacia(uuid, uuid) from public, anon;
+grant execute on function public.descartar_cuenta_vacia(uuid, uuid) to authenticated;

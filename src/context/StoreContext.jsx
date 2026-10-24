@@ -425,7 +425,7 @@ function reducer(s, a) {
 
     case 'abrir': if (s.cuentas.some(c => c.estado !== 'cerrada' && (c.mesaIds || []).includes(a.mesaId))) return s
       return { ...s, cuentas: [...s.cuentas, nuevaCuenta({ tipo: 'mesa', canal: 'mesa', mesaIds: [a.mesaId], comensales: a.comensales || 1, abiertaPor: a.usuario })] }
-    case 'abrir-descartar': return { ...s, cuentas: s.cuentas.filter(c => !(c.id === a.cuentaId && c.tipo === 'mesa' && c.estado === 'abierta' && !(c.items || []).length && !(c.pagos || []).length)) }
+    case 'abrir-descartar': return { ...s, cuentas: s.cuentas.filter(c => !(c.id === a.cuentaId && (c.tipo === 'mesa' || c.canal === 'llevar') && c.estado === 'abierta' && !(c.items || []).length && !(c.pagos || []).length)) }
     case 'abrir-directa': return { ...s, caja: { ...s.caja, siguienteTurno: s.caja.siguienteTurno + 1 },
       cuentas: [...s.cuentas, nuevaCuenta({ tipo: 'directa', canal: a.canal || 'mostrador', numero: s.caja.siguienteTurno, mesaIds: [], abiertaPor: a.usuario })] }
 

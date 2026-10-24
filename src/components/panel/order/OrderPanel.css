@@ -192,3 +192,18 @@
 .pm-pasos > .pm-paso.futuro{opacity:.8}
 /* Con 100+ productos el scroll vive en la propia tira de la carta, no dentro del recuadro. */
 .pm-carta{max-height:none;overflow:visible}
+
+/* ── v0.43 ─────────────────────────────────────────────────────────────── */
+/* Avance de la cuenta: la raya une un círculo con el siguiente SIN cruzar los números
+   (empieza donde acaba el círculo anterior y termina donde empieza el actual). */
+.pm-paso:not(:first-child)::before{top:12px;right:calc(50% + 17px);width:calc(100% - 34px);height:3px;border-radius:2px}
+
+/* Acciones por estado: todas del mismo tamaño, cada una con su color. */
+.pm-acciones{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.pm-acciones button{flex:none;width:100%;min-height:48px;padding:8px 12px;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-align:center;white-space:normal;line-height:1.15}
+.pm-confirmar small{color:var(--mut)}
+
+/* Opciones de mesa (antes «⋯»). */
+.pm-mas-btn{display:inline-flex;align-items:center;gap:6px;font-size:1rem}
+.pm-mas-btn .pm-mas-txt{font-size:.88rem;font-weight:700}
+@media(max-width:420px){.pm-mas-btn .pm-mas-txt{display:none}}

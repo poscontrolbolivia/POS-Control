@@ -6,6 +6,7 @@ import { useMoneda } from '../../../services/money.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { planZonaBorrar, accionesBorrarZona, SIN_SALON, BORRAR_MESAS } from '../../../services/salon.js'
 import OrderPanel from '../order/OrderPanel.jsx'
+import { ruedaHorizontal } from '../../../services/ruedaHorizontal.js'
 import './HallPage.css'
 
 const W = 1000, H = 600
@@ -149,10 +150,20 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   const destinoAlta = activo === LLEVAR ? null : activo === TODAS ? (zonas[0]?.id ?? null) : activo
   const mesasZona = s.mesas.filter(m => activo === TODAS || m.zona === activo)
   const mesaSel = s.mesas.find(m => m.id === sel)
+  const zonaAct = zonas.find(z => z.id === activo) || null
+  const iZonaAct = zonaAct ? zonas.indexOf(zonaAct) : -1
   const enLlevar = activo === LLEVAR
   const llevarCuentas = s.cuentas.filter(c => c.canal === 'llevar' && c.estado !== 'cerrada').sort((a, b) => (a.numero || 0) - (b.numero || 0))
   const llevarSel = llevarSelId ? llevarCuentas.find(c => c.id === llevarSelId) : null
   const mesasLibres = s.mesas.filter(m => cuentasDeMesa(s, m.id).length === 0)
+  // En modo servidor el pedido recién creado cambia de id al sincronizar: sin esto el panel se cerraba
+  // solo y el pedido «no dejaba comandar». Se vuelve a enganchar al pedido nuevo que aparece.
+  const esperaLlevar = useRef(null)
+  useEffect(() => {
+    if (!llevarSelId || llevarSel || !esperaLlevar.current) return
+    const nueva = llevarCuentas.find(c => !esperaLlevar.current.has(c.id))
+    if (nueva) { esperaLlevar.current = null; setLlevarSelId(nueva.id) }
+  }, [llevarSelId, llevarSel, llevarCuentas.length])
   useEffect(() => {
     if (!enLlevar || modo !== 'supabase') return undefined
     const id = setInterval(() => { if (!document.hidden) window.dispatchEvent(new Event('pos-reanudar')) }, 20000)
@@ -190,9 +201,11 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   // El nombre del cliente se escribe después, dentro del panel (OrderPanel).
   const nuevoLlevar = () => {
     const id = nuevoId()
+    const previos = new Set(llevarCuentas.map(c => c.id))
     d({ t: 'abrir-llevar', id, nombre: '', tel: '', usuario: sesion?.usuario || sesion?.nombre || rol })
     setZona(LLEVAR)
     abrirLlevar(id)
+    esperaLlevar.current = previos
   }
 
   const aCoord = e => {
@@ -312,7 +325,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
     <div className="salon">
       <section className={'mapa-col' + (edit ? ' editando' : '')}>
         <div className="zona-strip">
-          <div className="zonas-scroll" role="group" aria-label={t('salon.salones')}>
+          <div className="zonas-scroll" ref={ruedaHorizontal} role="group" aria-label={t('salon.salones')}>
             <button className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS}
               title={t('salon.todasTitle')} onClick={() => { setZona(TODAS); setSel(null) }}>
               <span aria-hidden="true">▦</span> {t('salon.todas')}
@@ -373,23 +386,14 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
               </button>
             )}
           </div>
-          <div className="vista-sel" role="group" aria-label={t('salon.vista')}>
+          {!enLlevar && <div className="vista-sel" role="group" aria-label={t('salon.vista')}>
             <button type="button" className={'tab' + (vista === 'mapa' || edit ? ' on' : '')} aria-pressed={vista === 'mapa' || edit} onClick={() => cambiarVista('mapa')}>🗺 <span className="txt">{t('salon.vistaMapa')}</span></button>
             <button type="button" className={'tab' + (vista === 'lista' && !edit ? ' on' : '')} aria-pressed={vista === 'lista' && !edit} disabled={edit} onClick={() => cambiarVista('lista')}>☰ <span className="txt">{t('salon.vistaLista')}</span></button>
-          </div>
-          {admin && (
-            <button className={edit ? 'primary' : 'ghost'} disabled={enLlevar} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
+          </div>}
+          {admin && !enLlevar && (
+            <button className={(edit ? 'primary' : 'ghost') + ' vt'} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
               title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { setEdit(!edit); setSel(null); setNueva(null); setRen(null); setConf(null) }}>
               <span aria-hidden="true">{edit ? '✓' : '✎'}</span><span className="txt">{edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}</span>
-            </button>
-          )}
-          {/* El alta de pedido para llevar estaba solo dentro de la vista «Para llevar»: se ofrece
-              también en la cabecera para crearlo sin cambiar de vista. Al entrar en esa vista se
-              oculta aquí y manda el botón de adentro, así nunca hay dos «＋» a la vez. */}
-          {puede(rol, 'abrir_mesa') && !enLlevar && (
-            <button type="button" className="success" onClick={nuevoLlevar}
-              aria-label={tOr('salon.llevarNuevoPedido', 'Nuevo pedido')} title={tOr('salon.llevarNuevoPedido', 'Nuevo pedido')}>
-              <span aria-hidden="true">＋</span><span className="txt">{t('salon.llevar')}</span>
             </button>
           )}
         </div>
@@ -412,13 +416,44 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           </div>
         )}
 
-        {admin && !enLlevar && (
+        {edit && admin && !enLlevar && zonaAct && (
+          <div className="zona-panel" role="group" aria-label={tOr('salon.zonaOpciones', 'Opciones del salón')}>
+            <b className="zp-nom">{zonaAct.nombre}</b>
+            {ren?.id === zonaAct.id ? null : (
+              <div className="zp-acc">
+                <button type="button" className="ghost" disabled={iZonaAct <= 0} onClick={() => moverZona(iZonaAct, -1)}>▲ {tOr('salon.subirZonaTxt', 'Subir')}</button>
+                <button type="button" className="ghost" disabled={iZonaAct >= zonas.length - 1} onClick={() => moverZona(iZonaAct, 1)}>▼ {tOr('salon.bajarZonaTxt', 'Bajar')}</button>
+                <button type="button" className="ghost" onClick={() => { setConf(null); setRen({ id: zonaAct.id, nombre: zonaAct.nombre }) }}>✎ {tOr('salon.renombrarTxt', 'Renombrar salón')}</button>
+                <button type="button" className="danger" onClick={() => pedirBorrarZona(zonaAct)}>🗑 {tOr('salon.eliminarZonaTxt', 'Eliminar salón')}</button>
+              </div>
+            )}
+            {conf?.id === zonaAct.id && (
+              <div className="zp-conf">
+                <span>{nMesasZona(zonaAct.id) ? t('salon.zonaMesasTitulo', { n: nMesasZona(zonaAct.id) }) : t('salon.confirmarEliminarZona')}</span>
+                {nMesasZona(zonaAct.id) > 0 && (
+                  <select name="destino-mesas-panel" aria-label={t('salon.zonaMoverA')} value={conf.destino}
+                    onChange={e => setConf({ ...conf, destino: e.target.value })}>
+                    {zonas.filter(x => x.id !== zonaAct.id).map(x => <option key={x.id} value={x.id}>{t('salon.zonaMoverA')} «{x.nombre}»</option>)}
+                    <option value={SIN_SALON}>{t('salon.zonaSinSalon')}</option>
+                    <option value={BORRAR_MESAS}>{t('salon.zonaEliminarMesas')}</option>
+                  </select>
+                )}
+                <div className="zp-acc">
+                  <button type="button" className="danger solid" onClick={() => borrarZona(zonaAct)}>✓ {t('comun.confirmar')}</button>
+                  <button type="button" className="ghost" onClick={() => setConf(null)}>{t('comun.cancelar')}</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {admin && !enLlevar && edit && (
           <div className="barra">
-            <button className="success" onClick={altaMesa} disabled={!destinoAlta} aria-label={t('salon.masMesaAria')}
+            <button className="success vt" onClick={altaMesa} disabled={!destinoAlta} aria-label={t('salon.masMesaAria')}
               title={destinoAlta ? t('salon.masMesaAria') : t('salon.sinZonas')}>
               <span aria-hidden="true">＋</span><span className="txt">{t('salon.masMesa')}</span>
             </button>
-            {edit && <span className="pista">{movil ? t('salon.arrastraMesaMovil') : t('salon.arrastraMesa')}</span>}
+            <span className="pista">{movil ? t('salon.arrastraMesaMovil') : t('salon.arrastraMesa')}</span>
           </div>
         )}
 
@@ -502,7 +537,8 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           </div>
         )}
 
-        <div className="lienzo-area" hidden={(vista === 'lista' && !edit) || enLlevar}>
+        <div className="lienzo-bloque" hidden={(vista === 'lista' && !edit) || enLlevar}>
+        <div className="lienzo-area">
           <div className="lienzo-wrap">
             <div ref={lienzo} className={'lienzo' + (edit ? ' edit' : '')} style={{ ['--z']: String(zoom) }}
               onPointerDown={e => { if (e.target === e.currentTarget) setSel(null) }}
@@ -539,13 +575,13 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           })}
             </div>
           </div>
-          {/* Zoom: siempre a la vista mientras se ve el mapa. Se guarda por negocio, así que si solo
-              apareciera al editar, al salir quedaba el mapa recortado en 150 % sin forma de volverlo. */}
-          <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
-            <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
-            <button type="button" className="zoom-pct" onClick={zoomReset} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
-            <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
-          </div>
+        </div>
+        {/* Zoom: fuera del recuadro del mapa para que no estorbe a la vista. */}
+        <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
+          <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
+          <button type="button" className="zoom-pct" onClick={zoomReset} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
+          <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
+        </div>
         </div>
 
         {enLlevar && (

@@ -322,3 +322,24 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 
 /* Una línea: qué es la pestaña Para llevar y dónde se cobra. */
 .llevar-ayuda { margin: 0; color: var(--mut); font-size: .84rem; font-weight: 600; line-height: 1.35; }
+
+/* ── v0.43 ─────────────────────────────────────────────────────────────── */
+/* Zoom fuera del recuadro del mapa: debajo, centrado, sin tapar las mesas. */
+.zoom-ctrl{ position:static; margin:6px auto 0; width:fit-content; box-shadow:none; }
+.salon .lienzo-bloque .lienzo-area{ --lienzo-descuento:330px; }
+@media (min-width:901px){.salon .mapa-col.editando .lienzo-bloque .lienzo-area{ --lienzo-descuento:360px; }}
+@media (max-width:900px){.salon .mapa-col.editando .lienzo-bloque{ order:3; width:100%; }
+.salon .mapa-col.editando .lienzo-bloque .lienzo-area{ order:initial; --lienzo-descuento:385px; }}
+
+/* Editar salón: panel con botones que SÍ dicen para qué sirven (en el teléfono solo se veían iconos). */
+.zona-panel{ display:none; flex-direction:column; gap:8px; padding:10px; margin:6px 0; border:1px dashed var(--ac); border-radius:12px; background:var(--card); }
+.zona-panel .zp-nom{ font-size:1rem; }
+.zona-panel .zp-acc{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.zona-panel .zp-acc button{ width:100%; min-height:44px; white-space:normal; }
+.zona-panel .zp-conf{ display:flex; flex-direction:column; gap:8px; font-size:.9rem; font-weight:600; color:var(--danger); }
+.zona-panel .zp-conf select{ width:100%; min-height:44px; }
+@media (max-width:768px){
+  .zona-panel{ display:flex; }
+  .salon .mapa-col.editando .ztools{ display:none; }
+  .salon .vt .txt{ display:inline; }
+}

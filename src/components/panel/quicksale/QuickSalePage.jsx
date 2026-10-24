@@ -2,16 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, nuevoId } from '../../../context/StoreContext.jsx'
 import { puede } from '../../../services/permissions'
 import { MONEDA } from '../../../services/config'
-import { LADO_VISUAL_PX, urlImagenProducto, urlImagenNegocio } from '../../../services/imageUpload.js'
+import { LADO_VISUAL_PX, urlImagenProducto } from '../../../services/imageUpload.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { agotadosHoy, conMarca } from '../../../services/soldOut.js'
-import { imprimirCuenta, imprimirComandas, precalcularCambio } from '../../printing/Ticket.jsx'
+import { imprimirCuenta, imprimirComandas } from '../../printing/Ticket.jsx'
 import { listasDe, notaDeUnidad, indicacionesDeUnidad, extraDeUnidad, selDeUnidad } from '../../../services/indicaciones.js'
 import IndicacionesPrevio from '../order/IndicacionesPrevio.jsx'
-import ComprobanteQr from '../pago/ComprobanteQr.jsx'
-import PagoQrCard from '../pago/PagoQrCard.jsx'
+import CobroForm, { imputarPagos, cobroNuevo } from '../pago/CobroForm.jsx'
 import MesasResumen from '../hall/MesasResumen.jsx'
 import '../pago/ComprobanteQr.css'
+import { ruedaHorizontal } from '../../../services/ruedaHorizontal.js'
 import './QuickSalePage.css'
 import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
 import { formatearMonto } from '../../../services/money.js'
@@ -30,22 +30,6 @@ function MiniaturaProducto({ producto }) {
         : ini}
     </span>
   )
-}
-
-function imputarPagos(lineas, total) {
-  let saldo = round2(total)
-  const pagos = []
-  let cambio = 0
-  ;(lineas || []).forEach(l => {
-    const n = round2(numMonto(l.monto))
-    if (n <= 0) return
-    const aplica = round2(Math.min(n, saldo))
-    const devuelto = l.metodo === 'efectivo' ? round2(n - aplica) : 0
-    if (aplica > 0) pagos.push({ metodo: l.metodo, monto: aplica, recibido: n, cambio: devuelto, ...(l.metodo === 'qr' && l.comprobante ? { comprobante: l.comprobante } : {}) })
-    cambio = round2(cambio + devuelto)
-    saldo = round2(saldo - aplica)
-  })
-  return { pagos, cambio, saldo }
 }
 
 const NOTAS_RAPIDAS = ['Para llevar', 'Sin cebolla', 'Poco sal', 'Bien cocido', 'Extra queso']
@@ -86,7 +70,6 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   const agotados = agotadosHoy(s.config)
   const agotadosEnSeccion = productos.filter(p => agotados[p.id])
   const total = round2(carrito.reduce((acc, l) => acc + (l.p.precio + (l.extra || 0)) * l.qty, 0))
-  const hayQrNegocio = Boolean(urlImagenNegocio(s.config, 'qr'))
 
   const agregar = p => {
     if (!puede(rol, 'pedir')) return setAviso(t('venta.sinPermisoPedir'))
@@ -133,15 +116,8 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
 
   const abrirCobro = () => {
     if (!puede(rol, 'cobrar')) return setAviso(t('venta.sinPermisoCobrar'))
-    setCobro({ lineas: [{ metodo: 'efectivo', monto: '' }], imprimir: true, comanda: true })
+    setCobro(cobroNuevo())
   }
-  const setLinea = (i, cambios) => setCobro(c => ({ ...c, lineas: c.lineas.map((l, j) => (j === i ? { ...l, ...cambios } : l)) }))
-  const agregarLinea = () => setCobro(c => {
-    if (c.lineas.length >= 2) return c
-    const aplicado = c.lineas.reduce((acc, l) => acc + (Number(l.monto) || 0), 0)
-    return { ...c, lineas: [...c.lineas, { metodo: 'qr', monto: String(Math.max(0, round2(total - aplicado))) }] }
-  })
-
   const confirmarCobro = () => {
     if (cobro.lineas.some(l => l.subiendo)) return setAviso(t('comp.subiendo'))
     const { pagos, saldo } = imputarPagos(cobro.lineas, total)
@@ -205,8 +181,6 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
     }, 0)
   }, [pendiente, s.cuentas])
 
-  const cambioPreview = cobro ? precalcularCambio(cobro.lineas, total) : 0
-  const pagadoPreview = cobro ? round2(cobro.lineas.reduce((acc, l) => acc + (Number(l.monto) || 0), 0)) : 0
 
   if (!puede(rol, 'venta_directa')) {
     return <div className="vd"><aside className="vd-panel vd-sinpermiso">{t('venta.sinPermiso', { rol })}</aside></div>
@@ -231,7 +205,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
         ) : (
           <>
         <p className="vd-ayuda">{tOr('venta.ayuda', 'Mostrador: el cliente pide, paga y se va, sin mesa ni cuenta abierta. Las mesas se cobran en Caja.')}</p>
-        <div className="vd-tabs" role="tablist">
+        <div className="vd-tabs" role="tablist" ref={ruedaHorizontal}>
           <button type="button" role="tab" aria-selected={secActiva === TODOS}
             className={secActiva === TODOS ? 'vd-tab on' : 'vd-tab'} onClick={() => setSec(TODOS)}>{tOr('venta.todos', 'Todos')}</button>
           {secciones.map(x => (
@@ -251,7 +225,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
         )}
         {/* La carta entra por una tira que se desliza hacia la izquierda con su barra, igual que los
             grupos: con «Todos» hay decenas de platos y una rejilla solo dejaría ver los primeros. */}
-        {!!productos.length && <div className="vd-grid" ref={tira}>
+        {!!productos.length && <div className="vd-grid" ref={el => { tira.current = el; ruedaHorizontal(el) }}>
           {productos.map(p => (
             <button key={p.id} className={'vd-prod' + (agotados[p.id] ? ' agotado' : '')} onClick={() => agregar(p)}
               title={agotados[p.id] ? t('agotado.bloqueado', { nombre: p.nombre, motivo: agotados[p.id].motivo ? t('agotado.motivoSep', { motivo: agotados[p.id].motivo }) : '' }) : undefined}>
@@ -291,46 +265,9 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
         </ul>
         <datalist id="vd-notas-rapidas">{NOTAS_RAPIDAS.map(n => <option key={n} value={n} />)}</datalist>
 
-        {!cobro ? (
-          <div className="vd-total"><span>{t('venta.total')}</span><b>{m(total)}</b></div>
-        ) : (
-          <div className="vd-pagos">
-            <div className="vd-total"><span>{t('venta.total')}</span><b>{m(total)}</b></div>
-            {cobro.lineas.map((l, i) => (
-              <div className="vd-pago" key={i}>
-                <div className="vd-metodos">
-                  {[['efectivo', t('venta.metodoEfectivo')], ['qr', t('venta.metodoQr')], ['tarjeta', t('venta.metodoTarjeta')]].map(([met, label]) => (
-                    <button key={met} type="button" className={l.metodo === met ? 'vd-metodo on' : 'vd-metodo'}
-                      onClick={() => setLinea(i, { metodo: met })}>{label}</button>
-                  ))}
-                </div>
-                <label className="vd-monto">{t('venta.recibido')}
-                  <input name="monto" type="text" inputMode="decimal" autoComplete="off" autoFocus={i === 0}
-                    value={l.monto} onChange={e => setLinea(i, { monto: limpiarMonto(e.target.value) })} onFocus={e => e.target.select()} placeholder={m(total)} />
-                </label>
-                {l.metodo === 'qr' && hayQrNegocio && (
-                  <PagoQrCard config={s.config} monto={numMonto(l.monto) > 0 ? numMonto(l.monto) : total} empresaNombre={s.config?.nombre} />
-                )}
-                {l.metodo === 'qr' && <ComprobanteQr valor={l.comprobante} onCambio={v => setLinea(i, v)} />}
-              </div>
-            ))}
-            {cobro.lineas.length < 2 && <button className="success" type="button" onClick={agregarLinea}>{t('venta.segundoPago')}</button>}
-            {cobro.lineas.length >= 2 && <small className="vd-nota-ayuda">{t('venta.maxDosLineas')}</small>}
-            <div className="vd-resumen-pago">
-              <span>{t('venta.pagadoLabel')} <b>{m(pagadoPreview)}</b></span>
-              {cambioPreview > 0 && <span className="vd-cambio">{t('venta.cambioLabel')} {m(cambioPreview)}</span>}
-              {round2(total - Math.min(pagadoPreview, total)) > 0.009 && <span className="vd-falta">{t('venta.faltaLabel')} {m(round2(total - pagadoPreview))}</span>}
-            </div>
-            <label className="vd-check">
-              <input name="imprimir" type="checkbox" checked={cobro.imprimir} onChange={e => setCobro({ ...cobro, imprimir: e.target.checked })} />
-              {t('venta.imprimirTicket')}
-            </label>
-            <label className="vd-check">
-              <input name="comanda" type="checkbox" checked={cobro.comanda} onChange={e => setCobro({ ...cobro, comanda: e.target.checked })} />
-              <span className="vd-check-cuerpo">{t('venta.comandaCheckbox')}<small>{t('venta.comandaAyuda')}</small></span>
-            </label>
-          </div>
-        )}
+        {!cobro
+          ? <div className="vd-total"><span>{t('venta.total')}</span><b>{m(total)}</b></div>
+          : <CobroForm cobro={cobro} onChange={setCobro} total={total} config={s.config} mostrarComanda />}
 
         <div className="vd-acciones">
           {!cobro
