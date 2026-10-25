@@ -261,11 +261,11 @@ export default function LoginPage({ onEntrar }) {
                 ? <p className="lg-alerta lg-bloqueo" role="alert">{t('login.demasiadosIntentos', { segundos: restante })}</p>
                 : error && <p className="lg-alerta" role="alert">{error}</p>)}
               {demo && error && <p className="lg-alerta" role="alert">{error}</p>}
-              <button className="cc-btn" type="submit" disabled={busy || (!demo && restante > 0)}>
+              <button className="cc-btn cc-blue" type="submit" disabled={busy || (!demo && restante > 0)}>
                 {busy ? t('login.entrando') : demo ? t('login.entrarDemo') : t('login.entrar')}
               </button>
-              {USAR_SUPABASE && <button className="cc-btn cc-ghost" type="button" onClick={irAlta}>{t('login.nuevoAqui')}</button>}
-              <a className="cc-btn cc-ghost" href={enlaceSoporte(t('login.mensajeSoporte'))} target="_blank" rel="noopener noreferrer">{t('login.soporte')}</a>
+              {USAR_SUPABASE && <button className="cc-btn cc-orange" type="button" onClick={irAlta}>{t('login.nuevoAqui')}</button>}
+              <a className="cc-btn cc-whatsapp" href={enlaceSoporte(t('login.mensajeSoporte'))} target="_blank" rel="noopener noreferrer">{t('login.soporte')}</a>
               {!demo && <button className="lg-olvido" type="button" onClick={irRecupera}>{t('login.olvidaste')}</button>}
             </>
           )}
@@ -275,7 +275,7 @@ export default function LoginPage({ onEntrar }) {
               <h2>{t('login.titulo3')}</h2>
               <p className="auth-sub">{t('login.sub3')}</p>
               {empresasUsuario.map(emp => (
-                <button key={emp.id} type="button" className="cc-btn" onClick={() => listo(emp, emp.rol, userRef)}>
+                <button key={emp.id} type="button" className="cc-btn cc-blue" onClick={() => listo(emp, emp.rol, userRef)}>
                   {emp.nombre} <small>({tOr('rol.' + emp.rol, emp.rol)})</small>
                 </button>
               ))}
@@ -307,7 +307,7 @@ export default function LoginPage({ onEntrar }) {
                 <small className="auth-ayuda">{t('alta.helpClave')}</small>
               </label>
               {error && <p className="lg-alerta">{error}</p>}
-              <button className="cc-btn cc-green" type="submit" disabled={busy}>{busy ? t('alta.creando') : t('alta.crear')}</button>
+              <button className="cc-btn" type="submit" disabled={busy}>{busy ? t('alta.creando') : t('alta.crear')}</button>
               <p className="auth-aviso">{t('alta.aviso')}</p>
               <button className="lg-link" type="button" onClick={irLogin}>{t('alta.volver')}</button>
               <p className="auth-legal"><Link to="/terminos">{t('legal.terms.title')}</Link> · <Link to="/privacidad">{t('legal.privacy.title')}</Link></p>
@@ -324,7 +324,7 @@ export default function LoginPage({ onEntrar }) {
               <div className="auth-bloque">
                 <p className="auth-bloque-titulo">{t('recupera.admin')}</p>
                 <p className="auth-ayuda">{t('recupera.adminSub')}</p>
-                <a className="cc-btn cc-ghost" href={enlaceRecupera()} target="_blank" rel="noopener noreferrer">{t('recupera.whatsapp')}</a>
+                <a className="cc-btn cc-whatsapp" href={enlaceRecupera()} target="_blank" rel="noopener noreferrer">{t('recupera.whatsapp')}</a>
               </div>
               <div className="auth-bloque">
                 <p className="auth-bloque-titulo">{t('recupera.equipo')}</p>

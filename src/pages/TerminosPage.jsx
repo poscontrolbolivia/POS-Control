@@ -5,10 +5,29 @@ import BrandMark from '../components/login/BrandMark.jsx'
 import LegalBackButton from '../components/LegalBackButton.jsx'
 import './LegalPage.css'
 
-const SECCIONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+// Cada sección: título t{n}, resumen opcional, lista opcional y párrafos (claves legal.terms.*).
+const SECCIONES = [
+  { n: 1, p: ['s1'] },
+  { n: 2, ul: ['s2a', 's2b', 's2c', 's2d'] },
+  { n: 3, p: ['s3'] },
+  { n: 4, p: ['s4', 's4b'] },
+  { n: 5, p: ['s5', 's5b'] },
+  { n: 6, p: ['s6', 's6b'] },
+  { n: 7, p: ['s7', 's7b'] },
+  { n: 8, p: ['s8', 's8b'] },
+  { n: 9, sum: 's9Summary', p: ['s9'] },
+  { n: 10, sum: 's10Summary', p: ['s10', 's10b'] },
+  { n: 11, sum: 's11Summary', p: ['s11'] },
+  { n: 12, p: ['s12'] },
+  { n: 13, p: ['s13'] },
+  { n: 14, p: ['s14'] },
+  { n: 15, p: ['s15'] },
+  { n: 16, p: ['s16'] },
+]
 
 export default function TerminosPage() {
   const { t } = useIdioma()
+  const k = x => t('legal.terms.' + x)
   return (
     <div className="legal-wrap">
       <div className="legal-cab">
@@ -18,62 +37,30 @@ export default function TerminosPage() {
       <div className="legal-card">
         <div className="legal-marca">
           <BrandMark size={34} />
-          <h1>{t('legal.terms.title')}</h1>
+          <h1>{k('title')}</h1>
         </div>
         <p className="legal-updated">{t('legal.updated')}</p>
-        <p>{t('legal.terms.intro')}</p>
+        <p>{k('intro')}</p>
 
         <div className="legal-toc">
-          <p>{t('legal.terms.tocTitle')}</p>
+          <p>{k('tocTitle')}</p>
           <ol>
-            {SECCIONES.map(n => <li key={n}><a href={`#s${n}`}>{t(`legal.terms.t${n}`)}</a></li>)}
+            {SECCIONES.map(({ n }) => <li key={n}><a href={`#s${n}`}>{k('t' + n)}</a></li>)}
           </ol>
         </div>
 
-        <h2 id="s1">1. {t('legal.terms.t1')}</h2>
-        <p>{t('legal.terms.s1')}</p>
-
-        <h2 id="s2">2. {t('legal.terms.t2')}</h2>
-        <ul>
-          <li>{t('legal.terms.s2a')}</li>
-          <li>{t('legal.terms.s2b')}</li>
-          <li>{t('legal.terms.s2c')}</li>
-        </ul>
-
-        <h2 id="s3">3. {t('legal.terms.t3')}</h2>
-        <p>{t('legal.terms.s3')}</p>
-
-        <h2 id="s4">4. {t('legal.terms.t4')}</h2>
-        <p>{t('legal.terms.s4')}</p>
-
-        <h2 id="s5">5. {t('legal.terms.t5')}</h2>
-        <p>{t('legal.terms.s5')}</p>
-
-        <h2 id="s6">6. {t('legal.terms.t6')}</h2>
-        <p>{t('legal.terms.s6')}</p>
-
-        <h2 id="s7">7. {t('legal.terms.t7')}</h2>
-        <div className="legal-summary"><b>{t('legal.summaryLabel')}</b> {t('legal.terms.s7Summary')}</div>
-        <p>{t('legal.terms.s7')}</p>
-
-        <h2 id="s8">8. {t('legal.terms.t8')}</h2>
-        <div className="legal-summary"><b>{t('legal.summaryLabel')}</b> {t('legal.terms.s8Summary')}</div>
-        <p>{t('legal.terms.s8')}</p>
-        <p>{t('legal.terms.s8b')}</p>
-
-        <h2 id="s9">9. {t('legal.terms.t9')}</h2>
-        <div className="legal-summary"><b>{t('legal.summaryLabel')}</b> {t('legal.terms.s9Summary')}</div>
-        <p>{t('legal.terms.s9')}</p>
-
-        <h2 id="s10">10. {t('legal.terms.t10')}</h2>
-        <p>{t('legal.terms.s10')}</p>
-
-        <h2 id="s11">11. {t('legal.terms.t11')}</h2>
-        <p>{t('legal.terms.s11')}</p>
+        {SECCIONES.map(({ n, sum, ul, p }) => (
+          <section key={n}>
+            <h2 id={`s${n}`}>{n}. {k('t' + n)}</h2>
+            {sum && <div className="legal-summary"><b>{t('legal.summaryLabel')}</b> {k(sum)}</div>}
+            {ul && <ul>{ul.map(x => <li key={x}>{k(x)}</li>)}</ul>}
+            {(p || []).map(x => <p key={x}>{k(x)}</p>)}
+          </section>
+        ))}
 
         <div className="legal-contact">
-          {t('legal.terms.contact')}
-          <br /><Link className="legal-crosslink" to="/privacidad">{t('legal.terms.seePrivacy')}</Link>
+          <p>{k('contact')}</p>
+          <Link className="legal-crosslink" to="/privacidad">{k('seePrivacy')}</Link>
         </div>
       </div>
     </div>
