@@ -8,7 +8,7 @@
 .vd-menu{display:flex;flex-direction:column;gap:8px;min-width:0}
 /* Cambio mostrador ↔ mesas: siempre arriba, para que el salón sea visible sin salir de la pantalla. */
 .vd-vistas{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0}
-.vd-vistas .vd-tab{min-height:40px;padding:6px 16px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:.9rem;font-weight:600}
+.vd-vistas .vd-tab{min-height:44px;padding:6px 16px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:.95rem;font-weight:600}
 .vd-vista-n{min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--libre);border:1px solid var(--line);
   color:var(--mut);font-size:.78rem;font-weight:700;font-style:normal;display:inline-flex;align-items:center;justify-content:center}
 .vd-vistas .vd-tab.on .vd-vista-n{background:rgba(255,255,255,.35);border-color:transparent;color:var(--on-btn)}
@@ -73,7 +73,7 @@
 .vd-check input{width:auto;min-height:0}
 .vd-check-cuerpo{display:flex;flex-direction:column;gap:2px;min-width:0}
 .vd-check-cuerpo small{font-weight:400;font-size:.78rem;line-height:1.35;opacity:.8}
-.vd-acciones{display:flex;flex-direction:column;gap:8px}
+.vd-acciones{display:flex;flex-direction:column;gap:8px;position:sticky;bottom:0;z-index:4;padding:10px 0 calc(6px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--card) 78%,transparent)}
 .vd-aviso{margin:0;padding:8px 10px;border-radius:var(--r-sm);background:var(--libre);color:var(--ac);font-weight:600;font-size:.9rem}
 
 .vd-agotados{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}

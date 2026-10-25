@@ -13,7 +13,6 @@ const esRedLocal = u => /^https?:\/\/(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|
 const esMovil = () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
 const ESPERA_TRAS_FALLO_MS = 60 * 1000
 let fallaHasta = 0
-export const reiniciarFalloAgente = () => { fallaHasta = 0 }
 
 async function pedir(ruta, opciones = {}, ms = 6000, { fondo = false } = {}) {
   const base = urlAgente()

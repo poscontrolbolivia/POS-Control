@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useStore, cuentaActiva, cuentasDeMesa, totalCuenta, totalFinal, pagadoCuenta, saldoCuenta, ordenDelDia, nuevoId, pasoPedido } from '../../../context/StoreContext.jsx'
+import { useStore, cuentaActiva, cuentasDeMesa, totalCuenta, totalFinal, pagadoCuenta, saldoCuenta, ordenDelDia, pasoPedido } from '../../../context/StoreContext.jsx'
 import { puede } from '../../../services/permissions'
 import { useMoneda } from '../../../services/money.js'
 import { LADO_VISUAL_PX, urlImagenProducto } from '../../../services/imageUpload.js'
@@ -17,13 +17,10 @@ import { ruedaHorizontal } from '../../../services/ruedaHorizontal.js'
 import './OrderPanel.css'
 import { round2, hora, limpiarMonto, numMonto } from '../../../services/format.js'
 
-const cap = x => (x ? String(x).charAt(0).toUpperCase() + String(x).slice(1) : '')
 
 const PASOS = ['prep', 'parcial', 'listo', 'cuenta', 'pagada']
 const PASOS_TXT = { prep: 'Prep', parcial: 'Parcial', listo: 'Listo', cuenta: 'Cuenta', pagada: 'Pagada' }
 const TODOS = 'todas'
-
-const nombreArea = (id, tOr, config) => nombreDeArea(config, id, tOr('areas.' + id, cap(id)))
 
 function Thumb({ producto, nombreFallback }) {
   const url = urlImagenProducto(producto)
@@ -476,9 +473,10 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   }
 
   // Acción principal de cada paso, siempre a la vista arriba a la derecha: 1) enviar a despacho,
-  // 2) sacar la cuenta, 3) cobrar. Se oculta mientras hay un formulario o una confirmación abiertos.
+  // 2) sacar la cuenta, 3) cobrar y 4) confirmar el cobro. Se oculta mientras hay una confirmación abierta.
   const accionPrincipal = (() => {
-    if (pagos || sinTurno || confirmar || salirAviso) return null
+    if (sinTurno || confirmar || salirAviso) return null
+    if (pagos) return { icono: '✅', texto: t('pedido.confirmarCobro'), fn: confirmarCobro }
     if (c.estado === 'abierta' && hayPendientes) return { icono: '🔥', texto: tOr('pedido.enviarDespacho', 'Enviar a despacho'), fn: enviarCocina }
     if (c.estado === 'abierta' && vivos.length > 0) return { icono: '🧾', texto: tOr('pedido.sacarCuenta', 'Sacar cuenta'), fn: sacarCuenta }
     if (c.estado === 'precuenta' && puede(rol, 'cobrar')) return { icono: '💵', texto: t('pedido.cobrar'), fn: iniciarCobro }
@@ -841,7 +839,6 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
               {seleccion.length > 0 && <small className="pm-pista-cobro">{conceptoSeleccion}</small>}
               <CobroForm cobro={pagos} onChange={setPagos} total={round2(baseCobro)} config={s.config} />
               <div className="barra pm-acciones">
-                <button className="success" onClick={confirmarCobro}>{t('pedido.confirmarCobro')}</button>
                 {!marcados.length && sumaRecibida > 0.009 && sumaRecibida < round2(saldo) - 0.009 && <button className="ghost" onClick={abonoLibre}>{t('pedido.abonar', { monto: money(sumaRecibida) })}</button>}
                 <button className="danger" onClick={() => { setPagos(null); setMarcados([]) }}>{t('comun.cancelar')}</button>
               </div>

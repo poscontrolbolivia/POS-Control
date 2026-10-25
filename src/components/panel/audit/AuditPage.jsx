@@ -207,36 +207,6 @@ export default function AuditPage({ rol, sesion }) {
   const accionesDisponibles = [...new Set((entries || []).map(e => e.accion).filter(Boolean))].sort()
   const actoresDisponibles = [...new Set((entries || []).map(nombreActor))].sort()
 
-  const exportarCsv = () => {
-    const sep = ';'
-    const lineas = [
-      [tOr('auditoria.colFecha', 'Fecha'), tOr('auditoria.colQuien', 'Quién'), tOr('auditoria.colAccion', 'Acción'), tOr('auditoria.colRegistro', 'Registro'), tOr('auditoria.colDetalle', 'Detalle')],
-      ...list.map(e => [
-        e.en || '',
-        nombreActor(e),
-        etiquetaAccion(e.accion, tOr),
-        e.entity_label || e.entity_type || '—',
-        textoDetalle(e.detalle),
-      ]),
-    ]
-    const limpiar = campo => {
-      const v = String(campo ?? '')
-      return /[";\n\r]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v
-    }
-    const texto = lineas.map(fila => fila.map(limpiar).join(sep)).join('\r\n')
-    const url = URL.createObjectURL(new Blob(['\uFEFF' + texto], { type: 'text/csv;charset=utf-8' }))
-    const a = document.createElement('a')
-    const f = n => String(n).padStart(2, '0')
-    const d = new Date()
-    a.href = url
-    a.download = `auditoria-${d.getFullYear()}-${f(d.getMonth() + 1)}-${f(d.getDate())}.csv`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    clearTimeout(revokeRef.current)
-    revokeRef.current = setTimeout(() => URL.revokeObjectURL(url), 5000)
-  }
-
   if (!permitido) {
     return (
       <div className="adm-panel">

@@ -6,7 +6,7 @@
 .mn-grupo{padding:0;overflow:hidden}
 .mn-grupo-cab{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 8px}
 .mn-grupo-btn{flex:1 1 220px;min-width:0;display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;text-align:left;background:transparent !important;color:var(--ink) !important;border:0 !important;min-height:48px}
-.mn-grupo-btn h3{margin:0;font-size:1.1rem}
+.mn-grupo-btn h3{margin:0;font-size:1.05rem}
 .mn-lista{list-style:none;margin:0;padding:0 10px 10px}
 .mn-fila{display:grid;grid-template-columns:64px minmax(0,1fr) 108px auto;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line)}
 .mn-fila.con-dato{grid-template-columns:64px minmax(0,1fr) 108px 92px auto}

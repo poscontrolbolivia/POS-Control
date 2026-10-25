@@ -14,7 +14,7 @@ import MesasResumen from '../hall/MesasResumen.jsx'
 import '../pago/ComprobanteQr.css'
 import { ruedaHorizontal } from '../../../services/ruedaHorizontal.js'
 import './QuickSalePage.css'
-import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
+import { round2 } from '../../../services/format.js'
 import { formatearMonto } from '../../../services/money.js'
 
 function MiniaturaProducto({ producto }) {

@@ -44,7 +44,7 @@
 .rp-mapa{gap:10px}
 .rp-mapa-cab{flex-wrap:wrap}
 .rp-vistas{display:inline-flex;gap:6px;flex:0 0 auto}
-.rp-mapa .tab{min-height:38px;padding:5px 12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:.85rem;white-space:nowrap}
+.rp-mapa .tab{min-height:44px;padding:5px 12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:.95rem;white-space:nowrap}
 .rp-zonas{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
 
 .rp-filtro{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--verde-bg);border:1.5px solid var(--verde-bd);

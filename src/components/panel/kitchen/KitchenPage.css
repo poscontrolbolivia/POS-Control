@@ -3,7 +3,7 @@
 
 .ck-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ck-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-.ck-tab { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; min-height: 40px; padding: 6px 14px; font-weight: 600; }
+.ck-tab { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; min-height: 48px; padding: 6px 14px; font-weight: 600; }
 /* Contador rojo de la pestaña: lo que falta sacar en esa área, como el badge de una notificación. */
 .ck-n { min-width: 24px; height: 24px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 999px; background: var(--danger); color: var(--on-btn); font-size: .82rem; font-weight: 800; font-style: normal; box-shadow: 0 0 0 2px var(--card); }
 .ck-sacadas { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
@@ -25,13 +25,9 @@
 
 .ck-filas { display: flex; flex-direction: column; gap: 12px; }
 .ck-fila { background: color-mix(in srgb, var(--card) 70%, transparent); border: 1.5px solid var(--line); border-radius:var(--r-lg); padding: 8px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-.ck-fila.area-cocina { border-color: color-mix(in srgb, var(--btn-orange) 45%, var(--line)); }
-.ck-fila.area-barra { border-color: color-mix(in srgb, var(--btn-blue, var(--ac)) 45%, var(--line)); }
 .ck-fila-cab { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
 .ck-fila-cab h3 { margin: 0; font-size: 1.05rem; }
 .ck-cuenta { min-width: 26px; height: 26px; padding: 0 8px; display: inline-grid; place-items: center; border-radius: 999px; font-weight: 800; font-size: .85rem; background: var(--ac); color: var(--on-btn); }
-.ck-fila.area-cocina .ck-cuenta { background: var(--btn-orange); color: var(--on-orange); }
-.ck-fila.area-barra .ck-cuenta { background: var(--btn-blue, var(--ac)); }
 
 /* Sin scroll interno: la página se desplaza una sola vez y las comandas se reparten en columnas
    (más comandas a la vez en pantalla grande, una columna en el móvil). */

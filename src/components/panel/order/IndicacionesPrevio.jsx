@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { useMoneda } from '../../../services/money.js'
-import { cumple, maxDe, extraDe, notaDeUnidad } from '../../../services/indicaciones.js'
+import { cumple, maxDe, extraDe } from '../../../services/indicaciones.js'
 import './OrderPanel.css'
 
 const nuevaUnidad = () => ({ sel: {}, texto: '' })

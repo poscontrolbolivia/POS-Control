@@ -88,4 +88,3 @@ export async function cargarAlertas() {
 export const contarAbiertas = alertas => (Array.isArray(alertas) ? alertas : [])
   .filter(a => a && a.resueltaEn == null).length
 
-export const estaAbierta = alerta => Boolean(alerta) && alerta.resueltaEn == null

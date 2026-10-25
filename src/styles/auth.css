@@ -46,7 +46,7 @@
 .topbar-rol-mesero{background:var(--rol-mesero);color:var(--rol-mesero-ink)}
 .topbar-user{color:var(--mut);font-size:.85rem;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
 .topbar-mods{display:flex;gap:6px;flex-wrap:wrap;order:3;width:100%;justify-content:flex-start;padding-top:2px}
-.topbar-tab{border-radius:var(--r-pill);min-height:38px;padding:6px 14px;font-size:.9rem;font-weight:600;border-color:var(--chip-bd);background:var(--chip-bg);color:var(--chip-ink)}
+.topbar-tab{border-radius:var(--r-pill);min-height:44px;padding:6px 14px;font-size:.95rem;font-weight:600;border-color:var(--chip-bd);background:var(--chip-bg);color:var(--chip-ink)}
 .topbar-tab:hover:not(:disabled):not(.on){background:var(--chip-hover);border-color:color-mix(in srgb,var(--sel) 55%,transparent)}
 .topbar-n{font-style:normal;font-size:.7rem;font-weight:800;border-radius:999px;padding:1px 6px;margin-left:6px;background:var(--danger);color:var(--on-btn);display:inline-block;min-width:18px;text-align:center}
 .topbar-n-menu{position:absolute;top:-2px;right:-4px;margin:0}

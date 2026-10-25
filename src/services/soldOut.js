@@ -14,8 +14,6 @@ export function agotadosHoy(config) {
   return out
 }
 
-export const estaAgotado = (config, productoId) => Boolean(agotadosHoy(config)[productoId])
-
 export function conMarca(config, productoId, marca) {
   return conMarcas(config, [productoId], marca)
 }

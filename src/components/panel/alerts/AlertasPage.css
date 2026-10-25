@@ -10,13 +10,13 @@
 .ala-filtros{display:flex;flex-direction:column;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px;box-shadow:var(--sh-1)}
 .ala-grupo{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .ala-grupo-label{font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);min-width:52px}
-.ala-grupo .tab{min-height:36px;padding:5px 12px;font-size:.85rem;display:inline-flex;align-items:center;gap:6px}
+.ala-grupo .tab{min-height:44px;padding:5px 12px;font-size:.95rem;display:inline-flex;align-items:center;gap:6px}
 .ala-n{font-style:normal;font-size:.78rem;font-weight:800;border-radius:999px;padding:1px 7px;background:color-mix(in srgb,var(--ink) 12%,transparent)}
 .ala-grupo .tab.on .ala-n{background:var(--on-btn);color:var(--ac)}
 
 .ala-bloque{display:flex;flex-direction:column;gap:8px}
 .ala-bloque-cab{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.ala-bloque-cab h3{margin:0;font-size:1rem}
+.ala-bloque-cab h3{margin:0;font-size:1.05rem}
 .ala-badge{border-radius:999px;padding:3px 10px;font-size:.78rem;font-weight:700;white-space:nowrap;border:1px solid var(--line);background:var(--card-2);color:var(--mut)}
 .ala-tipo-general{background:var(--card-2);border-color:var(--line-fuerte);color:var(--mut)}
 .ala-tipo-cocina{background:var(--enviada-bg);border-color:var(--enviada-bd);color:var(--enviada-ink)}

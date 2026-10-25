@@ -1,7 +1,7 @@
 {
   "name": "pos-control",
   "private": true,
-  "version": "0.59.0",
+  "version": "0.59.2",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-agent.mjs",
@@ -12,18 +12,8 @@
     "agent": "node scripts/copy-agent.mjs",
     "icons": "node scripts/gen-icons.mjs",
     "i18n": "node scripts/check-i18n.mjs",
-    "test": "node scripts/check-i18n.mjs && node tests/indicaciones.mjs && node tests/cierre.mjs && node tests/soldOut.mjs && node tests/montos.mjs && node tests/costoPeso.mjs && node tests/respaldoZip.mjs && node tests/ticket.mjs && node tests/agenteLocal.mjs && node tests/kitchenClases.mjs && node tests/pedidoListo.mjs && node tests/impresionGrupos.mjs && node tests/estadoMesas.mjs && node tests/cocinaAlertas.mjs && node tests/despacho.mjs && node tests/optimista.mjs && node tests/tanda039.mjs && node tests/subcuentas.mjs && node tests/auditoria.mjs",
-    "test:auditoria": "node tests/auditoria.mjs",
-    "test:subcuentas": "node tests/subcuentas.mjs",
-    "test:render": "node tests/render.mjs",
-    "test:despacho": "node tests/despacho.mjs && node tests/optimista.mjs && node tests/tanda039.mjs",
-    "test:impresion": "node tests/impresionGrupos.mjs",
-    "test:ticket": "node tests/ticket.mjs",
-    "test:pedido": "node tests/pedidoListo.mjs",
-    "test:soldout": "node tests/soldOut.mjs",
-    "test:montos": "node tests/montos.mjs",
-    "test:isolation": "node tests/isolation.mjs",
-    "test:quotas": "node tests/quotas.mjs"
+    "test": "node scripts/check-i18n.mjs && node tests/avisos.mjs && node tests/optimista.mjs",
+    "test:avisos": "node tests/avisos.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

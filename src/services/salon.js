@@ -31,5 +31,3 @@ export function accionesBorrarZona(plan, destino = SIN_SALON) {
   return out
 }
 
-export const destinoValido = (plan, destino) =>
-  destino === BORRAR_MESAS || destino === SIN_SALON || plan.otras.some(z => z.id === destino)

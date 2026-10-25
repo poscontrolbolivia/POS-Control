@@ -232,12 +232,3 @@ export function descargarBlob(blob, codigo, ext = 'zip') {
   setTimeout(() => URL.revokeObjectURL(url), 10000)
 }
 
-export async function leerTextoArchivo(file) {
-  if (!file) throw new Error('No se seleccionó ningún archivo.')
-  try {
-    const texto = await file.text()
-    return JSON.parse(texto)
-  } catch {
-    throw new Error('El archivo no contiene JSON válido. Usa un .json exportado por este panel.')
-  }
-}
