@@ -807,7 +807,7 @@
   "salon.vista": "Visualização das mesas",
   "salon.vistaMapa": "Mapa",
   "salon.vistaLista": "Lista",
-  "pedido.atras": "Sair",
+  "pedido.atras": "Voltar",
   "pedido.atrasTitulo": "Voltar ao salão sem comandar",
   "install.text": "Instale o POS Control no seu aparelho para abri-lo como um app.",
   "install.installBtn": "Instalar",
@@ -1875,5 +1875,10 @@
   "cocina.lblSalon": "Salão",
   "cocina.lblMesa": "Mesa",
   "cocina.lblEnviadoPor": "Enviado por",
-  "cocina.lblHora": "Hora"
+  "cocina.lblHora": "Hora",
+  "pedido.salirSinEnviarTitulo": "Voltar sem enviar ao despacho?",
+  "pedido.salirSinEnviarAyuda": "Há produtos que ainda não foram enviados. Se voltar agora, eles ficam na conta, mas a cozinha e o bar não os verão.",
+  "pedido.salirEnviarYSalir": "Enviar ao despacho e voltar",
+  "pedido.salirSinEnviar": "Voltar sem enviar",
+  "pedido.salirSeguir": "Continuar na conta"
 }

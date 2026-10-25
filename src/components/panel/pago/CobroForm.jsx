@@ -4,7 +4,6 @@ import { useStore } from '../../../context/StoreContext.jsx'
 import { MONEDA } from '../../../services/config'
 import { formatearMonto } from '../../../services/money.js'
 import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
-import { urlImagenNegocio } from '../../../services/imageUpload.js'
 import { cargarTrabajadores, trabajadoresEnCache } from '../../../services/trabajadores.js'
 import { precalcularCambio } from '../../printing/Ticket.jsx'
 import { etiquetaFiscal, pideDatosFiscales } from '../../../services/fiscal.js'
@@ -44,7 +43,6 @@ export default function CobroForm({ cobro, onChange, total, config, mostrarComan
   const { s: tienda, modo, sesion } = useStore()
   const moneda = config?.moneda || MONEDA
   const m = n => formatearMonto(n, moneda)
-  const hayQrNegocio = Boolean(urlImagenNegocio(config, 'qr'))
   const [masAbierto, setMasAbierto] = useState(-1)
   const [remotos, setRemotos] = useState(trabajadoresEnCache)
   const [errTrab, setErrTrab] = useState('')
@@ -127,10 +125,10 @@ export default function CobroForm({ cobro, onChange, total, config, mostrarComan
             </label>
           )}
           <label className="vd-monto">{t('venta.recibido')}
-            <input name="monto" type="text" inputMode="decimal" autoComplete="off" autoFocus={i === 0}
+            <input name="monto" type="text" inputMode="decimal" autoComplete="off"
               value={l.monto} onChange={e => setLinea(i, { monto: limpiarMonto(e.target.value), tocado: true })} onFocus={e => e.target.select()} placeholder={m(total)} />
           </label>
-          {l.metodo === 'qr' && hayQrNegocio && (
+          {l.metodo === 'qr' && (
             <PagoQrCard config={config} monto={numMonto(l.monto) > 0 ? numMonto(l.monto) : total} empresaNombre={config?.nombre} />
           )}
           {l.metodo === 'qr' && <ComprobanteQr valor={l.comprobante} onCambio={v => setLinea(i, v)} />}

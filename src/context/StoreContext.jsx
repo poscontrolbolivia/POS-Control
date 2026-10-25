@@ -1010,8 +1010,17 @@ function useSupabaseStore(empresaId) {
         } catch {  }
       })
     }
+    // Si la app estuvo oculta más de 10 min (se bloqueó el teléfono, se cambió de app), al volver se baja la carta
+    // completa: así un precio cambiado en otro dispositivo se ve sin esperar a los 30 min.
+    let ocultoDesde = 0
+    const alCambiarVista = () => {
+      if (document.hidden) { ocultoDesde = Date.now(); return }
+      if (ocultoDesde && Date.now() - ocultoDesde > 10 * 60 * 1000) completaRef.current = 0
+      ocultoDesde = 0
+    }
+    document.addEventListener('visibilitychange', alCambiarVista)
     window.addEventListener('pos-reanudar', alReanudar)
-    return () => { vivo = false; window.removeEventListener('pos-reanudar', alReanudar) }
+    return () => { vivo = false; window.removeEventListener('pos-reanudar', alReanudar); document.removeEventListener('visibilitychange', alCambiarVista) }
   }, [empresaId])
 
   // TIEMPO REAL: cuando cualquier dispositivo abre, edita, envía o cobra una cuenta, los demás lo ven en ~1 segundo.

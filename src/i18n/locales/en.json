@@ -807,7 +807,7 @@
   "salon.vista": "Table view",
   "salon.vistaMapa": "Map",
   "salon.vistaLista": "List",
-  "pedido.atras": "Exit",
+  "pedido.atras": "Back",
   "pedido.atrasTitulo": "Back to the floor without ordering",
   "install.text": "Install POS Control on your device to open it like an app.",
   "install.installBtn": "Install",
@@ -1875,5 +1875,10 @@
   "cocina.lblSalon": "Hall",
   "cocina.lblMesa": "Table",
   "cocina.lblEnviadoPor": "Sent by",
-  "cocina.lblHora": "Time"
+  "cocina.lblHora": "Time",
+  "pedido.salirSinEnviarTitulo": "Go back without sending to dispatch?",
+  "pedido.salirSinEnviarAyuda": "Some products haven't been sent yet. If you go back now they stay on the bill, but the kitchen and bar won't see them.",
+  "pedido.salirEnviarYSalir": "Send to dispatch and go back",
+  "pedido.salirSinEnviar": "Go back without sending",
+  "pedido.salirSeguir": "Stay on the bill"
 }

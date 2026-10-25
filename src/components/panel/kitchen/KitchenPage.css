@@ -35,7 +35,7 @@
 
 /* Sin scroll interno: la página se desplaza una sola vez y las comandas se reparten en columnas
    (más comandas a la vez en pantalla grande, una columna en el móvil). */
-.ck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 8px; align-content: start; }
+.ck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; align-content: start; }
 .ck-vacio { display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 18px 12px; text-align: center; color: var(--ink); }
 .ck-vacio small, .ck-vacio-mini { color: var(--mut); }
 
@@ -53,7 +53,10 @@
 .ck-timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1.05rem; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--btn-green) 16%, var(--card)); color: color-mix(in srgb, var(--btn-green) 70%, var(--ink)); white-space: nowrap; }
 .ck-timer.ambar { background: color-mix(in srgb, var(--btn-yellow) 30%, var(--card)); color: var(--ink); }
 .ck-timer.rojo { background: var(--btn-red); color: var(--on-btn); }
-.ck-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .95rem; color: var(--mut); }
+.ck-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 5px; font-size: .8rem; color: var(--mut); }
+.ck-meta .ck-tag { font-size: .78rem; padding: 1px 7px; }
+.ck-meta .ck-timer { font-size: .84rem; padding: 1px 7px; }
+.ck-meta .ck-hora { font-size: .8rem; }
 
 .ck-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .ck-item { border: 1.5px solid var(--line); border-radius:var(--r-md); background: var(--card-2, var(--card)); overflow: hidden; }
@@ -110,10 +113,11 @@
 
 /* Una línea que explica cada bloque de la cola (áreas, sacadas, devueltos). */
 .ck-ayuda{margin:0 0 8px;padding:7px 10px;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-sm);color:var(--mut);font-size:.83rem;font-weight:600;line-height:1.35}
-.ck-linea { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 1.12rem; color: var(--ink); line-height: 1.25; overflow-wrap: anywhere; }
+.ck-linea { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; gap: 0 10px; font-size: .86rem; color: var(--ink); line-height: 1.25; }
+.ck-campo { min-width: 0; overflow-wrap: anywhere; }
 .ck-campo small, .ck-hora small { color: var(--mut); font-weight: 700; font-size: .85em; }
 .ck-campo b, .ck-hora b { font-weight: 800; }
-.ck-hora { font-variant-numeric: tabular-nums; font-size: 1rem; color: var(--ink); white-space: nowrap; }
+.ck-hora { font-variant-numeric: tabular-nums; font-size: .8rem; color: var(--ink); white-space: nowrap; }
 
 /* Total por producto: el resumen de toda la cola, para cuando las comandas no caben en pantalla. */
 .ck-total-btn em { background: var(--ac); }

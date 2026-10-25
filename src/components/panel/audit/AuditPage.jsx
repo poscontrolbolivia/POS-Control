@@ -116,9 +116,32 @@ const humanizar = codigo => {
 const etiquetaAccion = (accion, tOr) => (accion ? tOr('auditoria.acc.' + accion, ACCIONES[accion] || humanizar(accion)) : '—')
 const etiquetaRol = (rol, tOr) => (rol ? tOr('rol.' + rol, ROL_ETIQUETA[rol] || humanizar(rol)) : null)
 
-const textoDetalle = det => (det && typeof det === 'object' && Object.keys(det).length)
-  ? Object.entries(det).map(([k, v]) => `${humanizar(k)}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' · ')
-  : '—'
+// El detalle guarda datos técnicos (ids, nulos, banderas en falso). Aquí solo queda lo que una persona entiende:
+// sin identificadores, sin vacíos y sin «falso»; las banderas en verdadero salen como etiqueta.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const CLAVES_DETALLE = { dueno: 'Dueño', items: 'Ítems', numero: 'Número', parcial: 'Parcial', ayuda: 'Ayuda', motivo: 'Motivo', monto: 'Monto', total: 'Total', cantidad: 'Cantidad', nombre: 'Nombre', mesa: 'Mesa', metodo: 'Método', rol: 'Rol', antes: 'Antes', despues: 'Después' }
+const etiquetaClave = k => CLAVES_DETALLE[String(k).toLowerCase()] || humanizar(k)
+const esTecnica = k => /(^|_)(id|ids|uuid)$/i.test(String(k)) || /^(cuenta|empresa|usuario|user|item|turno|mesa)_?id$/i.test(String(k)) || String(k).toLowerCase() === 'cuenta'
+const valorLegible = v => {
+  if (v === null || v === undefined || v === '' || v === false) return null
+  if (typeof v === 'string') return UUID.test(v) ? null : v
+  if (Array.isArray(v)) { const xs = v.map(valorLegible).filter(x => x !== null); return xs.length ? xs.join(', ') : null }
+  if (typeof v === 'object') { const t = partesDetalle(v).join(' · '); return t || null }
+  return String(v)
+}
+function partesDetalle(det) {
+  return Object.entries(det || {}).flatMap(([k, v]) => {
+    if (esTecnica(k)) return []
+    if (v === true) return [etiquetaClave(k)]
+    const txt = valorLegible(v)
+    return txt === null ? [] : [`${etiquetaClave(k)}: ${txt}`]
+  })
+}
+const textoDetalle = det => {
+  if (!det || typeof det !== 'object') return '—'
+  const partes = partesDetalle(det)
+  return partes.length ? partes.join(' · ') : '—'
+}
 
 function fechaLegible(iso, idiom) {
   if (!iso) return '—'

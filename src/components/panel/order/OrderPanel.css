@@ -29,7 +29,11 @@
 .pm-pax b{min-width:1.6rem;text-align:center}
 .modal-fondo.pedido-fondo{padding:0;align-items:stretch;justify-content:stretch;background:var(--bg);backdrop-filter:none}
 .pedido-modal{width:100vw;max-width:none;height:100dvh;max-height:none;border:0;border-radius:0;box-shadow:none;padding:12px 16px 20px;overflow-y:auto}
-.pm-atras{position:sticky;top:0;z-index:3;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:6px 16px;margin-bottom:8px;border:0;border-radius:999px;color:var(--rojo-on);font-weight:650;text-shadow:0 1px 1px rgba(0,0,0,.25);--pc:var(--rojo);background:var(--gloss),var(--pc);box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 38%,transparent)}
+/* Barra flotante transparente: no tapa el contenido entre los dos botones, solo los botones reciben toques. */
+.pm-flota{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;pointer-events:none}
+.pm-flota>button{pointer-events:auto;white-space:nowrap}
+.pm-principal{min-height:44px;padding:6px 18px;border-radius:999px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.28)}
+.pm-atras{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:6px 16px;border:0;border-radius:999px;color:var(--rojo-on);font-weight:650;text-shadow:0 1px 1px rgba(0,0,0,.25);--pc:var(--rojo);background:var(--gloss),var(--pc);box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 38%,transparent)}
 .pm-atras:hover:not(:disabled){background:var(--gloss),var(--pc);filter:brightness(.95)}
 .pm-cab{padding-right:0}
 .pm-carta{max-height:calc(100dvh - 170px)}
@@ -146,14 +150,14 @@
 .pm-busca-fila{display:flex;align-items:center;gap:8px;margin:2px 0 8px}
 .pm-busca-fila input{flex:1 1 auto;min-width:0;min-height:44px;border-radius:999px;padding:6px 16px;font-size:1rem}
 .pm-busca-fila .pm-busca-x{flex:none;min-width:40px;min-height:40px;padding:0;border-radius:50%;font-size:1rem}
-.pm-carta .pm-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.pm-carta .pm-tabs{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;touch-action:pan-x pan-y;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
 .pm-carta .pm-tabs .tab{flex:0 0 auto;white-space:nowrap}
 /* Por columnas que se deslizan hacia la izquierda con su barra: en un recuadro de 3×3 con scroll vertical
    los platos sobrantes quedaban abajo, sin barra visible, justo lo que ya no pasa en el mostrador. */
 .pm-productos{display:grid;grid-template-columns:none;grid-auto-flow:column;
   grid-template-rows:repeat(var(--pm-filas,3),minmax(0,auto));grid-auto-columns:calc((100% - 8px)/2);
   gap:8px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity;
-  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:thin}
+  -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;overscroll-behavior-y:auto;overflow-y:hidden;touch-action:pan-x pan-y;scrollbar-width:thin}
 /* En PC la columna de la carta es ancha: entran 3 platos por fila sin achicar la píldora. */
 @media(min-width:860px){.pm-productos{grid-auto-columns:calc((100% - 16px)/3)}}
 .pm-productos>.prod{scroll-snap-align:start}
@@ -218,3 +222,10 @@
 .pm-chip.pm-chip-area{margin-left:6px;font-size:.78rem}
 .pm-sub.fila-wrap{gap:10px;flex-wrap:wrap}
 .pm-sub.pm-sub-sep{margin-top:6px}
+
+/* Confirmación al salir de una cuenta con productos sin enviar a despacho */
+.pm-salir-fondo{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--overlay)}
+.pm-salir{width:min(440px,100%);display:flex;flex-direction:column;gap:12px;padding:18px;background:var(--card);border-radius:var(--r-lg);border:var(--borde-ventana);box-shadow:var(--sh-2)}
+.pm-salir small{color:var(--mut)}
+.pm-salir .barra{flex-direction:column;align-items:stretch}
+.pm-salir .barra button{width:100%;min-height:48px}

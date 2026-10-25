@@ -46,7 +46,7 @@ const PIN_ADMIN_DEMO = '1234'
 
 const MOTIVOS = ['error', 'cambio', 'agotado', 'demora', 'cortesia', 'otro']
 
-function Ventana({ titulo, onClose, children }) {
+function Ventana({ titulo, onClose, accion, children }) {
   const { t } = useIdioma()
   const cerrarRef = useRef(null)
   const salir = useRef(onClose)
@@ -64,7 +64,11 @@ function Ventana({ titulo, onClose, children }) {
   return (
     <div className="modal-fondo pedido-fondo">
       <div className="modal-caja pedido-modal" role="dialog" aria-modal="true" aria-label={titulo}>
-        <button ref={cerrarRef} type="button" className="pm-atras" onClick={onClose} title={t('pedido.atrasTitulo')}>← {t('pedido.atras')}</button>
+        {/* Barra flotante: «Atrás» a la izquierda y, a la derecha, la acción principal del paso en que está la cuenta. */}
+        <div className="pm-flota">
+          <button ref={cerrarRef} type="button" className="pm-atras" onClick={onClose} title={t('pedido.atrasTitulo')}>← {t('pedido.atras')}</button>
+          {accion && <button type="button" className="success pm-principal" onClick={accion.fn}>{accion.icono} {accion.texto}</button>}
+        </div>
         {children}
       </div>
     </div>
@@ -102,6 +106,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const [desc, setDesc] = useState(null)
   const [prop, setProp] = useState(null)
   const [confirmar, setConfirmar] = useState(null)
+  const [salirAviso, setSalirAviso] = useState(false)
   const [destZona, setDestZona] = useState('')
   const [pagos, setPagos] = useState(null)
   const [sinTurno, setSinTurno] = useState(null)
@@ -128,7 +133,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const c = cuenta ?? hermanas.find(x => x.id === cuentaSelId) ?? hermanas[0]
   const sufijo = c?.tipo === 'mesa' && hermanas.length > 1 && c.etiqueta ? c.etiqueta : ''
   const titulo = c?.canal === 'llevar' ? tOr('pedido.llevarCabecera', `Pedido ${c.numero ?? ''}`, { n: c.numero }) + (c.clienteNombre ? ' · ' + c.clienteNombre : '') : c?.tipo === 'directa' ? t('pedido.turnoNumero', { n: c.numero }) : ((mesa?.nombre ?? t('pedido.cuenta')) + sufijo)
-  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setAUnirCtas([]); setPartes({}); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null); setConfirmar(null); setDestZona('') }
+  const reset = () => { setMarcados([]); setDestino(''); setCanje(''); setPagos(null); setDesc(null); setProp(null); setUniendo(false); setAUnir([]); setAUnirCtas([]); setPartes({}); setApertura(null); setSinTurno(null); setBorrando(null); setNota(null); setModo(null); setMenu(false); setPrevia(null); setConfirmar(null); setSalirAviso(false); setDestZona('') }
   const cerrar = () => {
     // Cualquier cuenta de mesa que quede en blanco se descarta al salir, la abrieron un toque de más
     // o sobró de una división: una mesa «activa» sin platos no sirve para nada y ensucia Caja.
@@ -463,9 +468,25 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
     setPrevia(null)
   }
   const hayPendientes = c.items.some(i => i.estado === 'pendiente')
+  // Salir (← Atrás o Escape) con productos sin enviar a despacho: antes se perdían de vista sin aviso y cocina
+  // nunca los recibía. Ahora se pregunta qué hacer.
+  const intentarSalir = () => {
+    if (!enCobro && c.estado === 'abierta' && hayPendientes) { setSalirAviso(true); return }
+    cerrar()
+  }
+
+  // Acción principal de cada paso, siempre a la vista arriba a la derecha: 1) enviar a despacho,
+  // 2) sacar la cuenta, 3) cobrar. Se oculta mientras hay un formulario o una confirmación abiertos.
+  const accionPrincipal = (() => {
+    if (pagos || sinTurno || confirmar || salirAviso) return null
+    if (c.estado === 'abierta' && hayPendientes) return { icono: '🔥', texto: tOr('pedido.enviarDespacho', 'Enviar a despacho'), fn: enviarCocina }
+    if (c.estado === 'abierta' && vivos.length > 0) return { icono: '🧾', texto: tOr('pedido.sacarCuenta', 'Sacar cuenta'), fn: sacarCuenta }
+    if (c.estado === 'precuenta' && puede(rol, 'cobrar')) return { icono: '💵', texto: t('pedido.cobrar'), fn: iniciarCobro }
+    return null
+  })()
 
   return (
-    <Ventana titulo={titulo} onClose={cerrar}>
+    <Ventana titulo={titulo} onClose={intentarSalir} accion={accionPrincipal}>
       <div className="fila pm-cab">
         <h3 className="pm-titulo">{titulo}</h3>
         <span className={'tag ' + c.estado}>{estadoVisto}</span>
@@ -843,14 +864,11 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
                 <div className="barra pm-acciones">
                   {/* 1 · cuenta en blanco */}
                   {cuentaVacia && <button className="danger solid" onClick={cerrarVacia}>✕ {c.tipo === 'mesa' ? tOr('pedido.cerrarVacia', 'Cerrar mesa vacía') : tOr('pedido.cerrarPedidoVacio', 'Cerrar pedido vacío')}</button>}
-                  {/* 2 · con productos sin enviar */}
-                  {c.estado === 'abierta' && hayPendientes && <button className="success" onClick={enviarCocina}>🔥 {tOr('pedido.enviarDespacho', 'Enviar a despacho')}</button>}
+                  {/* 2 · con productos sin enviar (el botón principal «Enviar a despacho» va flotando arriba) */}
                   {c.estado === 'abierta' && hayPendientes && <button className="danger" onClick={() => setConfirmar('quitar')}>🗑 {tOr('pedido.quitarSinEnviar', 'Quitar productos sin enviar')}</button>}
                   {/* 3 · todo enviado a despacho */}
-                  {c.estado === 'abierta' && !hayPendientes && vivos.length > 0 && <button className="success" onClick={sacarCuenta}>🧾 {tOr('pedido.sacarCuenta', 'Sacar cuenta')}</button>}
                   {c.estado === 'abierta' && !hayPendientes && c.items.some(i => i.estado === 'enviado') && <button className="ghost" onClick={() => setConfirmar('reenviar')}>↻ {tOr('pedido.reenviarComanda', 'Reenviar comanda a despacho')}</button>}
                   {/* 4 · cuenta ya sacada */}
-                  {c.estado === 'precuenta' && puede(rol, 'cobrar') && <button className="success" onClick={iniciarCobro}>💵 {t('pedido.cobrar')}</button>}
                   {c.estado === 'precuenta' && <button className="ghost" onClick={imprimirTicketCuenta}>🖨 {tOr('pedido.reimprimirCuenta', 'Reimprimir cuenta')}</button>}
                   {c.estado === 'precuenta' && <button className="ghost" onClick={() => d({ t: 'reabrir', cuentaId: c.id })}>↺ {c.tipo === 'mesa' ? tOr('pedido.reabrirMesa', 'Reabrir mesa') : tOr('pedido.reabrirPedido', 'Reabrir pedido')}</button>}
                 </div>
@@ -863,6 +881,19 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
       {previa && (
         <IndicacionesPrevio producto={previa.p} listas={previa.listas}
           onClose={() => setPrevia(null)} onConfirm={confirmarPrevia} />
+      )}
+      {salirAviso && (
+        <div className="pm-salir-fondo" role="presentation" onClick={() => setSalirAviso(false)}>
+          <div className="pm-salir" role="alertdialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+            <b>{tOr('pedido.salirSinEnviarTitulo', '¿Volver atrás sin enviar a despacho?')}</b>
+            <small>{tOr('pedido.salirSinEnviarAyuda', 'Hay productos que todavía no se enviaron. Si vuelves ahora quedan en la cuenta, pero cocina y barra no los verán.')}</small>
+            <div className="barra">
+              <button type="button" className="success" onClick={() => { setSalirAviso(false); enviarCocina().catch(() => {}); cerrar() }}>🔥 {tOr('pedido.salirEnviarYSalir', 'Enviar a despacho y volver')}</button>
+              <button type="button" className="danger" onClick={() => { setSalirAviso(false); cerrar() }}>{tOr('pedido.salirSinEnviar', 'Volver sin enviar')}</button>
+              <button type="button" className="ghost" onClick={() => setSalirAviso(false)}>{tOr('pedido.salirSeguir', 'Seguir en la cuenta')}</button>
+            </div>
+          </div>
+        </div>
       )}
     </Ventana>
   )

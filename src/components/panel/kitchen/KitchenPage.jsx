@@ -511,16 +511,17 @@ export default function KitchenPage({ rol, sesion }) {
     ].filter(([, v]) => v)
     return (
       <article key={clave} className={'ck-card' + nivel(c.desde) + (nueva ? ' nueva' : '')}>
+        {/* Dos renglones: 1) Salón · Mesa · Enviado por   2) 👥 · Por salir · ⏱ contador · Hora de entrada */}
         <header className="ck-cab">
           <div className="ck-linea">
             {campos.map(([k, v]) => <span key={k} className="ck-campo"><small>{k}:</small> <b>{v}</b></span>)}
           </div>
-          {Number(c.comensales) > 0 && <span className="ck-tag" title={tOr('cocina.comensales', 'Comensales')}>👥 {c.comensales}</span>}
-          <span className="ck-sp" />
-          <span className={'ck-timer' + nivel(c.desde)} title={cuando ? `${tOr('cocina.entro', 'Entró a las')} ${hora(cuando)}` : ''}>⏱ {cronometro(c.desde, ahora)}</span>
         </header>
         <div className="ck-meta">
-          {pendientes > 0 ? <span className="ck-tag pend">{tOr('cocina.porSalir', `Por salir: ${pendientes}`, { n: pendientes })}</span> : <span />}
+          {Number(c.comensales) > 0 && <span className="ck-tag" title={tOr('cocina.comensales', 'Comensales')}>👥 {c.comensales}</span>}
+          {pendientes > 0 && <span className="ck-tag pend">{tOr('cocina.porSalir', `Por salir: ${pendientes}`, { n: pendientes })}</span>}
+          <span className="ck-sp" />
+          <span className={'ck-timer' + nivel(c.desde)} title={cuando ? `${tOr('cocina.entro', 'Entró a las')} ${hora(cuando)}` : ''}>⏱ {cronometro(c.desde, ahora)}</span>
           {cuando > 0 && <span className="ck-hora"><small>{tOr('cocina.lblHora', 'Hora')}:</small> <b>{hora(cuando)}</b></span>}
         </div>
         {tandas.map((tn, ix) => {
@@ -529,9 +530,9 @@ export default function KitchenPage({ rol, sesion }) {
           const desdeT = tiempos.length ? Math.min(...tiempos) : null
           return (
             <section key={ix} className="ck-tanda">
-              {tandas.length > 1 && (
+              {ix > 0 && (
                 <div className={'ck-tanda-cab' + (pend.length ? nivel(desdeT) : ' hecha')}>
-                  <b>{ix === 0 ? tOr('cocina.pedidoInicial', 'Pedido inicial') : `➕ ${tOr('cocina.adicion', `Adición ${ix}`, { n: ix })}`}</b>
+                  <b>{`➕ ${tOr('cocina.adicion', `Adición ${ix}`, { n: ix })}`}</b>
                   {tn.desde > 0 && <small>{hora(tn.desde)}</small>}
                   <span className="ck-sp" />
                   {pend.length > 0
