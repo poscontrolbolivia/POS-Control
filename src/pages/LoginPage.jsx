@@ -264,8 +264,8 @@ export default function LoginPage({ onEntrar }) {
               <button className="cc-btn" type="submit" disabled={busy || (!demo && restante > 0)}>
                 {busy ? t('login.entrando') : demo ? t('login.entrarDemo') : t('login.entrar')}
               </button>
-              {USAR_SUPABASE && <button className="cc-btn cc-yellow" type="button" onClick={irAlta}>{t('login.nuevoAqui')}</button>}
-              <a className="cc-btn cc-whatsapp" href={enlaceSoporte(t('login.mensajeSoporte'))} target="_blank" rel="noopener noreferrer">{t('login.soporte')}</a>
+              {USAR_SUPABASE && <button className="cc-btn cc-ghost" type="button" onClick={irAlta}>{t('login.nuevoAqui')}</button>}
+              <a className="cc-btn cc-ghost" href={enlaceSoporte(t('login.mensajeSoporte'))} target="_blank" rel="noopener noreferrer">{t('login.soporte')}</a>
               {!demo && <button className="lg-olvido" type="button" onClick={irRecupera}>{t('login.olvidaste')}</button>}
             </>
           )}
@@ -324,7 +324,7 @@ export default function LoginPage({ onEntrar }) {
               <div className="auth-bloque">
                 <p className="auth-bloque-titulo">{t('recupera.admin')}</p>
                 <p className="auth-ayuda">{t('recupera.adminSub')}</p>
-                <a className="cc-btn cc-whatsapp" href={enlaceRecupera()} target="_blank" rel="noopener noreferrer">{t('recupera.whatsapp')}</a>
+                <a className="cc-btn cc-ghost" href={enlaceRecupera()} target="_blank" rel="noopener noreferrer">{t('recupera.whatsapp')}</a>
               </div>
               <div className="auth-bloque">
                 <p className="auth-bloque-titulo">{t('recupera.equipo')}</p>

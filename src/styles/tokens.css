@@ -6,14 +6,14 @@
   --logo-green:#248F3C;--logo-green-claro:#4CC248;--logo-orange:#F68B1F;--logo-yellow:#F7C63D;
   --gris-claro:#F3F5F7;--gris-medio:#A0A8B0;--gris-oscuro:#444B52;
 
-  --btn-blue:var(--logo-blue);--btn-green:var(--logo-green);--btn-orange:var(--logo-orange);
+  --btn-blue:var(--logo-blue);--btn-green:#1F8236;--btn-orange:var(--logo-orange);
   --btn-yellow:var(--logo-yellow);--btn-teal:var(--logo-teal);
   --btn-red:#e4002b;--btn-violet:var(--logo-navy);--btn-pink:#d6338a;--btn-whatsapp:#25d366;--btn-slate:var(--gris-oscuro);
 
   --sel:var(--btn-blue);
   --on-btn:#fff;
   --on-warning:#2d2000;--on-orange:#2b1500;
-  --gloss:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,0));
+  --gloss:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,0));
 }
 
 :root{

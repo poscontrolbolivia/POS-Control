@@ -8,7 +8,7 @@ Una sola idea para toda la app: **qué tocar se ve de un vistazo**. Los colores 
 |---|---|---|
 | Azul primario (marca, foco, selección) | `#0B5DA8` | `--logo-blue` / `--ac` |
 | Azul oscuro (apoyo) | `#083D7C` | `--logo-navy` |
-| Verde primario (acción principal) | `#248F3C` | `--logo-green` |
+| Verde primario (acción principal) | `#1F8236` (el verde del logo `#248F3C`, un paso más oscuro para que el texto blanco tenga contraste AA) | `--btn-green` |
 | Verde claro (brillo, estados) | `#4CC248` | `--logo-green-claro` |
 | Naranja (atención) | `#F68B1F` | `--logo-orange` |
 | Amarillo (acento) | `#F7C63D` | `--logo-yellow` |
