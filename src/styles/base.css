@@ -10,11 +10,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 button:disabled{opacity:.5;cursor:not-allowed}
 /* JERARQUÍA DE BOTONES (igual en toda la app; la guía completa está en GUIA-ESTILO.md):
    1) PRINCIPAL  = verde sólido (primary / success): UNA sola acción clave por paso, pantalla o diálogo.
-   2) SECUNDARIO = «ghost»: fondo blanco con borde y texto azul; todo lo demás que no es la acción clave.
+   2) SECUNDARIO = «ghost»: AZUL SÓLIDO con texto blanco (nunca fondo blanco ni transparente); todo lo demás que no es la acción clave.
    3) DESTRUCTIVO = rojo suave (danger) y rojo sólido solo para confirmar algo irreversible.
    Azul oscuro (violet / teal / slate) = acción de apoyo sólida; naranja y amarillo solo marcan estado o atención. */
-button.ghost{--pc:var(--ghost-bd);border:2px solid var(--ghost-bd);background:var(--card);color:var(--ghost-ink);font-weight:700;box-shadow:none;text-shadow:none}
-button.ghost:hover:not(:disabled){background:color-mix(in srgb,var(--ac) 12%,var(--card));border-color:var(--ghost-bd);transform:none;filter:none}
+button.ghost{--pc:var(--btn-sec);border:0;background:var(--gloss),var(--pc);color:var(--on-btn);font-weight:650;box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 38%,transparent);text-shadow:0 1px 1px rgba(0,0,0,.25)}
+button.ghost:hover:not(:disabled){background:var(--gloss),var(--pc);transform:none;filter:brightness(1.12)}
 button.big{width:100%;padding:16px;font-size:1.1rem}
 /* En los paneles de administración «big» ya no es gigante: mismo tamaño que los demás botones. */
 .adm-panel button.big{width:auto;min-width:160px;padding:9px 22px;font-size:1rem}

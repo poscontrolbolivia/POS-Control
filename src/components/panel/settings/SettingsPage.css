@@ -1,50 +1,50 @@
 .adm-config{display:flex;flex-direction:column;gap:14px}
 
-/* ── NIVEL 1 · Bloques de Configuración: la píldora es a la vez el menú y el título del bloque,
-   así que no existe un segundo menú. Verde de marca cuando está abierto (el verde se reserva para
-   lo que manda: el bloque activo), azul solo en el nivel 2 y gris plano en el nivel 3.
+/* ── NIVEL 1 · Bloques de Configuración: la píldora es a la vez el menú y el título del bloque.
+   SÓLIDA siempre (la app no usa botones blancos ni transparentes): azul oscuro cerrada, verde de
+   marca cuando está abierta (el verde se reserva para lo que manda: el bloque activo).
    El abierto se pega bajo la barra superior mientras se recorre su contenido. ── */
 .cfg-bloque{display:flex;flex-direction:column;gap:8px}
 .cfg-cab{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:10px 16px;text-align:left;
-  border:1.5px solid var(--line-fuerte);border-radius:var(--r-pill);background:var(--card-2);color:var(--ink);
-  font-weight:650;box-shadow:var(--sh-1)}
-.cfg-cab:hover:not(:disabled){background:var(--card);border-color:color-mix(in srgb,var(--logo-green) 55%,var(--line))}
+  border:0;border-radius:var(--r-pill);background:var(--gloss),var(--logo-navy);color:var(--on-btn);
+  font-weight:650;box-shadow:0 4px 14px color-mix(in srgb,var(--logo-navy) 38%,transparent)}
+.cfg-cab:hover:not(:disabled){background:var(--gloss),var(--logo-navy);filter:brightness(1.25)}
 .cfg-cab-icono{flex:0 0 auto;font-size:1.1rem;line-height:1}
 .cfg-cab-titulo{flex:1 1 auto;min-width:0}
 .cfg-cab-chip{flex:0 0 auto}
-.cfg-cab-flecha{flex:0 0 auto;margin-left:auto;color:var(--logo-green);font-size:1rem;line-height:1}
+.cfg-cab-flecha{flex:0 0 auto;margin-left:auto;color:inherit;font-size:1rem;line-height:1}
 .cfg-bloque.abierto > .cfg-cab{position:sticky;top:calc(var(--topbar-h,0px) + 6px);z-index:120;
   /* anillo del color de la página: la cabecera fija es opaca y no deja ver el contenido que pasa por detrás */
-  box-shadow:0 0 0 6px var(--bg);
-  border-color:var(--logo-green);background:color-mix(in srgb,var(--logo-green) 12%,var(--card))}
-.cfg-bloque.abierto > .cfg-cab:hover:not(:disabled){background:color-mix(in srgb,var(--logo-green) 18%,var(--card))}
+  outline:6px solid var(--bg);outline-offset:0;
+  background:var(--gloss),var(--btn-green);box-shadow:0 4px 14px color-mix(in srgb,var(--btn-green) 38%,transparent)}
+.cfg-bloque.abierto > .cfg-cab:hover:not(:disabled){background:var(--gloss),var(--btn-green);filter:brightness(1.1)}
 .cfg-cuerpo{display:flex;flex-direction:column;gap:12px;background:var(--card);border:1px solid var(--line);
   border-radius:var(--r-md);padding:16px;box-shadow:var(--sh-1)}
 .cfg-cuerpo > .adm-config{width:100%}
 /* Impresoras trae sus propios submenús con tarjeta: el cuerpo del bloque va al ras, sin caja doble. */
 .cfg-cuerpo-plano{border:0;padding:0;background:transparent;box-shadow:none;gap:10px}
+.cfg-sesion{margin:-6px 0 0}
 
-/* ── NIVEL 2 · Submenús (Impresoras): misma píldora pero en AZUL, que es el color de estado.
-   Así un subgroup se ve distinto de su grupo: verde arriba, azul adentro. ── */
-.adm-panel .imp-sub-cab{border-color:var(--line);background:var(--card);box-shadow:none;min-height:46px}
-.adm-panel .imp-sub.abierto > .imp-sub-cab{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,var(--card));
-  position:sticky;top:calc(var(--topbar-h,0px) + 70px);z-index:110;box-shadow:0 0 0 6px var(--card)}
+/* ── Caja y cierres: atajos a Caja y Reportes + subtítulo de la sección de cierres ── */
+.cfg-atajos{display:flex;flex-wrap:wrap;gap:8px}
+.cfg-seccion{margin:8px 0 0;font-size:1.05rem}
+
+/* ── NIVEL 2 · Submenús (Impresoras): misma píldora pero en AZUL (abierta: azul claro del logo).
+   Así un subgrupo se ve distinto de su grupo: azul oscuro/verde arriba, azul adentro. ── */
+.adm-panel .imp-sub-cab{min-height:46px}
+.adm-panel .imp-sub.abierto > .imp-sub-cab{position:sticky;top:calc(var(--topbar-h,0px) + 70px);z-index:110;outline:6px solid var(--card);outline-offset:0}
 
 /* ── NIVEL 3 · Tarjetas planas y grises (grupos, papeles, salidas): sin píldora ni color. ── */
 
-/* ── «Equipo» (UsersPage es archivo ajeno): se iguala aquí sin tocarlo. Cerrado es la misma
-   píldora de nivel 1 con ▸; abierto se ve como un bloque de nivel 1 (verde de marca) y su botón
-   pasa a ser una píldora chica, porque el título grande ya lo firma la tarjeta. ── */
-.adm-panel button.ghost.eq-toggle{display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:10px 16px;
-  border:1.5px solid var(--line-fuerte);border-radius:var(--r-pill);background:var(--card-2);color:var(--ink);
-  font-weight:650;text-shadow:none;box-shadow:var(--sh-1)}
-.adm-panel button.ghost.eq-toggle:hover:not(:disabled){background:var(--card);filter:none;transform:none}
-.adm-panel button.ghost.eq-toggle::after{content:'▸';margin-left:auto;color:var(--logo-green);font-size:1rem}
+/* ── «Equipo» (UsersPage es archivo ajeno): se iguala aquí sin tocarlo. Su botón de plegar es un
+   azul sólido más (botón secundario); dentro del bloque de Configuración se oculta porque el
+   bloque ya pliega. ── */
+.adm-panel button.ghost.eq-toggle{display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:10px 16px}
+.adm-panel button.ghost.eq-toggle::after{content:'▸';margin-left:auto;font-size:1rem}
 .adm-panel > .adm-fila > button.ghost.eq-toggle{flex:1 1 auto;min-width:0}
 .adm-panel .adm-equipo{border:1.5px solid var(--logo-green);border-radius:var(--r-md);background:var(--card);box-shadow:var(--sh-1)}
 .adm-panel .adm-equipo > .adm-card-cab{background:color-mix(in srgb,var(--logo-green) 12%,var(--card));border-radius:calc(var(--r-md) - 4px)}
-.adm-panel .adm-equipo button.ghost.eq-toggle{min-height:38px;padding:6px 14px;border-radius:var(--r-pill);
-  background:var(--card-2);font-size:.88rem;box-shadow:none}
+.adm-panel .adm-equipo button.ghost.eq-toggle{min-height:38px;padding:6px 14px;font-size:.88rem}
 .adm-panel .adm-equipo button.ghost.eq-toggle::after{content:''}
 
 /* Subidas de logo y QR de pago dentro de «Datos del negocio» */

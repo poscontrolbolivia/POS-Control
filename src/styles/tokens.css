@@ -4,10 +4,13 @@
   /* PALETA DEL LOGO (60 % azul · 30 % verde · 10 % naranja). Cambiar un color aquí lo cambia en toda la app. */
   --logo-navy:#083D7C;--logo-blue:#0B5DA8;--logo-teal:#0B5DA8;
   --logo-green:#248F3C;--logo-green-claro:#4CC248;--logo-orange:#F68B1F;--logo-yellow:#F7C63D;
+  /* Los dos claros del logo: el azul de la flecha (login: Entrar y el ojito) y el dorado del naranja (login: «Soy nuevo»). */
+  --logo-blue-claro:#1E88C8;--logo-dorado:#F8B030;
   --gris-claro:#F3F5F7;--gris-medio:#A0A8B0;--gris-oscuro:#444B52;
 
   --btn-blue:var(--logo-blue);--btn-green:#1F8236;--btn-orange:var(--logo-orange);
   --btn-yellow:var(--logo-yellow);--btn-teal:var(--logo-teal);
+  --btn-sec:var(--logo-blue); /* botón secundario = azul sólido (nunca blanco ni transparente) */
   --btn-red:#e4002b;--btn-violet:var(--logo-navy);--btn-pink:#d6338a;--btn-whatsapp:#25d366;--btn-slate:var(--gris-oscuro);
 
   --sel:var(--btn-blue);

@@ -1708,7 +1708,7 @@
   "alertas.prioNormal": "Normal",
   "alertas.prioBaja": "Low",
   "salon.llevarAyuda": "Orders to be picked up, no table: charge them here or from Cash.",
-  "config.ayuda": "Set how your business looks and works here: language and theme, details, printers, team, closings and plan. One block opens at a time and its title stays pinned while you scroll.",
+  "config.ayuda": "Set how your business looks and works here: language and theme, details, cash and closings, printers, team and plan. One block opens at a time and its title stays pinned while you scroll.",
   "super.zip.conFallos": "Backup downloaded, but {fallidas} of {total} photos could not be fetched (details are in LEEME.txt inside the zip).",
   "super.zip.ok": "Complete backup downloaded ({total} photos included).",
   "super.zip.progreso": "Downloading photos… {hechas}/{total}",
@@ -1861,5 +1861,9 @@
   "pedido.salirSinEnviarAyuda": "Some products haven't been sent yet. If you go back now they stay on the bill, but the kitchen and bar won't see them.",
   "pedido.salirEnviarYSalir": "Send to dispatch and go back",
   "pedido.salirSinEnviar": "Go back without sending",
-  "pedido.salirSeguir": "Stay on the bill"
+  "pedido.salirSeguir": "Stay on the bill",
+  "config.cajaYCierres": "Cash and closings",
+  "config.cajaYCierresAyuda": "Everything about cash in one place: how the drawer works, the closing history, and shortcuts to Cash and Reports.",
+  "config.irCaja": "Open Cash",
+  "config.irReportes": "Open Reports"
 }

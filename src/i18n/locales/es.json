@@ -1708,7 +1708,7 @@
   "alertas.prioNormal": "Normal",
   "alertas.prioBaja": "Baja",
   "salon.llevarAyuda": "Pedidos que se retiran, sin mesa: se cobran acá mismo o desde Caja.",
-  "config.ayuda": "Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, equipo, cierres y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.",
+  "config.ayuda": "Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, caja y cierres, impresoras, equipo y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.",
   "super.zip.conFallos": "Respaldo descargado, pero {fallidas} de {total} fotos no se pudieron bajar (el detalle está en LEEME.txt dentro del zip).",
   "super.zip.ok": "Respaldo completo descargado ({total} fotos incluidas).",
   "super.zip.progreso": "Bajando fotos… {hechas}/{total}",
@@ -1861,5 +1861,9 @@
   "pedido.salirSinEnviarAyuda": "Hay productos que todavía no se enviaron. Si vuelves ahora quedan en la cuenta, pero cocina y barra no los verán.",
   "pedido.salirEnviarYSalir": "Enviar a despacho y volver",
   "pedido.salirSinEnviar": "Volver sin enviar",
-  "pedido.salirSeguir": "Seguir en la cuenta"
+  "pedido.salirSeguir": "Seguir en la cuenta",
+  "config.cajaYCierres": "Caja y cierres",
+  "config.cajaYCierresAyuda": "Todo lo de caja en un solo lugar: cómo se maneja la gaveta, el historial de cierres y el acceso a Caja y Reportes.",
+  "config.irCaja": "Abrir Caja",
+  "config.irReportes": "Abrir Reportes"
 }

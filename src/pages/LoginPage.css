@@ -25,9 +25,9 @@ body{background:radial-gradient(circle at 20% 20%,color-mix(in srgb,var(--verde)
 .lg-form input:focus-visible, .lg-form select:focus-visible, .lg-share-btn:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .lg-clave{display:flex;gap:8px;align-items:center}
 .lg-clave input{flex:1;min-width:0}
-.lg-clave .lg-ojo{flex:none;width:46px;height:46px;min-height:46px;padding:0;border-radius:50%;border:0;background:var(--logo-navy);color:var(--on-btn);box-shadow:0 4px 12px color-mix(in srgb,var(--logo-navy) 40%,transparent);display:inline-flex;align-items:center;justify-content:center}
+.lg-clave .lg-ojo{flex:none;width:46px;height:46px;min-height:46px;padding:0;border-radius:50%;border:0;background:var(--gloss),var(--logo-blue-claro);color:var(--on-btn);box-shadow:0 4px 14px color-mix(in srgb,var(--logo-blue-claro) 40%,transparent);display:inline-flex;align-items:center;justify-content:center}
 .lg-clave .lg-ojo svg{width:22px;height:22px}
-.lg-clave .lg-ojo:hover:not(:disabled){background:var(--logo-navy);filter:brightness(1.18)}
+.lg-clave .lg-ojo:hover:not(:disabled){background:var(--gloss),var(--logo-blue-claro);filter:brightness(.95)}
 .lg-alerta{margin:0;padding:10px 14px;border-radius:var(--r-md);background:var(--danger-bg);color:var(--danger-ink);font-size:.9rem;text-align:center}
 .lg-bloqueo{background:var(--warn-bg);color:var(--warn-ink);font-weight:650}
 .lg-demo{margin:0;text-align:center;font-size:.8rem;color:var(--mut);display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
@@ -38,8 +38,11 @@ a.cc-btn, a.cc-btn:hover{color:var(--on-btn);text-decoration:none}
 .cc-btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(.95);box-shadow:0 8px 22px color-mix(in srgb,var(--cc) 42%,transparent)}
 .cc-btn:active{transform:translateY(0) scale(.98)}
 .cc-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
-.cc-blue{--cc:var(--btn-blue)}
-.cc-orange{--cc:#B85F08}
+.cc-btn:hover:not(:disabled){background:var(--gloss),var(--cc)}
+.cc-blue{--cc:var(--logo-blue-claro)}
+/* Dorado del logo: fondo claro, así que el texto va oscuro (blanco no pasa contraste). */
+.cc-orange{--cc:var(--logo-dorado);color:var(--on-orange);text-shadow:none}
+a.cc-orange, a.cc-orange:hover{color:var(--on-orange)}
 .cc-whatsapp{--cc:var(--btn-whatsapp);text-shadow:0 1px 2px rgba(0,0,0,.35)}
 .lg-footer{width:100%;max-width:420px;margin-top:22px;padding-top:16px;border-top:1px solid color-mix(in srgb,var(--ink) 12%,transparent);text-align:center;color:var(--mut)}
 .lg-footer-marca{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.9rem;color:var(--ink)}
@@ -48,9 +51,10 @@ a.cc-btn, a.cc-btn:hover{color:var(--on-btn);text-decoration:none}
 .lg-footer-links a{color:var(--ac);font-weight:600;text-decoration:underline}
 .lg-footer-links a:hover{filter:brightness(1.15)}
 .lg-footer-copy{margin-top:3px;font-size:.78rem}
-.lg-share .lg-share-btn{background:var(--btn-green);border:0;color:var(--on-btn);box-shadow:0 4px 12px color-mix(in srgb,var(--btn-green) 40%,transparent)}
-
-.lg-share .lg-share-btn:hover{filter:brightness(.93)}
+/* Compartir: mismo color y degradado que el botón de WhatsApp (.cc-whatsapp). */
+.lg-share .lg-share-btn{background:var(--gloss),var(--btn-whatsapp);border:0;color:var(--on-btn);box-shadow:0 4px 14px color-mix(in srgb,var(--btn-whatsapp) 38%,transparent)}
+.lg-share .lg-share-btn svg{filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.lg-share .lg-share-btn:hover:not(:disabled){background:var(--gloss),var(--btn-whatsapp);filter:brightness(.95)}
 .lg-olvido{align-self:center;margin-top:10px;padding:8px 14px;min-height:0;border:0;background:none;color:var(--ac);font-family:var(--font-display);font-size:.95rem;font-weight:700;cursor:pointer;border-radius:999px}
 .lg-olvido:hover{color:var(--ac);background:color-mix(in srgb,var(--ac) 10%,transparent)}
 .lg-demo{padding:8px 12px;border-radius:var(--r-md);background:var(--libre)}

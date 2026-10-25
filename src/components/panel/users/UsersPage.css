@@ -6,7 +6,7 @@
   background:var(--danger-bg);border:1px solid var(--danger-bd);color:var(--danger);border-radius:var(--r-md);
   padding:10px 12px;font-size:.88rem;font-weight:600;
 }
-.eq-error button{min-height:36px;padding:5px 12px;font-size:.84rem;background:var(--card);border-color:var(--danger-bd);color:var(--danger)}
+.eq-error button{min-height:36px;padding:5px 12px;font-size:.84rem}
 .eq-ok{
   background:var(--ok-bg);border:1px solid var(--ok-bd);color:var(--ok);border-radius:var(--r-md);
   padding:10px 12px;font-size:.9rem;font-weight:600;

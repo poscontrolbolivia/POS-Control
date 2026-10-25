@@ -1708,7 +1708,7 @@
   "alertas.prioNormal": "Normal",
   "alertas.prioBaja": "Baixa",
   "salon.llevarAyuda": "Pedidos de retirada, sem mesa: cobre aqui mesmo ou no Caixa.",
-  "config.ayuda": "Aqui você ajusta como seu negócio aparece e funciona: idioma e tema, dados, impressoras, equipe, fechamentos e plano. Um bloco abre por vez e o título fica fixo enquanto você rola.",
+  "config.ayuda": "Aqui você ajusta como seu negócio aparece e funciona: idioma e tema, dados, caixa e fechamentos, impressoras, equipe e plano. Um bloco abre por vez e o título fica fixo enquanto você rola.",
   "super.zip.conFallos": "Backup baixado, mas {fallidas} de {total} fotos não puderam ser baixadas (o detalhe está em LEEME.txt dentro do zip).",
   "super.zip.ok": "Backup completo baixado ({total} fotos incluídas).",
   "super.zip.progreso": "Baixando fotos… {hechas}/{total}",
@@ -1861,5 +1861,9 @@
   "pedido.salirSinEnviarAyuda": "Há produtos que ainda não foram enviados. Se voltar agora, eles ficam na conta, mas a cozinha e o bar não os verão.",
   "pedido.salirEnviarYSalir": "Enviar ao despacho e voltar",
   "pedido.salirSinEnviar": "Voltar sem enviar",
-  "pedido.salirSeguir": "Continuar na conta"
+  "pedido.salirSeguir": "Continuar na conta",
+  "config.cajaYCierres": "Caixa e fechamentos",
+  "config.cajaYCierresAyuda": "Tudo sobre o caixa em um só lugar: como a gaveta funciona, o histórico de fechamentos e os atalhos para Caixa e Relatórios.",
+  "config.irCaja": "Abrir Caixa",
+  "config.irReportes": "Abrir Relatórios"
 }

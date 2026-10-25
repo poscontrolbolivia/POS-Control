@@ -15,21 +15,24 @@ import { USAR_SUPABASE, MONEDA } from '../../../services/config.js'
 import { MONEDAS_COMUNES, MONEDA_MAX, limpiarMoneda, formatearMonto } from '../../../services/money.js'
 import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
 import { sb } from '../../../services/supabaseClient.js'
+import { puede } from '../../../services/permissions.js'
 import { urlImagenNegocio, procesarImagenNegocio, borrarImagen } from '../../../services/imageUpload.js'
 import '../../../styles/admin.css'
 import '../cash/CashPage.css'
 import './SettingsPage.css'
 
-// Tecla única del acordeón de Configuración (antes había una por bloque: pos-cfg-<id>).
+// Tecla única del acordeón de Configuración (un solo bloque abierto a la vez).
 const CLAVE_ABIERTO = 'pos-cfg-abierto'
-const IDS_BLOQUES = ['preferencias', 'negocio', 'impresoras', 'equipo', 'cierres', 'plan']
+const IDS_BLOQUES = ['preferencias', 'negocio', 'caja', 'impresoras', 'equipo', 'plan']
+// «Cierres» pasó a llamarse «Caja y cierres»: la preferencia guardada con el id viejo se conserva.
+const ID_VIEJO = { cierres: 'caja' }
 
-// Cuál viene abierto: la tecla nueva; si no existe, la preferencia vieja por bloque (migración).
+// Cuál viene abierto: la tecla única; si no existe, la preferencia vieja por bloque (migración).
 function leerAbierto() {
   try {
     if (typeof window !== 'undefined' && window.location?.hash === '#estacion') return 'impresoras'
     const nuevo = localStorage.getItem(CLAVE_ABIERTO)
-    if (nuevo !== null) return IDS_BLOQUES.includes(nuevo) ? nuevo : null
+    if (nuevo !== null) { const id = ID_VIEJO[nuevo] || nuevo; return IDS_BLOQUES.includes(id) ? id : null }
     // Impresoras manda en la migración porque es el destino del enlace viejo #estacion.
     const abiertaAntes = ['impresoras', ...IDS_BLOQUES].find(id => localStorage.getItem('pos-cfg-' + id) === '1')
     if (abiertaAntes) return abiertaAntes
@@ -58,9 +61,7 @@ export default function SettingsPage({ rol, sesion }) {
   })
   const [msg, setMsg] = useState('')
 
-  // Acordeón EXCLUSIVO: un solo bloque abierto. La preferencia vieja era una tecla por bloque
-  // (pos-cfg-<id>) y se migra a la tecla única pos-cfg-abierto, conservando lo que ya había.
-  const idsRef = useRef([])
+  // Acordeón EXCLUSIVO: un solo bloque abierto (la preferencia vive en pos-cfg-abierto).
   const [abierto, setAbierto] = useState(() => leerAbierto())
   const alternar = id => setAbierto(v => (v === id ? null : id))
   // Con un bloque abierto, los demás desaparecen (ni arriba ni abajo) hasta minimizarlo.
@@ -68,7 +69,6 @@ export default function SettingsPage({ rol, sesion }) {
   useEffect(() => {
     try {
       localStorage.setItem(CLAVE_ABIERTO, abierto ?? '')
-      idsRef.current.forEach(id => { localStorage.setItem('pos-cfg-' + id, abierto === id ? '1' : '0') })
     } catch { /* noop */ }
   }, [abierto])
   // El enlace viejo «#estacion» (PC de impresión) sigue aterrizando en Impresoras ya desplegado.
@@ -77,6 +77,18 @@ export default function SettingsPage({ rol, sesion }) {
     window.addEventListener('hashchange', alCambiar)
     return () => window.removeEventListener('hashchange', alCambiar)
   }, [])
+
+  // Misma cabecera y mismo texto de ayuda para todos los roles.
+  const ayuda = tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, caja y cierres, impresoras, equipo y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.')
+  const cabecera = (
+    <>
+      <CabeceraPagina titulo={t('config.titulo')} />
+      <p className="adm-sub">{ayuda}</p>
+      {sesion && (
+        <p className="adm-sub cfg-sesion">{t('config.sesionLabel')} <b>{sesion.nombre}</b> ({tOr('rol.' + sesion.rol, sesion.rol)}) · {sesion.empresa}</p>
+      )}
+    </>
+  )
 
   const cuerpoPreferencias = (
     <div className="pref-fila">
@@ -87,11 +99,9 @@ export default function SettingsPage({ rol, sesion }) {
 
   if (rol !== 'admin') {
     const conImpresoras = rol === 'cajero' && sesion?.supabase
-    idsRef.current = ['preferencias', ...(conImpresoras ? ['impresoras'] : [])]
     return (
       <div className="adm-panel">
-        <CabeceraPagina titulo={t('config.titulo')} />
-      <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, equipo, cierres y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.')}</p>
+        {cabecera}
         <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')} {...props('preferencias')}>{cuerpoPreferencias}</Bloque>
         {conImpresoras && (
           <Bloque id="impresoras" icono="🖨️" titulo={t('config.impresoras')} {...props('impresoras')}>
@@ -108,6 +118,11 @@ export default function SettingsPage({ rol, sesion }) {
     const nuevo = !form.propinaMostrar
     setForm(f => ({ ...f, propinaMostrar: nuevo }))
     d({ t: 'cfg~', cambios: { propinaMostrar: nuevo } })
+  }
+  // El modo de caja se guarda al instante (vive en «Caja y cierres», fuera del formulario de datos).
+  const cambiarCajaModo = m => {
+    setForm(f => ({ ...f, cajaModo: m }))
+    d({ t: 'cfg~', cambios: { cajaModo: m } })
   }
   const guardar = e => {
     e.preventDefault()
@@ -127,26 +142,25 @@ export default function SettingsPage({ rol, sesion }) {
       fiscalEtiqueta: form.fiscalEtiqueta.trim(),
       datosFiscales: form.datosFiscales,
       moneda: limpiarMoneda(form.moneda),
-      ivaPct, propinaPct, propinaIncluida: form.propinaIncluida, cajaModo: form.cajaModo,
+      ivaPct, propinaPct, propinaIncluida: form.propinaIncluida,
     } })
     setMsg(t('config.guardado'))
     setTimeout(() => setMsg(''), 2500)
   }
 
   const moneda = s.config?.moneda || MONEDA
-
-  idsRef.current = IDS_BLOQUES
+  const turnoAbierto = Boolean(s.caja?.turno) || (s.caja?.otros || []).length > 0
+  // Atajos a las pantallas de trabajo diario: usan el mismo hash que ya entiende PanelPage.
+  const ir = hash => { window.location.hash = hash }
 
   return (
     <div className="adm-panel">
-      <CabeceraPagina titulo={t('config.titulo')} />
-      <p className="adm-sub">{tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, impresoras, equipo, cierres y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.')}</p>
+      {cabecera}
 
       <Bloque id="preferencias" icono="🌐" titulo={t('config.preferencias')} {...props('preferencias')}>{cuerpoPreferencias}</Bloque>
 
       <Bloque id="negocio" icono="🏪" titulo={tOr('config.datosNegocio', 'Datos del negocio')} {...props('negocio')}>
         <form className="adm-config" onSubmit={guardar}>
-          {sesion && <p className="adm-sub">{t('config.sesionLabel')} <b>{sesion.nombre}</b> ({tOr('rol.' + sesion.rol, sesion.rol)}) · {sesion.empresa}</p>}
           <label className="adm-campo">
             <span>{t('config.nombreLabel')}</span>
             <input name="mi-negocio" value={form.nombre} onChange={set('nombre')} placeholder={t('comun.miNegocio')} />
@@ -216,17 +230,6 @@ export default function SettingsPage({ rol, sesion }) {
                 <small>{tOr('config.propinaMostrarAyuda', 'Apagado: al cobrar no se ofrece propina al cliente; el porcentaje configurado se sigue usando si alguien la escribe a mano.')}</small></span>
             </div>
           </div>
-          <fieldset className="adm-caja-modo" disabled={Boolean(s.caja?.turno) || (s.caja?.otros || []).length > 0}>
-            <legend>{t('config.cajaModo')}</legend>
-            {['compartida', 'por_cajero'].map(m => (
-              <label key={m} className={'adm-check' + (form.cajaModo === m ? ' on' : '')}>
-                <input type="radio" name="cajaModo" value={m} checked={form.cajaModo === m} onChange={() => setForm(f => ({ ...f, cajaModo: m }))} />
-                <span><b>{t(m === 'compartida' ? 'config.cajaCompartida' : 'config.cajaPorCajero')}</b>
-                  <small>{t(m === 'compartida' ? 'config.cajaCompartidaAyuda' : 'config.cajaPorCajeroAyuda')}</small></span>
-              </label>
-            ))}
-            {(s.caja?.turno || (s.caja?.otros || []).length > 0) && <small className="adm-msg warn">{t('config.cajaModoBloqueado')}</small>}
-          </fieldset>
           <div className="adm-fila">
             <button type="submit" className="primary big">{t('config.guardarCambios')}</button>
             {msg && <span className={'adm-msg' + (msg.startsWith('✅') ? ' ok' : ' warn')}>{msg}</span>}
@@ -256,6 +259,29 @@ export default function SettingsPage({ rol, sesion }) {
         </div>
       </Bloque>
 
+      <Bloque id="caja" icono="💰" titulo={tOr('config.cajaYCierres', 'Caja y cierres')} {...props('caja')}>
+        <p className="adm-sub">{tOr('config.cajaYCierresAyuda', 'Todo lo de caja en un solo lugar: cómo se maneja la gaveta, el historial de cierres y el acceso a Caja y Reportes.')}</p>
+        <div className="cfg-atajos">
+          <button type="button" className="ghost" onClick={() => ir('#caja')}>💵 {tOr('config.irCaja', 'Abrir Caja')}</button>
+          {puede(rol, 'ver_reportes') && <button type="button" className="ghost" onClick={() => ir('#reportes')}>📊 {tOr('config.irReportes', 'Abrir Reportes')}</button>}
+        </div>
+        <fieldset className="adm-caja-modo" disabled={turnoAbierto}>
+          <legend>{t('config.cajaModo')}</legend>
+          {['compartida', 'por_cajero'].map(m => (
+            <label key={m} className={'adm-check' + (form.cajaModo === m ? ' on' : '')}>
+              <input type="radio" name="cajaModo" value={m} checked={form.cajaModo === m} onChange={() => cambiarCajaModo(m)} />
+              <span><b>{t(m === 'compartida' ? 'config.cajaCompartida' : 'config.cajaPorCajero')}</b>
+                <small>{t(m === 'compartida' ? 'config.cajaCompartidaAyuda' : 'config.cajaPorCajeroAyuda')}</small></span>
+            </label>
+          ))}
+          {turnoAbierto && <small className="adm-msg warn">{t('config.cajaModoBloqueado')}</small>}
+        </fieldset>
+        <h3 className="cfg-seccion">{t('cierres.titulo')}</h3>
+        {sesion?.supabase
+          ? <ClosingsHistory moneda={moneda} />
+          : <CierresDemo historial={s.caja?.historial || []} cuentas={s.cuentas} moneda={moneda} />}
+      </Bloque>
+
       <Bloque
         id="impresoras"
         icono="🖨️"
@@ -274,12 +300,6 @@ export default function SettingsPage({ rol, sesion }) {
           <UsersPage rol={rol} sesion={sesion} abierto onToggleAbierto={() => alternar('equipo')} />
         </Bloque>
       )}
-
-      <Bloque id="cierres" icono="💰" titulo={t('cierres.titulo')} {...props('cierres')}>
-        {sesion?.supabase
-          ? <ClosingsHistory moneda={moneda} />
-          : <CierresDemo historial={s.caja?.historial || []} cuentas={s.cuentas} moneda={moneda} />}
-      </Bloque>
 
       {USAR_SUPABASE && sesion?.supabase && (
         <Bloque id="plan" icono="📦" titulo={t('plan.titulo')} {...props('plan')}><PlanCard sesion={sesion} /></Bloque>
