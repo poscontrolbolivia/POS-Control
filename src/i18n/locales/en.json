@@ -1889,5 +1889,10 @@
   "super.importar.ins3": "The .zip also includes photos; with the .json the business is created too, but without photos.",
   "super.importar.ins4": "It is created as a NEW business with a different code; the original is untouched. Missing users get the password pos12345.",
   "super.importar.elegir": "Select file",
-  "super.importar.otroArchivo": "Choose another file"
+  "super.importar.otroArchivo": "Choose another file",
+  "config.demoTitulo": "Demo: start from scratch",
+  "config.demoAyuda": "The demo keeps everything in this browser. If something got stuck (for example after updating the app), reset it: it goes back to new, with the sample menu and tables. It does not affect any real business.",
+  "config.demoRestablecer": "Reset demo",
+  "config.demoSeguro": "Orders, bills and changes in the demo will be erased. Sure?",
+  "config.demoConfirmar": "Yes, reset"
 }

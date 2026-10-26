@@ -1889,5 +1889,10 @@
   "super.importar.ins3": "O .zip inclui também as fotos; com o .json a empresa é criada igual, mas sem fotos.",
   "super.importar.ins4": "É criada como uma empresa NOVA com outro código; a original não é alterada. Usuários que faltem entram com a senha pos12345.",
   "super.importar.elegir": "Selecionar arquivo",
-  "super.importar.otroArchivo": "Escolher outro arquivo"
+  "super.importar.otroArchivo": "Escolher outro arquivo",
+  "config.demoTitulo": "Demo: começar do zero",
+  "config.demoAyuda": "A demo guarda tudo neste navegador. Se algo ficou estranho (por exemplo depois de atualizar o app), restaure: volta a ficar nova, com o cardápio e as mesas de exemplo. Não afeta nenhuma empresa real.",
+  "config.demoRestablecer": "Restaurar demo",
+  "config.demoSeguro": "Pedidos, contas e alterações da demo serão apagados. Tem certeza?",
+  "config.demoConfirmar": "Sim, restaurar"
 }

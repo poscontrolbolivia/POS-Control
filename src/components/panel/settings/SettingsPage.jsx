@@ -40,6 +40,7 @@ function leerAbierto() {
 
 export default function SettingsPage({ rol, sesion }) {
   const { s, d, modo } = useStore()
+  const [confirmaDemo, setConfirmaDemo] = useState(false)
   const { t, tOr } = useIdioma()
   const [form, setForm] = useState({
     nombre: s.config?.nombre ?? '',
@@ -289,6 +290,23 @@ export default function SettingsPage({ rol, sesion }) {
 
       {USAR_SUPABASE && sesion?.supabase && (
         <Bloque id="plan" icono="📦" titulo={t('plan.titulo')} {...props('plan')}><PlanCard sesion={sesion} /></Bloque>
+      )}
+
+      {modo !== 'supabase' && (
+        <Bloque id="demo" icono="🧪" titulo={tOr('config.demoTitulo', 'Demo: empezar de cero')} {...props('demo')}>
+          <p className="adm-sub">{tOr('config.demoAyuda', 'La demo guarda todo en este navegador. Si algo se quedó raro (por ejemplo después de actualizar la app), restablécela: queda como nueva, con la carta y las mesas de ejemplo. No afecta a ninguna empresa real.')}</p>
+          <div className="adm-fila">
+            {!confirmaDemo
+              ? <button type="button" className="danger" onClick={() => setConfirmaDemo(true)}>{tOr('config.demoRestablecer', 'Restablecer demo')}</button>
+              : (
+                <>
+                  <b>{tOr('config.demoSeguro', 'Se borran los pedidos, cuentas y cambios de la demo. ¿Seguro?')}</b>
+                  <button type="button" className="ghost" onClick={() => setConfirmaDemo(false)}>{tOr('comun.cancelar', 'Cancelar')}</button>
+                  <button type="button" className="danger solid" onClick={() => { d({ t: 'reset' }); setConfirmaDemo(false); setAbierto(null) }}>{tOr('config.demoConfirmar', 'Sí, restablecer')}</button>
+                </>
+              )}
+          </div>
+        </Bloque>
       )}
     </div>
   )
