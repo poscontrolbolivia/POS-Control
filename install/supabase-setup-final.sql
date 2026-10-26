@@ -7717,4 +7717,67 @@ end $fn$;
 revoke all on function public.personal_guardar(text, text, uuid, boolean, uuid) from public, anon;
 grant execute on function public.personal_guardar(text, text, uuid, boolean, uuid) to authenticated;
 
+-- ## Super: eliminar una empresa entera (pide la contraseña del propio super)
+-- La clave se comprueba AQUÍ, en la base, contra auth.users: el navegador no puede saltarse la confirmación.
+-- Todo lo de la empresa cae en cascada (mesas, cuentas, carta, equipo...). Queda una fila en auditoria,
+-- que no tiene FK a empresas, con quién la borró y cuántas cosas tenía.
+drop function if exists public.super_eliminar_empresa(uuid, text);
+create or replace function public.super_eliminar_empresa(p_empresa uuid, p_clave text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_ok     boolean;
+  v_nombre text;
+  v_codigo text;
+  v_resumen jsonb;
+  r record;
+begin
+  if not public.es_super() then raise exception 'requiere super'; end if;
+  if coalesce(p_clave, '') = '' then raise exception 'Escribe tu contraseña para confirmar'; end if;
+
+  select (u.encrypted_password = extensions.crypt(p_clave, u.encrypted_password))
+    into v_ok
+    from auth.users u
+   where u.id = auth.uid();
+  if not coalesce(v_ok, false) then raise exception 'Contraseña incorrecta'; end if;
+
+  select e.nombre, e.codigo into v_nombre, v_codigo from public.empresas e where e.id = p_empresa;
+  if not found then raise exception 'empresa inexistente'; end if;
+
+  if exists (select 1 from public.membresias m where m.empresa_id = p_empresa and m.user_id = auth.uid()) then
+    raise exception 'Esa es tu propia empresa: no se puede eliminar desde aquí';
+  end if;
+
+  v_resumen := jsonb_build_object(
+    'nombre', v_nombre, 'codigo', v_codigo,
+    'usuarios', (select count(*) from public.membresias m where m.empresa_id = p_empresa),
+    'mesas',    (select count(*) from public.mesas x where x.empresa_id = p_empresa),
+    'productos',(select count(*) from public.productos p where p.empresa_id = p_empresa),
+    'cuentas',  (select count(*) from public.cuentas c where c.empresa_id = p_empresa));
+
+  perform set_config('pos.sin_bitacora', 'on', true);
+  delete from public.empresas where id = p_empresa;
+
+  -- Por si alguna tabla con empresa_id no tuviera FK en cascada: barrido de lo que quede suelto.
+  for r in
+    select c.table_name
+      from information_schema.columns c
+      join information_schema.tables t
+        on t.table_schema = c.table_schema and t.table_name = c.table_name and t.table_type = 'BASE TABLE'
+     where c.table_schema = 'public' and c.column_name = 'empresa_id'
+       and c.table_name not in ('auditoria', 'empresas')
+  loop
+    execute format('delete from public.%I where empresa_id = $1', r.table_name) using p_empresa;
+  end loop;
+
+  perform private.auditar(p_empresa, 'super_eliminar_empresa', v_resumen);
+  return true;
+end $fn$;
+
+revoke all on function public.super_eliminar_empresa(uuid, text) from public, anon;
+grant execute on function public.super_eliminar_empresa(uuid, text) to authenticated;
+
 commit;

@@ -359,3 +359,6 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .salon .mesa .importe{ font-size:min(19cqw,16cqh); font-weight:750; line-height:1.1; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; display:block; }
 @container (max-height: 40px){ .salon .mesa .importe{ display:none; } }
 @media (max-width:480px){ .salon .mesa .importe{ display:block; } }
+
+/* Pregunta en línea de «Cancelar edición» (junto a los botones Sí, descartar / Seguir editando) */
+.salon .vt-pregunta{ font-weight:650; color:var(--ink); align-self:center; padding:0 4px; }

@@ -40,9 +40,8 @@ a.cc-btn, a.cc-btn:hover{color:var(--on-btn);text-decoration:none}
 .cc-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
 .cc-btn:hover:not(:disabled){background:var(--gloss),var(--cc)}
 .cc-blue{--cc:var(--logo-blue-claro)}
-/* Dorado del logo: fondo claro, así que el texto va oscuro (blanco no pasa contraste). */
-.cc-orange{--cc:var(--logo-dorado);color:var(--on-orange);text-shadow:none}
-a.cc-orange, a.cc-orange:hover{color:var(--on-orange)}
+/* Dorado del logo con letra blanca y el mismo degradado y sombra de texto que WhatsApp. */
+.cc-orange{--cc:var(--logo-dorado);text-shadow:0 1px 2px rgba(0,0,0,.35)}
 .cc-whatsapp{--cc:var(--btn-whatsapp);text-shadow:0 1px 2px rgba(0,0,0,.35)}
 .lg-footer{width:100%;max-width:420px;margin-top:22px;padding-top:16px;border-top:1px solid color-mix(in srgb,var(--ink) 12%,transparent);text-align:center;color:var(--mut)}
 .lg-footer-marca{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:.9rem;color:var(--ink)}

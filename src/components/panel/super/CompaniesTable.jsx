@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { MONEDA } from '../../../services/config.js'
-import { ajustarCuota, cambiarPlan, verCuota } from '../../../services/super/superApi.js'
+import { ajustarCuota, cambiarPlan, eliminarEmpresa, verCuota } from '../../../services/super/superApi.js'
 import { mensajeError } from '../../../services/super/client.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import './SuperPage.css'
@@ -8,6 +8,23 @@ import './SuperPage.css'
 export default function CompaniesTable({ empresas = [], cargando = false, error = '', ocupado = false, onExportar, onExportarZip, onEntrar, onRefrescar }) {
   const { tOr } = useIdioma()
   const [confirmando, setConfirmando] = useState(null)
+
+  // Eliminar una empresa: pide la contraseña del propio super (la comprueba la base de datos).
+  const [eliminando, setEliminando] = useState(null)
+  const [claveDel, setClaveDel] = useState('')
+  const [errorDel, setErrorDel] = useState('')
+  const [borrando, setBorrando] = useState(false)
+  const abrirEliminar = e => { setConfirmando(null); cerrarCuota(); setEliminando(e); setClaveDel(''); setErrorDel('') }
+  const cerrarEliminar = () => { setEliminando(null); setClaveDel(''); setErrorDel('') }
+  const confirmarEliminar = async () => {
+    if (!eliminando || !claveDel || borrando) return
+    setErrorDel(''); setBorrando(true)
+    try {
+      await eliminarEmpresa(eliminando.id, claveDel)
+      cerrarEliminar()
+      onRefrescar?.()
+    } catch (err) { setErrorDel(mensajeError(err)) } finally { setBorrando(false) }
+  }
 
   const [cuotaEmpresa, setCuotaEmpresa] = useState(null)
   const [cuota, setCuota] = useState(null)
@@ -136,6 +153,9 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
                             onClick={() => abrirCuota(e)}>
                             {cuotaEmpresa?.id === e.id ? tOr('super.tabla.cuotaCerrar', 'Plan ✕') : tOr('super.tabla.planCuota', 'Plan / Premium')}
                           </button>
+                          <button type="button" className="danger" disabled={ocupado || borrando} onClick={() => abrirEliminar(e)}>
+                            {tOr('super.tabla.eliminar', 'Eliminar')}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -238,6 +258,32 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {eliminando && (
+        <div className="super-bloque super-eliminar" role="alertdialog" aria-label={tOr('super.eliminar.titulo', 'Eliminar empresa')}>
+          <b>{tOr('super.eliminar.pregunta', '¿Eliminar «{empresa}» para siempre?').replace('{empresa}', eliminando.nombre)}</b>
+          <p className="super-ayuda">
+            {tOr('super.eliminar.detalle', 'Se borran TODOS sus datos: salón, carta, cuentas, caja y equipo.')}{' '}
+            ({Number(eliminando.usuarios || 0)} {tOr('super.tabla.colUsuarios', 'Usuarios').toLowerCase()}, {Number(eliminando.mesas || 0)} {tOr('super.entrar.mesas', 'mesas')},{' '}
+            {Number(eliminando.productos || 0)} {tOr('super.entrar.productos', 'productos')}, {Number(eliminando.cuentas || 0)} {tOr('super.entrar.cuentas', 'cuentas')}).{' '}
+            <b>{tOr('super.eliminar.irreversible', 'No se puede deshacer.')}</b>{' '}
+            {tOr('super.eliminar.respaldo', 'Si puede hacer falta, descarga antes su respaldo con «Completo (.zip)».')}
+          </p>
+          <label className="super-campo">
+            <span>{tOr('super.eliminar.clave', 'Repite tu contraseña de super administrador para confirmar')}</span>
+            <input name="clave-eliminar" type="password" autoComplete="current-password" value={claveDel} disabled={borrando} autoFocus
+              onChange={ev => { setClaveDel(ev.target.value); setErrorDel('') }}
+              onKeyDown={ev => { if (ev.key === 'Enter') confirmarEliminar() }} />
+          </label>
+          {errorDel && <div className="super-error" role="alert">⚠️ {errorDel}</div>}
+          <div className="super-centro" style={{ justifyContent: 'flex-start' }}>
+            <button type="button" className="super-ghost" disabled={borrando} onClick={cerrarEliminar}>{tOr('super.entrar.cancelar', 'Cancelar')}</button>
+            <button type="button" className="danger solid" disabled={!claveDel || borrando} onClick={confirmarEliminar}>
+              {borrando ? tOr('super.eliminar.eliminando', 'Eliminando…') : tOr('super.eliminar.confirmar', 'Eliminar definitivamente')}
+            </button>
+          </div>
         </div>
       )}
 

@@ -17,6 +17,7 @@ export function mensajeError(e) {
   if (/requiere super/i.test(t)) return NO_SUPER
   if (/sin ?sesion/i.test(t)) return SIN_SESION
   if (/no pertenece a esa empresa/i.test(t)) return 'No puedes operar esa empresa: ni eres super administrador ni tienes membresía en ella.'
+  if (/contrase.a incorrecta/i.test(t)) return 'La contraseña no es correcta. No se eliminó nada.'
   if (/empresa inexistente/i.test(t)) return 'La empresa ya no existe en esta base de datos.'
   if (/snapshot invalido/i.test(t)) return 'El respaldo no es válido: falta la información de la empresa.'
   if (/ya existe/i.test(t)) return t.replace(/ya existe/i, 'ya está en uso. Escribe un código distinto.')

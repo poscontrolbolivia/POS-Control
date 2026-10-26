@@ -1,0 +1,3 @@
+/* Submenús de Caja (Caja · Cierres · Reportes): píldoras .tab; la marcada es azul sólido (base.css). */
+.caja-hub{max-width:var(--pagina-max);margin:0 auto;padding:var(--pagina-pad) var(--pagina-pad) 0}
+.caja-hub-tabs .tab{flex:1 1 140px}

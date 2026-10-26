@@ -25,9 +25,6 @@
 .cfg-cuerpo-plano{border:0;padding:0;background:transparent;box-shadow:none;gap:10px}
 .cfg-sesion{margin:-6px 0 0}
 
-/* ── Caja y cierres: atajos a Caja y Reportes + subtítulo de la sección de cierres ── */
-.cfg-atajos{display:flex;flex-wrap:wrap;gap:8px}
-.cfg-seccion{margin:8px 0 0;font-size:1.05rem}
 
 /* ── NIVEL 2 · Submenús (Impresoras): misma píldora pero en AZUL (abierta: azul claro del logo).
    Así un subgrupo se ve distinto de su grupo: azul oscuro/verde arriba, azul adentro. ── */

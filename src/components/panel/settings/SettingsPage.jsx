@@ -9,13 +9,10 @@ import { lazyRetry } from '../../../services/lazyRetry.js'
 const StationPage = lazyRetry(() => import('../station/StationPage.jsx'))
 import UsersPage from '../users/UsersPage.jsx'
 import PlanCard from './PlanCard.jsx'
-import ClosingsHistory from '../cash/ClosingsHistory.jsx'
-import { calcularResumen } from '../cash/calcularResumen.js'
 import { USAR_SUPABASE, MONEDA } from '../../../services/config.js'
-import { MONEDAS_COMUNES, MONEDA_MAX, limpiarMoneda, formatearMonto } from '../../../services/money.js'
-import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
+import { MONEDAS_COMUNES, MONEDA_MAX, limpiarMoneda } from '../../../services/money.js'
+import { limpiarMonto, numMonto } from '../../../services/format.js'
 import { sb } from '../../../services/supabaseClient.js'
-import { puede } from '../../../services/permissions.js'
 import { urlImagenNegocio, procesarImagenNegocio, borrarImagen } from '../../../services/imageUpload.js'
 import '../../../styles/admin.css'
 import '../cash/CashPage.css'
@@ -24,8 +21,8 @@ import './SettingsPage.css'
 // Tecla única del acordeón de Configuración (un solo bloque abierto a la vez).
 const CLAVE_ABIERTO = 'pos-cfg-abierto'
 const IDS_BLOQUES = ['preferencias', 'negocio', 'caja', 'impresoras', 'equipo', 'plan']
-// «Cierres» pasó a llamarse «Caja y cierres»: la preferencia guardada con el id viejo se conserva.
-const ID_VIEJO = { cierres: 'caja' }
+// «Cierres» se fue al menú Caja y aquí quedó solo el modo de caja: la preferencia vieja apunta a ese bloque.
+const ID_VIEJO = { cierres: 'caja' } // el historial de cierres ahora vive en el menú Caja
 
 // Cuál viene abierto: la tecla única; si no existe, la preferencia vieja por bloque (migración).
 function leerAbierto() {
@@ -79,7 +76,7 @@ export default function SettingsPage({ rol, sesion }) {
   }, [])
 
   // Misma cabecera y mismo texto de ayuda para todos los roles.
-  const ayuda = tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, caja y cierres, impresoras, equipo y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.')
+  const ayuda = tOr('config.ayuda', 'Aquí ajustas cómo se ve y cómo trabaja tu negocio: idioma y tema, datos, modo de caja, impresoras, equipo y plan. Se abre un bloque a la vez y su título queda fijo mientras bajas.')
   const cabecera = (
     <>
       <CabeceraPagina titulo={t('config.titulo')} />
@@ -148,10 +145,7 @@ export default function SettingsPage({ rol, sesion }) {
     setTimeout(() => setMsg(''), 2500)
   }
 
-  const moneda = s.config?.moneda || MONEDA
   const turnoAbierto = Boolean(s.caja?.turno) || (s.caja?.otros || []).length > 0
-  // Atajos a las pantallas de trabajo diario: usan el mismo hash que ya entiende PanelPage.
-  const ir = hash => { window.location.hash = hash }
 
   return (
     <div className="adm-panel">
@@ -259,12 +253,8 @@ export default function SettingsPage({ rol, sesion }) {
         </div>
       </Bloque>
 
-      <Bloque id="caja" icono="💰" titulo={tOr('config.cajaYCierres', 'Caja y cierres')} {...props('caja')}>
-        <p className="adm-sub">{tOr('config.cajaYCierresAyuda', 'Todo lo de caja en un solo lugar: cómo se maneja la gaveta, el historial de cierres y el acceso a Caja y Reportes.')}</p>
-        <div className="cfg-atajos">
-          <button type="button" className="ghost" onClick={() => ir('#caja')}>💵 {tOr('config.irCaja', 'Abrir Caja')}</button>
-          {puede(rol, 'ver_reportes') && <button type="button" className="ghost" onClick={() => ir('#reportes')}>📊 {tOr('config.irReportes', 'Abrir Reportes')}</button>}
-        </div>
+      <Bloque id="caja" icono="💰" titulo={tOr('config.cajaModoTitulo', 'Modo de caja')} {...props('caja')}>
+        <p className="adm-sub">{tOr('config.cajaModoAyuda', 'Cómo se maneja la gaveta. El turno, los cierres y los reportes están en el menú Caja.')}</p>
         <fieldset className="adm-caja-modo" disabled={turnoAbierto}>
           <legend>{t('config.cajaModo')}</legend>
           {['compartida', 'por_cajero'].map(m => (
@@ -276,10 +266,6 @@ export default function SettingsPage({ rol, sesion }) {
           ))}
           {turnoAbierto && <small className="adm-msg warn">{t('config.cajaModoBloqueado')}</small>}
         </fieldset>
-        <h3 className="cfg-seccion">{t('cierres.titulo')}</h3>
-        {sesion?.supabase
-          ? <ClosingsHistory moneda={moneda} />
-          : <CierresDemo historial={s.caja?.historial || []} cuentas={s.cuentas} moneda={moneda} />}
       </Bloque>
 
       <Bloque
@@ -404,32 +390,5 @@ function CfgImagen({ tipo, titulo, ayuda, config, modo, empresaId, onCambios }) 
         {aviso && <small className={'adm-msg ' + (aviso.ok ? 'ok' : 'warn')} role="status">{aviso.msg}</small>}
       </div>
     </div>
-  )
-}
-
-// Historial de cierres en modo demo (localStorage): lista simple, sin cerrar nada.
-function CierresDemo({ historial, cuentas, moneda }) {
-  const { t } = useIdioma()
-  const m = n => formatearMonto(n, moneda)
-  if (!historial.length) return <p className="caja-nota">{t('cierres.vacio')}</p>
-  return (
-    <ul className="caja-lista">
-      {historial.map((h, i) => {
-        const r = calcularResumen(h, cuentas)
-        const dif = round2((Number(h.contado) || 0) - r.esperado)
-        return (
-          <li key={h.id}>
-            <b>{t('caja.turnoNumero', { n: historial.length - i })}</b>
-            <span className="caja-hora">{new Date(h.cerradoEn || h.abiertoEn).toLocaleString()}</span>
-            <span className="sp" />
-            {h.traspaso?.length > 0 && <span className="caja-hora">{t('caja.traspasoHist', { n: h.traspaso.length })}</span>}
-            <span>{t('caja.vendidoM', { monto: m(r.vendido) })}</span>
-            <span className={'caja-diff ' + (Math.abs(dif) < 0.005 ? 'ok' : dif > 0 ? 'sobra' : 'falta')}>
-              {Math.abs(dif) < 0.005 ? t('caja.cuadrado') : dif > 0 ? t('caja.sobraM', { monto: m(dif) }) : t('caja.faltaM', { monto: m(-dif) })}
-            </span>
-          </li>
-        )
-      })}
-    </ul>
   )
 }

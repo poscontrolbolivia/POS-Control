@@ -7,6 +7,7 @@ import { useIdioma } from '../../../i18n/index.jsx'
 import { planZonaBorrar, accionesBorrarZona, SIN_SALON, BORRAR_MESAS } from '../../../services/salon.js'
 import OrderPanel from '../order/OrderPanel.jsx'
 import { ruedaHorizontal } from '../../../services/ruedaHorizontal.js'
+import { accionesDescartar } from './descartarEdicion.js'
 import './HallPage.css'
 import { W, H, ASP_BASE, ZOOM_MIN, ZOOM_MAX, ZOOM_PASO, CLAVE_ZOOM, leerZoom, estiloMesa, calcularAsp } from './mapaMesas.js'
 
@@ -87,6 +88,10 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   const [nueva, setNueva] = useState(null)
   const [ren, setRen] = useState(null)
   const [conf, setConf] = useState(null)
+  // «Cancelar edición»: foto del salón al entrar a editar y confirmación en línea (sin confirm() nativo).
+  const snapEdicion = useRef(null)
+  const [descartando, setDescartando] = useState(false)
+  useEffect(() => { if (!edit) setDescartando(false) }, [edit])
 
   const [cli, setCli] = useState(null)
   const [aMesa, setAMesa] = useState(null)
@@ -319,7 +324,22 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
 
   // El alta de mesas y zonas es parte del mapa, no un submenú: el botón siempre está a la vista y entrar
   // en «Editar salón» pasa solo. Antes había que descubrir ese botón primero y las altas parecían rotas.
-  const entrarEdicion = () => { setEdit(true); setRen(null); setConf(null) }
+  const entrarEdicion = () => {
+    if (!edit) snapEdicion.current = { mesas: s.mesas, zonas: s.zonas }
+    setEdit(true); setRen(null); setConf(null)
+  }
+  const salirEdicion = () => { setEdit(false); setSel(null); setNueva(null); setRen(null); setConf(null); setDescartando(false) }
+  // La X: sin cambios sale directo; con cambios pide confirmar y luego deshace todo lo hecho desde que se entró.
+  const cancelarEdicion = () => {
+    const ahora = { mesas: s.mesas, zonas: s.zonas }
+    const acc = accionesDescartar(snapEdicion.current || ahora, ahora)
+    if (!acc.length) { salirEdicion(); return }
+    if (!descartando) { setDescartando(true); return }
+    acc.forEach(a => d(a))
+    if (acc.some(a => a.t === 'zona-' && a.id === activo)) setZona(TODAS)
+    salirEdicion()
+    avisar(t('salon.edicionDescartada'))
+  }
   const irAlMapa = () => { if (vista === 'lista' && !edit) cambiarVista('mapa') }
   const altaZona = () => { entrarEdicion(); irAlMapa(); setNueva(nueva === null ? '' : null) }
   const altaMesa = () => { if (!destinoAlta) return; entrarEdicion(); irAlMapa(); crear() }
@@ -421,10 +441,21 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           </div>}
           {admin && !enLlevar && (
             <button className={(edit ? 'primary' : 'ghost') + ' vt'} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
-              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { setEdit(!edit); setSel(null); setNueva(null); setRen(null); setConf(null) }}>
+              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { if (edit) salirEdicion(); else { entrarEdicion(); setSel(null); setNueva(null) } }}>
               <span aria-hidden="true">{edit ? '✓' : '✎'}</span><span className="txt">{edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}</span>
             </button>
           )}
+          {admin && !enLlevar && edit && (descartando ? (
+            <>
+              <span className="vt-pregunta" role="alert">{t('salon.descartarPregunta')}</span>
+              <button type="button" className="danger solid vt" onClick={cancelarEdicion}><span aria-hidden="true">✕</span><span className="txt">{t('salon.descartarSi')}</span></button>
+              <button type="button" className="ghost vt" onClick={() => setDescartando(false)}><span className="txt">{t('salon.seguirEditando')}</span></button>
+            </>
+          ) : (
+            <button type="button" className="danger solid vt" aria-label={t('salon.cancelarEdicion')} title={t('salon.cancelarEdicion')} onClick={cancelarEdicion}>
+              <span aria-hidden="true">✕</span><span className="txt">{t('salon.cancelarEdicion')}</span>
+            </button>
+          ))}
         </div>
 
         {aviso && (

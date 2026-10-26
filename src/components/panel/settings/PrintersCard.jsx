@@ -41,7 +41,7 @@ function Sub({ id, icono, titulo, ayuda, chip = null, abierto = false, oculto = 
 const CLAVE_SUB = 'pos-cfg-impresoras-sub'
 const SUBS = ['grupos', 'contenido', 'papel', 'donde', 'sonido']
 // Hashes que son rutas de la app: nunca un id de grupo, aunque el grupo se llame igual (#caja, #cocina).
-const HASH_DE_RUTA = ['salon', 'cocina', 'caja', 'venta', 'menu', 'config', 'auditoria', 'inventario', 'reportes', 'alertas', 'estacion']
+const HASH_DE_RUTA = ['salon', 'cocina', 'caja', 'venta', 'menu', 'config', 'auditoria', 'inventario', 'reportes', 'cierres', 'alertas', 'estacion']
 
 // Qué submenú pide el enlace profundo: #estacion es «dónde se imprime»; #grupo-<id> (o el id del
 // grupo a secas) es «Grupos de comanda»; #donde, #grupos, #papel, #contenido y #sonido van directos.

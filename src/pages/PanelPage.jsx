@@ -9,7 +9,7 @@ import { useIdioma } from '../i18n/index.jsx'
 import Topbar from '../components/panel/Topbar.jsx'
 import PantallaCarga from '../components/PantallaCarga.jsx'
 import HallPage from '../components/panel/hall/HallPage.jsx'
-import CashPage from '../components/panel/cash/CashPage.jsx'
+import CajaHub from '../components/panel/cash/CajaHub.jsx'
 import QuickSalePage from '../components/panel/quicksale/QuickSalePage.jsx'
 import KitchenPage from '../components/panel/kitchen/KitchenPage.jsx'
 import MenuPage from '../components/panel/menu/MenuPage.jsx'
@@ -21,7 +21,6 @@ import { totalDespacho } from '../services/despacho.js'
 
 const AuditPage = lazyRetry(() => import('../components/panel/audit/AuditPage.jsx'))
 const InventoryPage = lazyRetry(() => import('../components/panel/inventory/InventoryPage.jsx'))
-const ReportsPage = lazyRetry(() => import('../components/panel/reports/ReportsPage.jsx'))
 const AlertasPage = lazyRetry(() => import('../components/panel/alerts/AlertasPage.jsx'))
 const SuperPage = lazyRetry(() => import('../components/panel/super/SuperPage.jsx'))
 
@@ -29,12 +28,14 @@ const SuperPage = lazyRetry(() => import('../components/panel/super/SuperPage.js
 // al tocar la pestaña ya están y no hay «cargando».
 const PRECARGAS = {
   inventario: () => import('../components/panel/inventory/InventoryPage.jsx'),
-  reportes: () => import('../components/panel/reports/ReportsPage.jsx'),
+  reportes: () => import('../components/panel/reports/ReportsPage.jsx'), // submenú de Caja
   alertas: () => import('../components/panel/alerts/AlertasPage.jsx'),
   auditoria: () => import('../components/panel/audit/AuditPage.jsx'),
 }
 
-const VISTAS = { '#salon': 'salon', '#cocina': 'cocina', '#caja': 'caja', '#estacion': 'config', '#venta': 'venta', '#menu': 'menu', '#config': 'config', '#auditoria': 'auditoria', '#inventario': 'inventario', '#reportes': 'reportes', '#alertas': 'alertas' }
+const VISTAS = { '#salon': 'salon', '#cocina': 'cocina', '#caja': 'caja', '#cierres': 'caja', '#reportes': 'caja', '#estacion': 'config', '#venta': 'venta', '#menu': 'menu', '#config': 'config', '#auditoria': 'auditoria', '#inventario': 'inventario', '#alertas': 'alertas' }
+// Submenú de Caja al que lleva cada enlace profundo (Caja, Cierres y Reportes son un solo menú).
+const SUB_CAJA = { '#caja': 'caja', '#cierres': 'cierres', '#reportes': 'reportes' }
 
 // Enlaces profundos de impresión: #estacion (la PC de la estación), #grupo-<id> y los nombres de
 // submenú de Impresoras. Todos aterrizan en Configuración; PrintersCard lee el mismo hash para saber
@@ -75,26 +76,27 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   if (enPantalla) {
     modulos.push({ id: 'cocina', nombre: tOr('app.mod.cocina', 'Cocina'), contador: porSacar })
   } else {
-    modulos.push({ id: 'salon', nombre: t('app.mod.salon') }, { id: 'caja', nombre: t('app.mod.caja') }, { id: 'venta', nombre: t('app.mod.venta') })
+    modulos.push({ id: 'salon', nombre: t('app.mod.salon') }, { id: 'caja', nombre: puede(sesion.rol, 'ver_reportes') ? tOr('app.mod.cajaReportes', 'Caja y reportes') : t('app.mod.caja') }, { id: 'venta', nombre: t('app.mod.venta') })
     if (puede(sesion.rol, 'ver_cocina')) modulos.push({ id: 'cocina', nombre: tOr('app.mod.cocina', 'Cocina'), contador: porSacar })
   }
   if (puede(sesion.rol, 'ver_alertas')) modulos.push({ id: 'alertas', nombre: tOr('app.mod.alertas', 'Alertas'), contador: contarAbiertas(s.alertas) })
   if (puede(sesion.rol, 'gestionar_menu')) modulos.push({ id: 'menu', nombre: t('app.mod.menu') })
-  if (puede(sesion.rol, 'ver_reportes')) modulos.push({ id: 'reportes', nombre: tOr('app.mod.reportes', 'Reportes') })
   if (puede(sesion.rol, 'ver_inventario')) modulos.push({ id: 'inventario', nombre: tOr('app.mod.inventario', 'Inventario') })
   if (puede(sesion.rol, 'ver_auditoria')) modulos.push({ id: 'auditoria', nombre: tOr('app.mod.auditoria', 'Auditoría') })
   modulos.push({ id: 'config', nombre: t('app.mod.config') })
   if (sesion.es_super) modulos.push({ id: 'super', nombre: tOr('app.mod.super', 'Super') })
 
   const idsModulos = modulos.map(m => m.id).join(',')
+  const verReportes = puede(sesion.rol, 'ver_reportes')
   useEffect(() => {
-    const ids = idsModulos.split(',').filter(id => PRECARGAS[id])
+    const ids = [...idsModulos.split(','), ...(verReportes ? ['reportes'] : [])].filter(id => PRECARGAS[id])
     if (!ids.length) return undefined
     const lanzar = () => ids.forEach((id, i) => setTimeout(() => PRECARGAS[id]().catch(() => {}), i * 400))
     const h = typeof requestIdleCallback === 'function' ? requestIdleCallback(lanzar, { timeout: 4000 }) : setTimeout(lanzar, 1500)
     return () => { if (typeof cancelIdleCallback === 'function' && typeof requestIdleCallback === 'function') cancelIdleCallback(h); else clearTimeout(h) }
-  }, [idsModulos])
+  }, [idsModulos, verReportes])
 
+  const [subCaja, setSubCaja] = useState('caja')
   const [foco, setFoco] = useState(null)
   // `desde` le dice al Salón de dónde vino el toque: desde Caja abre la cuenta en modo cobro.
   const abrirDeAlerta = ({ mesaId, cuentaId, desde }) => {
@@ -102,7 +104,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
     setModulo('salon')
   }
   // El cajero cobra de mesa en mesa: al terminar, la vista de cobro lo devuelve a Caja en vez de dejarlo en Salón.
-  const volverCaja = () => { setFoco(null); setModulo('caja') }
+  const volverCaja = () => { setFoco(null); setSubCaja('caja'); setModulo('caja') }
 
   const configRef = useRef(s.config)
   configRef.current = s.config
@@ -127,6 +129,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
         // Configuración trae el bloque abierto según pos-cfg-abierto (la tecla que lee SettingsPage):
         // sin este aviso el enlace profundo caería en Configuración con todo minimizado.
         if (deImpresion) { try { localStorage.setItem('pos-cfg-abierto', 'impresoras') } catch { /* noop */ } }
+        if (SUB_CAJA[hash]) setSubCaja(SUB_CAJA[hash])
         setModulo(destino)
       }
     }
@@ -157,12 +160,11 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
       <ChunkBoundary resetKey={modulo}>
       <Suspense fallback={<div className="auth-aviso" role="status" style={{ padding: '8px 16px' }}>{t('app.conectando')}</div>}>
         {modulo === 'salon' && <HallPage rol={sesion.rol} sesion={sesion} foco={foco} onVolverCaja={volverCaja} />}
-        {modulo === 'caja' && <CashPage rol={sesion.rol} sesion={sesion} onAbrirMesa={abrirDeAlerta} />}
+        {modulo === 'caja' && <CajaHub rol={sesion.rol} sesion={sesion} onAbrirMesa={abrirDeAlerta} sub={subCaja} onSub={setSubCaja} />}
         {modulo === 'venta' && <QuickSalePage rol={sesion.rol} sesion={sesion} onAbrirMesa={abrirDeAlerta} />}
         {modulo === 'cocina' && <KitchenPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'menu' && <MenuPage rol={sesion.rol} />}
         {modulo === 'inventario' && <InventoryPage rol={sesion.rol} sesion={sesion} />}
-        {modulo === 'reportes' && <ReportsPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'alertas' && <AlertasPage rol={sesion.rol} sesion={sesion} onAbrirCuenta={abrirDeAlerta} />}
         {modulo === 'auditoria' && <AuditPage rol={sesion.rol} sesion={sesion} />}
         {modulo === 'config' && <SettingsPage rol={sesion.rol} sesion={sesion} />}

@@ -56,6 +56,14 @@ export async function exportarEmpresaZip(id, onProgreso) {
 
 export { leerArchivoRespaldo }
 
+// Borra la empresa entera. La contraseña (la del propio super) la comprueba la base de datos, no el navegador.
+export async function eliminarEmpresa(id, clave) {
+  if (!esUuid(id)) throw new Error('El identificador de la empresa no es válido.')
+  if (!String(clave || '')) throw new Error('Escribe tu contraseña para confirmar.')
+  await rpcSuper('super_eliminar_empresa', { p_empresa: id, p_clave: String(clave) })
+  return true
+}
+
 export async function verCuota(id) {
   if (!esUuid(id)) throw new Error('El identificador de la empresa no es válido.')
   const d = await rpcSuper('super_ver_cuota', { p_empresa: id })

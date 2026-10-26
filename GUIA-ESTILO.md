@@ -9,7 +9,7 @@ Una sola idea para toda la app: **qué tocar se ve de un vistazo**. Los colores 
 | Azul primario (marca, foco, selección) | `#0B5DA8` | `--logo-blue` / `--ac` |
 | Azul oscuro (apoyo) | `#083D7C` | `--logo-navy` |
 | Azul claro del logo (flecha: login «Entrar» y el ojito) | `#1E88C8` | `--logo-blue-claro` |
-| Dorado del logo (login «Soy nuevo») | `#F8B030` (texto oscuro `--on-orange`) | `--logo-dorado` |
+| Dorado del logo (login «Soy nuevo», letra blanca) | `#F8B030` | `--logo-dorado` |
 | WhatsApp (soporte y compartir) | `#25D366` | `--btn-whatsapp` |
 | Verde primario (acción principal) | `#1F8236` (el verde del logo `#248F3C`, un paso más oscuro para que el texto blanco tenga contraste AA) | `--btn-green` |
 | Verde claro (brillo, estados) | `#4CC248` | `--logo-green-claro` |
@@ -33,13 +33,24 @@ Una sola idea para toda la app: **qué tocar se ve de un vistazo**. Los colores 
 
 ## Login (único lugar con colores propios)
 - **Entrar** y el **ojito**: `--logo-blue-claro` con degradado.
-- **Soy nuevo**: `--logo-dorado` con degradado y texto oscuro (el blanco no pasa contraste sobre dorado).
+- **Soy nuevo**: `--logo-dorado` con el degradado de WhatsApp y **letra blanca** (con sombra de texto oscura para leerse).
 - **Compartir** y **Soporte**: mismo verde y degradado de WhatsApp (`--btn-whatsapp`).
 
+## Menús con submenús (Salón por zonas, Caja)
+- **Caja y reportes es UN solo menú** con submenús como los salones del mapa: **Caja** (turno y cobros) · **Cierres de caja**
+  (solo admin) · **Reportes** (quien tenga `ver_reportes`). Se arma en `CajaHub`; los enlaces `#caja`, `#cierres` y `#reportes`
+  abren el submenú correspondiente. No crear otra pestaña para algo que ya es un submenú.
+- Los submenús son píldoras `.tab`: **la marcada es azul sólido** (`.tab.on`), las demás chips. Un CSS de pantalla nunca debe
+  poner `background`/`border` a `.tab` (pisa la marcada): solo tamaño, o `.tab:not(.on)`.
+
 ## Configuración
-Un bloque abierto a la vez: **Idioma y tema · Datos del negocio · Caja y cierres · Impresoras · Equipo · Plan**.
-Todo lo de caja vive en «Caja y cierres» (modo de caja, historial de cierres y atajos a Caja y Reportes). Los ajustes que
-se guardan al instante (modo de caja, mostrar propina) no llevan botón Guardar; los datos del negocio sí.
+Un bloque abierto a la vez: **Idioma y tema · Datos del negocio · Modo de caja · Impresoras · Equipo · Plan**.
+Aquí solo van ajustes: el turno, los cierres y los reportes viven en el menú Caja. Los ajustes que se guardan al instante
+(modo de caja, mostrar propina) no llevan botón Guardar; los datos del negocio sí.
+
+## Edición del mapa
+Al editar, el mapa guarda cada cambio al instante. **✓ Terminar edición** los conserva y **✕ Cancelar edición** los deshace
+(pide confirmar en línea y vuelve a dejar mesas y salones como estaban al entrar; lógica en `descartarEdicion.js`).
 
 ## Pantallas
 - **Ancho y espacio**: `--pagina-max`, `--pagina-pad`, `--pagina-gap`. Despacho es la excepción: usa todo el ancho para ver más comandas.
