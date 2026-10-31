@@ -530,7 +530,7 @@ export default function MenuPage({ rol }) {
         title={tOr('menu.costoPctAyuda', '¿Qué porcentaje del precio será el costo? Ej.: 40 para el 40 %')}
         aria-label={tOr('menu.costoPctPlace', 'Costo % del precio')} />
       <button type="button" className="success" onClick={aplicarCostoPct}>{tOr('menu.costoPctBtn', 'Asignar costo')}</button>
-      <label className="mn-costo-reemp"><input name="costo-reemplazar" type="checkbox" checked={costoReemplazar} onChange={e => setCostoReemplazar(e.target.checked)} /> {tOr('menu.costoPctReemplazar', 'Reemplazar también los que ya tienen costo')}</label>
+      <label className="mn-costo-reemp"><input name="costo-reemplazar" type="checkbox" className="sw" checked={costoReemplazar} onChange={e => setCostoReemplazar(e.target.checked)} /> {tOr('menu.costoPctReemplazar', 'Reemplazar también los que ya tienen costo')}</label>
       <input name="masivo-margen" className="adm-num" type="text" inputMode="numeric" autoComplete="off" value={margenTmp}
         onChange={e => setMargenTmp(e.target.value.replace(/\D/g, '').slice(0, 2))}
         onFocus={e => e.target.select()} placeholder={tOr('menu.masivoMargen', 'Margen %')} aria-label={tOr('menu.masivoMargen', 'Margen %')} />
@@ -759,7 +759,7 @@ export default function MenuPage({ rol }) {
             </div>
             <div className="mn-reglas">
               <label className="mn-check" title={tOr('items.indObligarAyuda', 'Si es obligatoria, el mesero debe elegir al menos una opción al pedir.')}>
-                <input name="obligatoria" type="checkbox" checked={vInd.obligatoria} onChange={e => setVInd({ ...vInd, obligatoria: e.target.checked })} />
+                <input name="obligatoria" type="checkbox" className="sw" checked={vInd.obligatoria} onChange={e => setVInd({ ...vInd, obligatoria: e.target.checked })} />
                 <span>{t('indic.obligatoria')}</span>
               </label>
               <div className="mn-dos">

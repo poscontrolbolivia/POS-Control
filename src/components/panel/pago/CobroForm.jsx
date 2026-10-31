@@ -157,12 +157,12 @@ export default function CobroForm({ cobro, onChange, total, config, mostrarComan
         </fieldset>
       )}
       <label className="vd-check">
-        <input name="imprimir" type="checkbox" checked={cobro.imprimir} onChange={e => onChange({ ...cobro, imprimir: e.target.checked })} />
+        <input name="imprimir" type="checkbox" className="sw" checked={cobro.imprimir} onChange={e => onChange({ ...cobro, imprimir: e.target.checked })} />
         {t('venta.imprimirTicket')}
       </label>
       {mostrarComanda && (
         <label className="vd-check">
-          <input name="comanda" type="checkbox" checked={cobro.comanda} onChange={e => onChange({ ...cobro, comanda: e.target.checked })} />
+          <input name="comanda" type="checkbox" className="sw" checked={cobro.comanda} onChange={e => onChange({ ...cobro, comanda: e.target.checked })} />
           <span className="vd-check-cuerpo">{t('venta.comandaCheckbox')}<small>{t('venta.comandaAyuda')}</small></span>
         </label>
       )}

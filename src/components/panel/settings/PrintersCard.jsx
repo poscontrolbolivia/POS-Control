@@ -311,7 +311,7 @@ export default function PrintersCard({ rol, sesion }) {
                     onBlur={e => { const v = e.target.value.trim(); if (v !== String(g.pie || '').trim()) cambiarGrupo(g.id, { pie: v }) }} />
                 </label>
               </div>
-              <label className="imp-radio"><input name="corte" type="checkbox" checked={g.corte !== false} onChange={e => cambiarGrupo(g.id, { corte: e.target.checked })} /> {t('impresoras.corte')}</label>
+              <label className="imp-radio"><input name="corte" type="checkbox" className="sw" checked={g.corte !== false} onChange={e => cambiarGrupo(g.id, { corte: e.target.checked })} /> {t('impresoras.corte')}</label>
             </div>
           ))}
         </div>
@@ -358,7 +358,7 @@ export default function PrintersCard({ rol, sesion }) {
         ayuda={tOr('impresoras.subSonidoAyuda', 'Un pitido en la impresora para que nadie se quede con la comanda sin ver.')}
       >
         <div className="adm-fila">
-          <label className="imp-radio"><input name="impresora-beep" type="checkbox" checked={Boolean(cfg.impresoraBeep)} onChange={e => guardar({ impresoraBeep: e.target.checked })} /> {t('impresoras.beep')}</label>
+          <label className="imp-radio"><input name="impresora-beep" type="checkbox" className="sw" checked={Boolean(cfg.impresoraBeep)} onChange={e => guardar({ impresoraBeep: e.target.checked })} /> {t('impresoras.beep')}</label>
         </div>
         <p className="adm-sub" style={{ margin: 0 }}>{t('impresoras.notaComandas', { boton: t('pedido.enviarCocina') })}</p>
       </Sub>

@@ -1030,7 +1030,7 @@
   "fiscal.correoInvalido": "The email is not valid. Check it or leave it empty.",
   "ticket.clienteNombre": "Name",
   "ticket.clienteCorreo": "Email",
-  "config.fiscalEtiqueta": "Name of the tax ID (NIT, RUT, RFC, VAT…)",
+  "config.fiscalEtiqueta": "Tax ID name",
   "config.fiscalEtiquetaAyuda": "What the tax number is called in your country. It shows at checkout and on the receipt.",
   "config.datosFiscales": "Ask for the customer's name and tax ID",
   "config.datosFiscalesAyuda": "Optional fields appear at checkout and the printed bill leaves lines to fill in by hand.",

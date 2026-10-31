@@ -1030,7 +1030,7 @@
   "fiscal.correoInvalido": "O e-mail nao e valido. Revise ou deixe vazio.",
   "ticket.clienteNombre": "Nome",
   "ticket.clienteCorreo": "E-mail",
-  "config.fiscalEtiqueta": "Nome do identificador fiscal (CNPJ, CPF, NIT…)",
+  "config.fiscalEtiqueta": "Identificador fiscal",
   "config.fiscalEtiquetaAyuda": "Como se chama o numero fiscal no seu pais. Aparece na cobranca e no comprovante.",
   "config.datosFiscales": "Pedir nome e numero fiscal do cliente",
   "config.datosFiscalesAyuda": "Na cobranca aparecem campos opcionais e a conta impressa deixa linhas para preencher a mao.",

@@ -184,7 +184,7 @@ export default function SettingsPage({ rol, sesion }) {
               <small style={{ color: 'var(--mut)', fontWeight: 400 }}>{t('config.fiscalEtiquetaAyuda')}</small>
             </label>
             <label className="adm-check">
-              <input name="datosFiscales" type="checkbox" checked={form.datosFiscales} onChange={e => setForm({ ...form, datosFiscales: e.target.checked })} />
+              <input name="datosFiscales" type="checkbox" className="sw" checked={form.datosFiscales} onChange={e => setForm({ ...form, datosFiscales: e.target.checked })} />
               <span>{t('config.datosFiscales')}<small>{t('config.datosFiscalesAyuda')}</small></span>
             </label>
           </div>
@@ -211,7 +211,7 @@ export default function SettingsPage({ rol, sesion }) {
                 onFocus={e => e.target.select()} placeholder="0.00" />
             </label>
             <label className="adm-check">
-              <input name="propina-incluida" type="checkbox" checked={form.propinaIncluida} onChange={e => setForm(f => ({ ...f, propinaIncluida: e.target.checked }))} />
+              <input name="propina-incluida" type="checkbox" className="sw" checked={form.propinaIncluida} onChange={e => setForm(f => ({ ...f, propinaIncluida: e.target.checked }))} />
               <span><b>{t('config.propinaIncluir')}</b><small>{t('config.propinaIncluirAyuda')}</small></span>
             </label>
             <div className="adm-check cfg-switch-fila">

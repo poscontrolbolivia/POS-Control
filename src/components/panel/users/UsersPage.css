@@ -92,3 +92,6 @@
 .eq-area{min-height:44px;padding:6px 16px;border:0;border-radius:999px;color:var(--on-btn);font-weight:650;--pc:var(--btn-slate);background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,0)),var(--pc);box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 30%,transparent);opacity:.8}
 .eq-area.on{--pc:var(--btn-blue);opacity:1}
 .eq-areas-todas{color:var(--mut);font-size:.8rem}
+.eq-perms{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.eq-perm{display:flex;align-items:center;gap:10px;min-height:36px;cursor:pointer;font-weight:650}
+.eq-perm .sw{margin:0}

@@ -119,7 +119,7 @@ const etiquetaRol = (rol, tOr) => (rol ? tOr('rol.' + rol, ROL_ETIQUETA[rol] || 
 // El detalle guarda datos técnicos (ids, nulos, banderas en falso). Aquí solo queda lo que una persona entiende:
 // sin identificadores, sin vacíos y sin «falso»; las banderas en verdadero salen como etiqueta.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const CLAVES_DETALLE = { dueno: 'Dueño', items: 'Ítems', numero: 'Número', parcial: 'Parcial', ayuda: 'Ayuda', motivo: 'Motivo', monto: 'Monto', total: 'Total', cantidad: 'Cantidad', nombre: 'Nombre', mesa: 'Mesa', metodo: 'Método', rol: 'Rol', antes: 'Antes', despues: 'Después' }
+const CLAVES_DETALLE = { persona: 'Persona', correo: 'Correo', dio: 'Dio permiso', quito: 'Quitó permiso', dueno: 'Dueño', items: 'Ítems', numero: 'Número', parcial: 'Parcial', ayuda: 'Ayuda', motivo: 'Motivo', monto: 'Monto', total: 'Total', cantidad: 'Cantidad', nombre: 'Nombre', mesa: 'Mesa', metodo: 'Método', rol: 'Rol', antes: 'Antes', despues: 'Después' }
 const etiquetaClave = k => CLAVES_DETALLE[String(k).toLowerCase()] || humanizar(k)
 const esTecnica = k => /(^|_)(id|ids|uuid)$/i.test(String(k)) || /^(cuenta|empresa|usuario|user|item|turno|mesa)_?id$/i.test(String(k)) || String(k).toLowerCase() === 'cuenta'
 const valorLegible = v => {

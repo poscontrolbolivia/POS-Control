@@ -1030,7 +1030,7 @@
   "fiscal.correoInvalido": "El correo no es válido. Revísalo o déjalo vacío.",
   "ticket.clienteNombre": "Nombre",
   "ticket.clienteCorreo": "Correo",
-  "config.fiscalEtiqueta": "Nombre del identificador fiscal (NIT, RUT, RFC…)",
+  "config.fiscalEtiqueta": "Identificador fiscal",
   "config.fiscalEtiquetaAyuda": "Así se llama el número fiscal en tu país. Sale en el cobro y en el comprobante.",
   "config.datosFiscales": "Pedir nombre y número fiscal del cliente",
   "config.datosFiscalesAyuda": "En el cobro aparecen campos opcionales y la cuenta impresa deja renglones para llenar a mano.",

@@ -168,3 +168,12 @@ button.ico.danger{background:var(--rojo)}
 .aviso.vacio,.adm-vacio{background:transparent;border-style:dashed;font-weight:500}
 .aviso.error{background:var(--danger-bg);border-color:var(--danger-bd);color:var(--danger-ink)}
 .aviso-ico{font-size:1.2rem;line-height:1}
+
+/* INTERRUPTOR: toda casilla de «activar / desactivar» es un botón deslizante (input[type=checkbox].sw).
+   Las casillas de «elegir varias filas» siguen siendo casillas normales. */
+input[type=checkbox].sw{appearance:none;-webkit-appearance:none;position:relative;flex:0 0 auto;width:48px;min-width:48px;height:28px;min-height:28px;margin:2px 0 0;padding:0;border:1.5px solid var(--line-fuerte);border-radius:999px;background:var(--card-2);cursor:pointer;transition:background .15s,border-color .15s}
+input[type=checkbox].sw::before{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.28);transition:transform .15s}
+input[type=checkbox].sw:checked{background:var(--logo-green);border-color:var(--logo-green)}
+input[type=checkbox].sw:checked::before{transform:translateX(20px);background:#fff}
+input[type=checkbox].sw:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+input[type=checkbox].sw:disabled{opacity:.5;cursor:not-allowed}

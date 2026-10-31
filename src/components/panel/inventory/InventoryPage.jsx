@@ -498,14 +498,14 @@ export default function InventoryPage({ rol, sesion }) {
             onFocus={e => e.target.select()} placeholder="0" />
         </label>
         <label className="inv-check">
-          <input name="activo" type="checkbox" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
+          <input name="activo" type="checkbox" className="sw" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
           {tOr('inventario.activo', 'Activo')}
         </label>
       </div>
 
       <div className="inv-campos">
         <label className="inv-check">
-          <input name="con-merma" type="checkbox" checked={Boolean(form.con_merma)} onChange={e => setForm(f => ({ ...f, con_merma: e.target.checked }))} />
+          <input name="con-merma" type="checkbox" className="sw" checked={Boolean(form.con_merma)} onChange={e => setForm(f => ({ ...f, con_merma: e.target.checked }))} />
           {tOr('inventario.conMerma', 'Con merma de limpieza (al recibir se indica el peso limpio)')}
         </label>
         {form.con_merma && (
@@ -535,8 +535,8 @@ export default function InventoryPage({ rol, sesion }) {
               <span>{tOr('inventario.presCosto', 'Costo de referencia')} ({MONEDA})</span>
               <input name="pres-costo" type="text" inputMode="decimal" autoComplete="off" value={p.costo} onChange={e => cambiarPres(ix, 'costo', limpiarMonto(e.target.value))} onFocus={e => e.target.select()} placeholder="0" />
             </label>
-            <label className="inv-check"><input type="checkbox" checked={Boolean(p.principal)} onChange={() => marcarPrincipal(ix)} />{tOr('inventario.presPrincipal', 'Principal')}</label>
-            <label className="inv-check"><input type="checkbox" checked={p.activo !== false} onChange={e => cambiarPres(ix, 'activo', e.target.checked)} />{tOr('inventario.activo', 'Activo')}</label>
+            <label className="inv-check"><input type="checkbox" className="sw" checked={Boolean(p.principal)} onChange={() => marcarPrincipal(ix)} />{tOr('inventario.presPrincipal', 'Principal')}</label>
+            <label className="inv-check"><input type="checkbox" className="sw" checked={p.activo !== false} onChange={e => cambiarPres(ix, 'activo', e.target.checked)} />{tOr('inventario.activo', 'Activo')}</label>
             {numMonto(p.costo) > 0 && numMonto(p.cantidad) > 0 && (
               <button type="button" className="ghost" onClick={() => setForm(f => ({ ...f, costo: String(costoDePresentacion({ cantidad: numMonto(p.cantidad), costo: numMonto(p.costo) })) }))}>
                 {tOr('inventario.usarCosto', 'Usar como costo por unidad')}: {MONEDA} {fmtC(costoDePresentacion({ cantidad: numMonto(p.cantidad), costo: numMonto(p.costo) }))}

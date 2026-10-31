@@ -894,7 +894,20 @@ const BITACORA = {
   'zona-': (p, n, a) => ['salon_zona_baja', 'zona', nombreZona(p, a.id), { mesas: (p.mesas || []).filter(m => m.zona === a.id).length }],
 
   'usuario+': (p, n) => { const u = nuevoDe(p, n, 'usuariosDemo')[0] || {}; return ['equipo_alta', 'persona', u.nombre || u.usuario || '', { rol: u.rol }] },
-  'usuario~': (p, n, a) => ['equipo_edicion', 'persona', a.usuario || '', { campos: clavesDe(a).join(', ') }],
+  'usuario~': (p, n, a) => {
+    if (Array.isArray(a.cambios?.permisos)) {
+      const ETQ = { ver_inventario: 'Ver inventario', gestionar_inventario: 'Gestionar inventario' }
+      const antes = (p.usuariosDemo || []).find(u => u.usuario === a.usuario)?.permisos || []
+      const ahora = a.cambios.permisos
+      const nom = (n.usuariosDemo || []).find(u => u.usuario === a.usuario)?.nombre || a.usuario || ''
+      return ['equipo_permisos', 'persona', nom, {
+        persona: nom,
+        dio: ahora.filter(x => !antes.includes(x)).map(x => ETQ[x] || x),
+        quito: antes.filter(x => !ahora.includes(x)).map(x => ETQ[x] || x),
+      }]
+    }
+    return ['equipo_edicion', 'persona', a.usuario || '', { campos: clavesDe(a).join(', ') }]
+  },
   'usuario-': (p, n, a) => ['equipo_revoco', 'persona', a.usuario || '', {}],
   'rol~': (p, n, a) => ['equipo_cambio_rol', 'persona', a.usuario || '', { rol: a.rol }],
 

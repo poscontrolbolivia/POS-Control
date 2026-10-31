@@ -6958,21 +6958,50 @@ security definer
 set search_path = ''
 as $fn$
 declare
-  v_emp uuid;
-  v_pe  text[] := coalesce(p_permisos, '{}'::text[]);
+  v_emp    uuid;
+  v_pe     text[] := coalesce(p_permisos, '{}'::text[]);
+  v_antes  text[];
+  v_dio    text[];
+  v_quito  text[];
+  v_nombre text;
+  v_correo text;
+  v_etq    jsonb := '{"ver_inventario":"Ver inventario","gestionar_inventario":"Gestionar inventario"}'::jsonb;
 begin
   perform private.exigir_rol(array['admin']::text[]);
   v_emp := private.empresa_activa();
   if exists (select 1 from unnest(v_pe) x where x is null or x not in ('ver_inventario','gestionar_inventario')) then
     raise exception 'Permiso inválido';
   end if;
-  update public.membresias set permisos = v_pe
-   where empresa_id = v_emp and user_id = p_usuario_id and rol <> 'admin';
+  select coalesce(m.permisos, '{}'::text[]) into v_antes
+    from public.membresias m
+   where m.empresa_id = v_emp and m.user_id = p_usuario_id and m.rol <> 'admin';
   if not found then
     raise exception 'Solo se asignan permisos a personas que no son administradoras';
   end if;
+  update public.membresias set permisos = v_pe
+   where empresa_id = v_emp and user_id = p_usuario_id and rol <> 'admin';
+
+  select coalesce(nullif(p.display_name, ''), u.email::text, ''), coalesce(u.email::text, '')
+    into v_nombre, v_correo
+    from auth.users u
+    left join public.perfiles p on p.user_id = u.id
+   where u.id = p_usuario_id;
+
+  v_dio   := array(select x from unnest(v_pe) x where not (x = any(v_antes)));
+  v_quito := array(select x from unnest(v_antes) x where not (x = any(v_pe)));
+  if coalesce(cardinality(v_dio), 0) = 0 and coalesce(cardinality(v_quito), 0) = 0 then
+    return;  -- no cambió nada: no ensuciar la auditoría
+  end if;
+
+  -- Auditoría: A QUIÉN y QUÉ permiso se dio o se quitó (con nombre legible, no códigos).
   perform private.auditar(v_emp, 'equipo_permisos',
-    jsonb_build_object('usuario', p_usuario_id::text, 'permisos', to_jsonb(v_pe)));
+    jsonb_build_object(
+      'usuario', p_usuario_id::text,
+      'persona', v_nombre,
+      'correo',  v_correo,
+      'dio',     (select coalesce(jsonb_agg(coalesce(v_etq ->> x, x)), '[]'::jsonb) from unnest(v_dio) x),
+      'quito',   (select coalesce(jsonb_agg(coalesce(v_etq ->> x, x)), '[]'::jsonb) from unnest(v_quito) x)),
+    'persona', v_nombre);
 end $fn$;
 revoke all on function public.equipo_poner_permisos(uuid, text[]) from public, anon;
 grant execute on function public.equipo_poner_permisos(uuid, text[]) to authenticated;

@@ -167,7 +167,7 @@ export default function ProveedoresTab({ onPagar, alta = false, onAltaDone }) {
             placeholder={tOr('inventario.pistaProvNota', 'opcional: días de entrega, crédito…')} />
         </label>
         <label className="inv-check">
-          <input name="activo" type="checkbox" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
+          <input name="activo" type="checkbox" className="sw" checked={Boolean(form.activo)} onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))} />
           {tOr('inventario.activo', 'Activo')}
         </label>
       </div>

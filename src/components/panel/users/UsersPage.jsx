@@ -284,10 +284,15 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
                         </div>
                       )}
                       {m.rol !== 'admin' && (
-                        <div className="eq-areas" role="group" aria-label={tOr('equipo.perm.titulo', 'Permisos de inventario')}>
+                        <div className="eq-perms" role="group" aria-label={tOr('equipo.perm.titulo', 'Permisos de inventario')}>
                           {PERMISOS_INV.map(p => {
                             const on = Array.isArray(m.permisos) && m.permisos.includes(p.id)
-                            return <button key={p.id} type="button" className={'eq-area' + (on ? ' on' : '')} aria-pressed={on} disabled={ocupado} onClick={() => alternarPermiso(m, p.id)}>{tOr(p.clave, p.def)}</button>
+                            return (
+                              <label key={p.id} className="eq-perm">
+                                <input type="checkbox" className="sw" checked={on} disabled={ocupado} onChange={() => alternarPermiso(m, p.id)} />
+                                <span>{tOr(p.clave, p.def)}</span>
+                              </label>
+                            )
                           })}
                         </div>
                       )}
@@ -461,12 +466,17 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
             <div className="eq-persona">
               <span className="eq-nombre">{u.nombre}</span>
               {u.rol !== 'admin' && (
-                <div className="eq-areas" role="group" aria-label={tOr('equipo.perm.titulo', 'Permisos de inventario')}>
+                <div className="eq-perms" role="group" aria-label={tOr('equipo.perm.titulo', 'Permisos de inventario')}>
                   {PERMISOS_INV.map(p => {
                     const act = Array.isArray(u.permisos) ? u.permisos : []
                     const on = act.includes(p.id)
-                    return <button key={p.id} type="button" className={'eq-area' + (on ? ' on' : '')} aria-pressed={on}
-                      onClick={() => d({ t: 'usuario~', usuario: u.usuario, cambios: { permisos: on ? act.filter(x => x !== p.id) : [...act, p.id] } })}>{tOr(p.clave, p.def)}</button>
+                    return (
+                      <label key={p.id} className="eq-perm">
+                        <input type="checkbox" className="sw" checked={on}
+                          onChange={() => d({ t: 'usuario~', usuario: u.usuario, cambios: { permisos: on ? act.filter(x => x !== p.id) : [...act, p.id] } })} />
+                        <span>{tOr(p.clave, p.def)}</span>
+                      </label>
+                    )
                   })}
                 </div>
               )}
