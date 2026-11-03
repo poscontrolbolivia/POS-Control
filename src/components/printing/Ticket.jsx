@@ -2,6 +2,7 @@ import { MONEDA, VERSION } from '../../services/config'
 import { totalCuenta, totalFinal, pagadoCuenta } from '../../context/StoreContext.jsx'
 import { gruposDe, grupoTickets, repartirPorGrupo, areasDelItem, opcionesDeGrupo } from '../../services/printing.js'
 import { lineasComanda } from '../../services/comanda.js'
+import { imputarPagos } from '../../services/cobro.js'
 import { despachar } from '../../services/printDispatch.js'
 import { tGlobal, existeClave } from '../../i18n/index.jsx'
 import { round2 } from '../../services/format.js'
@@ -10,14 +11,8 @@ import { etiquetaFiscal, pideDatosFiscales, fiscalVacio, fiscalDe } from '../../
 
 const cap = x => x ? x.charAt(0).toUpperCase() + x.slice(1) : ''
 
-export const precalcularCambio = (pagos = [], total = 0) => {
-  const num = p => Number(p?.monto) || 0
-  const efectivo = (pagos || []).filter(p => p?.metodo === 'efectivo').reduce((acc, p) => acc + num(p), 0)
-  if (!efectivo) return 0
-  const otros = (pagos || []).filter(p => p && p.metodo !== 'efectivo').reduce((acc, p) => acc + Math.min(num(p), Number(total) || 0), 0)
-  const falta = Math.max(0, round2(Number(total) || 0) - otros)
-  return round2(Math.max(0, efectivo - falta))
-}
+// Cambio que saldrá del cajón con estos pagos (misma cuenta que al cobrar: lo que no es efectivo va primero).
+export const precalcularCambio = (pagos = [], total = 0) => imputarPagos(pagos, total).cambio
 
 const nombreMetodo = m => (existeClave('metodo.' + m) ? tGlobal('metodo.' + m) : cap(String(m || tGlobal('metodo.otro'))))
 
@@ -80,6 +75,8 @@ export function lineasPlanas({ cuenta, config = {}, titulo, comanda = false, anc
       salon: datos.salon || '',
       mesa: cuenta.mesaTexto || datos.mesa || (cuenta.mesaIds || []).join(', ')
         || (cuenta.canal === 'mostrador' ? tGlobal('venta.mostrador') : '—'),
+      cliente: cuenta.clienteNombre || '',
+      telefono: cuenta.clienteTel || '',
       enviadoPor: cuenta.abiertaPor || '',
       en: cuenta.abiertaEn || Date.now(),
       tr: tGlobal, ancho,

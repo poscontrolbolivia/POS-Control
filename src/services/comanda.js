@@ -8,17 +8,22 @@ export const CLAVES_COMANDA = {
   titulo: 'comanda.titulo',
   salon: 'comanda.salon',
   mesa: 'comanda.mesa',
+  cliente: 'comanda.cliente',
+  telefono: 'comanda.telefono',
   enviado: 'comanda.enviado',
   hora: 'comanda.hora',
   items: 'comanda.pedido',
   none: 'ticket.sinPedidos',
 }
 
-// Los cuatro encabezados, en el orden fijo que aprendió la cocina. Se omiten los que no tengan dato.
-export function camposComanda({ salon, mesa, enviadoPor, en } = {}) {
+// Los encabezados, en el orden fijo que aprendió la cocina. Se omiten los que no tengan dato. Cliente y teléfono
+// (venta directa y para llevar) van justo después de la mesa y solo salen si se escribieron.
+export function camposComanda({ salon, mesa, cliente, telefono, enviadoPor, en } = {}) {
   const out = []
   if (salon) out.push({ clave: CLAVES_COMANDA.salon, params: { v: salon } })
   out.push({ clave: CLAVES_COMANDA.mesa, params: { v: mesa || '—' } })
+  if (cliente) out.push({ clave: CLAVES_COMANDA.cliente, params: { v: cliente } })
+  if (telefono) out.push({ clave: CLAVES_COMANDA.telefono, params: { v: telefono } })
   if (enviadoPor) out.push({ clave: CLAVES_COMANDA.enviado, params: { v: enviadoPor } })
   out.push({ clave: CLAVES_COMANDA.hora, params: { v: hora(en || Date.now()) } })
   return out
@@ -28,12 +33,12 @@ export const tituloComanda = (areaNombre, tr) =>
   `${String(tr(CLAVES_COMANDA.titulo) || 'COMANDA').toUpperCase()}${areaNombre ? ` · ${String(areaNombre).toUpperCase()}` : ''}`
 
 // Líneas en el formato que consume la impresora y el agente ({ texto, negrita, guion }).
-export function lineasComanda({ items = [], areaNombre = '', salon = '', mesa = '', enviadoPor = '', en = Date.now(), tr, ancho = 32 } = {}) {
+export function lineasComanda({ items = [], areaNombre = '', salon = '', mesa = '', cliente = '', telefono = '', enviadoPor = '', en = Date.now(), tr, ancho = 32 } = {}) {
   const t = (k, p) => (tr ? tr(k, p) : `{${k}}`)
   const L = []
   L.push({ texto: tituloComanda(areaNombre, t), negrita: true })
   L.push({ texto: '', guion: true })
-  camposComanda({ salon, mesa, enviadoPor, en }).forEach(c => L.push({ texto: t(c.clave, c.params) }))
+  camposComanda({ salon, mesa, cliente, telefono, enviadoPor, en }).forEach(c => L.push({ texto: t(c.clave, c.params) }))
   L.push({ texto: '', guion: true })
   if (!items.length) L.push({ texto: t(CLAVES_COMANDA.none), centrado: true })
   items.forEach(i => {

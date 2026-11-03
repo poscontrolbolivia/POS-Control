@@ -12,11 +12,19 @@ const iniciaVista = () => {
   return typeof window !== 'undefined' && window.innerWidth <= 768 ? 'lista' : 'mapa'
 }
 
+// Cifra compacta para que quepa dentro de la mesa (el monto exacto sale en el filtro, el título y la vista Lista).
+const corto = n => {
+  const v = Number(n) || 0
+  if (v <= 0) return '—'
+  if (v >= 1000) return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(v)
+  return String(Math.round(v))
+}
+
 const ordenarZonas = zonas => zonas
   .map((z, i) => ({ ...z, _i: i }))
   .sort((a, b) => ((a.orden ?? a._i + 1) - (b.orden ?? b._i + 1)) || (a._i - b._i))
 
-export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera = [], sel = null, onSel = () => {}, m, total = 0 }) {
+export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera = [], sel = null, onSel = () => {}, m, total = 0, cuentasPanel = null }) {
   const { t, tOr } = useIdioma()
   const [vista, setVista] = useState(iniciaVista)
   const [zona, setZona] = useState(TODAS)
@@ -36,7 +44,7 @@ export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera 
   // no puede pintarse de azul. Las mesas frías salen casi blancas y las fuertes se leen en blanco.
   const calor = monto => {
     const i = max > 0 ? Math.min(1, (Number(monto) || 0) / max) : 0
-    return { background: `color-mix(in srgb, var(--verde) ${round2(6 + i * 62)}%, var(--card))`, color: i > 0.55 ? 'var(--on-btn)' : 'var(--ink)' }
+    return { background: `color-mix(in srgb, var(--verde) ${round2(14 + i * 62)}%, var(--card))`, color: i > 0.55 ? 'var(--on-btn)' : 'var(--ink)' }
   }
   const detalle = sel ? { monto: ventas[sel]?.monto ?? fuera.find(x => x.mesa === sel)?.monto ?? 0, cuentas: ventas[sel]?.cuentas ?? fuera.find(x => x.mesa === sel)?.cuentas ?? 0 } : null
 
@@ -90,24 +98,28 @@ export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera 
           })}
         </div>
       ) : (
-        <div className="lienzo rp-lienzo" style={{ aspectRatio: `${W} / ${H}` }}>
-          {mesasZona.map(mm => {
-            const monto = montoDe(mm.nombre)
-            return (
-              <button type="button" key={mm.id}
-                className={`mesa ${mm.forma || 'cuadrada'} rp-mesa` + (sel === mm.nombre ? ' sel' : '')}
-                onClick={() => pulsado(mm.nombre)} aria-pressed={sel === mm.nombre}
-                title={tOr('reportes.mapaTocar', 'Filtrar el reporte por esta mesa')}
-                style={{ left: `${(mm.x / W) * 100}%`, top: `${(mm.y / H) * 100}%`, width: `${(mm.w / W) * 100}%`, height: `${(mm.h / H) * 100}%`, ...calor(monto) }}>
-                <b className="nombre">{mm.nombre}</b>
-                <span className="rp-mesa-cifra">{monto > 0 ? m(monto) : '—'}</span>
-                {monto > 0 && <span className="rp-mesa-pax">{cuentaDe(mm.nombre)}</span>}
-                {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(mm.zona)}</span>}
-              </button>
-            )
-          })}
+        <div className="rp-marco">
+          <div className="lienzo rp-lienzo" style={{ aspectRatio: `${W} / ${H}` }}>
+            {mesasZona.map(mm => {
+              const monto = montoDe(mm.nombre)
+              return (
+                <button type="button" key={mm.id}
+                  className={`mesa ${mm.forma || 'cuadrada'} rp-mesa` + (sel === mm.nombre ? ' sel' : '')}
+                  onClick={() => pulsado(mm.nombre)} aria-pressed={sel === mm.nombre}
+                  title={`${mm.nombre}${monto > 0 ? ' · ' + m(monto) : ''} — ${tOr('reportes.mapaTocar', 'Filtrar el reporte por esta mesa')}`}
+                  style={{ left: `${(mm.x / W) * 100}%`, top: `${(mm.y / H) * 100}%`, width: `${(mm.w / W) * 100}%`, height: `${(mm.h / H) * 100}%`, ...calor(monto) }}>
+                  <b className={'nombre' + (String(mm.nombre).length > 4 ? ' largo' : '')}>{mm.nombre}</b>
+                  <span className="rp-mesa-cifra">{corto(monto)}</span>
+                  {monto > 0 && <span className="rp-mesa-pax">×{cuentaDe(mm.nombre)}</span>}
+                  {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(mm.zona)}</span>}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
+
+      {cuentasPanel}
 
       <div className="rp-calor">
         <span>{tOr('reportes.mapaSinVentas', 'Sin ventas')}</span>

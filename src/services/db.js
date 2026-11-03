@@ -178,6 +178,7 @@ function armarCuentas(cuentas, items, pagos, cms, nombres) {
     fiscalNumero: c.fiscal_numero || '',
     fiscalCorreo: c.fiscal_correo || '',
     numero: c.numero ?? undefined,
+    mesaTexto: c.mesas_texto || undefined,
     mesaIds: (mesasBy[c.id] || []).map(cm => cm.mesa_id),
     estado: c.estado,
     etiqueta: c.etiqueta || '',
@@ -236,6 +237,27 @@ export async function detalleCierre(turnoId) {
     cuentas: armarCuentas(cuentasRaw, items, pagos, cms, nombres),
     devoluciones: devs.map(r => mapDev(r, nombres)),
   }
+}
+
+// Cuentas YA COBRADAS de una «mesa» del reporte (una mesa, «Para llevar» o «Mostrador») dentro del periodo.
+// Sirven para reabrirlas desde Reportes aunque ya no estén en memoria (otro día u otro turno): la RLS deja
+// leer el histórico de la empresa, así que basta con pedirlas, sin función nueva en la base.
+export async function cuentasCerradasDeMesa({ empresaId, desde, hasta, etiqueta }) {
+  let q = sb.from('cuentas').select('*').eq('empresa_id', empresaId).eq('estado', 'cerrada')
+    .gte('cerrada_en', new Date(desde).toISOString()).lte('cerrada_en', new Date(hasta).toISOString())
+    .order('cerrada_en', { ascending: false })
+  if (etiqueta === 'Para llevar') q = q.eq('tipo', 'directa').eq('canal', 'llevar')
+  else if (etiqueta === 'Mostrador') q = q.eq('tipo', 'directa').or('canal.is.null,canal.neq.llevar')
+  else if (etiqueta === 'Mesa') q = q.eq('tipo', 'mesa').or('mesas_texto.is.null,mesas_texto.eq.')
+  else q = q.eq('tipo', 'mesa').eq('mesas_texto', etiqueta)
+  const [nombres, raw] = await Promise.all([fetchNombres(), selectAll(q)])
+  if (!raw.length) return []
+  const ids = raw.map(c => c.id)
+  const [items, pagos] = await Promise.all([
+    selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', ids).order('creada_en')),
+    selectAll(sb.from('pagos').select('*').in('cuenta_id', ids).order('creada_en')),
+  ])
+  return armarCuentas(raw, items, pagos, [], nombres)
 }
 
 export async function cargarEstadoInicial(empresaId, previo = null) {
@@ -507,6 +529,9 @@ export async function despacharSupabase(estado, a, ctx = {}) {
       return refrescarNegocio(E, { extras: false })
     case 'reabrir':
       await rpc('reabrir_cuenta', { p_cuenta_id: rid(mapa, a.cuentaId) })
+      return refrescarNegocio(E, { extras: false })
+    case 'reabrir-cobrada':
+      await rpc('reabrir_cuenta_cobrada', { p_cuenta_id: rid(mapa, a.cuentaId), p_motivo: a.motivo || '', p_mesa_ids: (a.mesaIds || []).length ? a.mesaIds.map(id => rid(mapa, id)) : null })
       return refrescarNegocio(E, { extras: false })
     case 'extras':
 

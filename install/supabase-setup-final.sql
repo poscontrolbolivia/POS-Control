@@ -3836,6 +3836,7 @@ begin
                                   then 'mesa' else 'mostrador' end,
                'numero',     cu.numero,
                'cliente',    cu.cliente_nombre,
+               'cliente_tel', cu.cliente_tel,
                'mesero',     coalesce((select nullif(pf.display_name, '') from public.perfiles pf
                                         where pf.user_id = cu.abierta_por), ''),
                'comensales', cu.comensales,
@@ -3870,7 +3871,7 @@ begin
                   then not (i.areas && coalesce(p_validas, '{}'::text[]))
                   else i.areas @> array[p_area]::text[] end
          and i.estado in ('enviado','listo','anulacion')
-       group by cu.id, cu.comensales, cu.abierta_en, cu.etiqueta, cu.canal, cu.numero, cu.cliente_nombre, cu.abierta_por
+       group by cu.id, cu.comensales, cu.abierta_en, cu.etiqueta, cu.canal, cu.numero, cu.cliente_nombre, cu.cliente_tel, cu.abierta_por
     ) t;
   return v_out;
 end $fn$;
@@ -5250,7 +5251,8 @@ begin
   v_emp := private.fijar_empresa(p_empresa_id);
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
   c := private.load_cuenta(p_cuenta_id, array['abierta','precuenta']::text[]);
-  if c.canal is distinct from 'llevar' then raise exception 'la cuenta no es para llevar'; end if;
+  -- Sirve para Para llevar y para la venta directa del mostrador: el nombre y el teléfono salen en Despacho.
+  if c.tipo is distinct from 'directa' then raise exception 'la cuenta no es de venta directa ni para llevar'; end if;
   update public.cuentas
      set cliente_nombre = nullif(v_nom, ''),
          cliente_tel    = left(nullif(btrim(coalesce(p_telefono, '')), ''), 40)
@@ -5259,7 +5261,7 @@ begin
     perform private.auditar(v_emp, 'llevar_edicion', jsonb_build_object(
       'cuenta', c.id::text, 'cliente', nullif(v_nom, ''),
       'telefono', nullif(left(btrim(coalesce(p_telefono, '')), 40), '')),
-      'cuenta', 'Para llevar ' || coalesce(c.numero::text, left(c.id::text, 8)));
+      'cuenta', (case when c.canal = 'llevar' then 'Para llevar ' else 'Venta directa ' end) || coalesce(c.numero::text, left(c.id::text, 8)));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -6660,47 +6662,6 @@ revoke all on function public.super_importar_empresa(jsonb, text, text, boolean)
 grant execute on function public.super_importar_empresa(jsonb, text, text, boolean) to authenticated;
 
 -- ############################################################################
--- ## v0.34 · Abrir mesa con un toque: descartar la cuenta si se tocó por error
--- ############################################################################
-create or replace function public.descartar_cuenta_vacia(
-  p_cuenta_id  uuid,
-  p_empresa_id uuid default null
-)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $fn$
-declare
-  v_emp uuid;
-  c     public.cuentas;
-  v_mesas text;
-begin
-  v_emp := private.fijar_empresa(p_empresa_id);
-  perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
-  select * into c from public.cuentas where id = p_cuenta_id and empresa_id = v_emp for update;
-  if not found then return; end if;
-  if c.tipo <> 'mesa' or c.estado <> 'abierta' then return; end if;
-  -- Solo se descarta si de verdad está vacía: sin ítems y sin pagos (otro aparato pudo haberle agregado algo).
-  if exists (select 1 from public.cuenta_items i where i.cuenta_id = c.id) then return; end if;
-  if exists (select 1 from public.pagos p where p.cuenta_id = c.id) then return; end if;
-  -- El nombre de la mesa se guarda antes de borrar: la cascada de cuenta_mesas lo borra con la cuenta.
-  select string_agg(m.nombre, ', ') into v_mesas
-    from public.cuenta_mesas cm join public.mesas m on m.id = cm.mesa_id
-   where cm.cuenta_id = c.id;
-  delete from public.cuentas where id = c.id and empresa_id = v_emp;
-  begin
-    perform private.auditar(v_emp, 'cuenta_descartada', jsonb_build_object(
-      'cuenta', c.id::text, 'numero', c.numero, 'mesa', v_mesas),
-      'cuenta', coalesce(v_mesas, 'cuenta ' || left(c.id::text, 8)));
-  exception when others then
-    null; -- una falla de la bitácora nunca revierte la operación
-  end;
-end $fn$;
-revoke all on function public.descartar_cuenta_vacia(uuid, uuid) from public, anon;
-grant execute on function public.descartar_cuenta_vacia(uuid, uuid) to authenticated;
-
--- ############################################################################
 -- ## v0.41 · BITÁCORA POR TRIGGER: lo que la app escribe directo, sin RPC
 -- ############################################################################
 -- mesas, zonas, secciones de la carta, productos, alertas y empresas.config se
@@ -6830,9 +6791,13 @@ select case
 end as resultado;
 
 -- ############################################################################
--- ## v0.43 · Cerrar un pedido «para llevar» que quedó en blanco
+-- ## v0.43 · Cerrar una mesa o un pedido «para llevar» que quedó en blanco
 -- ############################################################################
--- Igual que una mesa abierta por error: sin ítems y sin pagos se descarta con un toque.
+-- Una cuenta está «en blanco» si no tiene platos vivos, ni pagos, ni propina. Hay dos casos:
+--   · Sin ningún ítem (se abrió de un toque por error): se borra.
+--   · Con ítems, pero todos anulados (se pidió y se borró todo): no se puede cobrar, porque no hay nada que pagar,
+--     así que se CIERRA en cero. Los ítems anulados quedan como rastro y la mesa se libera.
+-- Vale también para una cuenta que ya se había pedido (precuenta).
 create or replace function public.descartar_cuenta_vacia(
   p_cuenta_id  uuid,
   p_empresa_id uuid default null
@@ -6851,20 +6816,29 @@ begin
   perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
   select * into c from public.cuentas where id = p_cuenta_id and empresa_id = v_emp for update;
   if not found then return; end if;
-  if c.estado <> 'abierta' then return; end if;
+  if c.estado not in ('abierta','precuenta') then return; end if;
   if c.tipo <> 'mesa' and c.canal is distinct from 'llevar' then return; end if;
-  if exists (select 1 from public.cuenta_items i where i.cuenta_id = c.id) then return; end if;
+  -- Solo si de verdad está en blanco (otro aparato pudo haberle agregado algo).
+  if exists (select 1 from public.cuenta_items i where i.cuenta_id = c.id and i.estado <> 'anulado') then return; end if;
   if exists (select 1 from public.pagos p where p.cuenta_id = c.id) then return; end if;
-  select string_agg(m.nombre, ', ') into v_mesas
+  if coalesce(c.propina, 0) > 0 then return; end if;
+  select string_agg(m.nombre, ', ' order by m.nombre) into v_mesas
     from public.cuenta_mesas cm join public.mesas m on m.id = cm.mesa_id
    where cm.cuenta_id = c.id;
-  delete from public.cuentas where id = c.id and empresa_id = v_emp;
+  if not exists (select 1 from public.cuenta_items i where i.cuenta_id = c.id) then
+    delete from public.cuentas where id = c.id and empresa_id = v_emp;
+  else
+    update public.cuentas
+       set estado = 'cerrada', cerrada_por = auth.uid(), cerrada_en = now(), mesas_texto = v_mesas
+     where id = c.id and empresa_id = v_emp;
+    delete from public.cuenta_mesas where cuenta_id = c.id;
+  end if;
   begin
     perform private.auditar(v_emp, 'cuenta_descartada', jsonb_build_object(
       'cuenta', c.id::text, 'numero', c.numero, 'mesa', v_mesas),
       'cuenta', coalesce(v_mesas, 'cuenta ' || left(c.id::text, 8)));
   exception when others then
-    null;
+    null; -- una falla de la bitácora nunca revierte la operación
   end;
 end $fn$;
 revoke all on function public.descartar_cuenta_vacia(uuid, uuid) from public, anon;
@@ -7808,5 +7782,147 @@ end $fn$;
 
 revoke all on function public.super_eliminar_empresa(uuid, text) from public, anon;
 grant execute on function public.super_eliminar_empresa(uuid, text) to authenticated;
+
+commit;
+
+-- ## Reabrir una cuenta YA COBRADA (devolución / error de cobro): de mesa, para llevar o de mostrador
+-- Vuelve a 'abierta' conservando sus pagos (el dinero ya entró a caja). Si es de mesa restituye su(s) mesa(s)
+-- o las que se elijan (p_mesa_ids) cuando la original ya está ocupada, y devuelve al inventario lo que el
+-- cobro descontó (el próximo cobro lo vuelve a descontar con los ítems corregidos).
+begin;
+
+drop function if exists public.reabrir_cuenta_cobrada(uuid, text, uuid);
+
+create or replace function public.reabrir_cuenta_cobrada(
+  p_cuenta_id  uuid,
+  p_motivo     text,
+  p_mesa_ids   uuid[] default null,
+  p_empresa_id uuid   default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp    uuid;
+  v_cuenta public.cuentas;
+  v_nom    text;
+  v_mesa   public.mesas;
+  v_id     uuid;
+  v_ids    uuid[] := '{}'::uuid[];
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+  if coalesce(btrim(p_motivo), '') = '' then
+    raise exception 'escribe el motivo para reabrir la cuenta';
+  end if;
+  v_cuenta := private.load_cuenta(p_cuenta_id, array['cerrada']::text[]);
+
+  perform pg_advisory_xact_lock(hashtextextended('cuenta:' || v_cuenta.id::text, 0));
+
+  -- Mesas destino: las elegidas, o las que tenía (cuenta_mesas se borró al cobrar: se lee mesas_texto).
+  if p_mesa_ids is not null and coalesce(array_length(p_mesa_ids, 1), 0) > 0 then
+    if v_cuenta.tipo <> 'mesa' then
+      raise exception 'solo una cuenta de mesa puede reabrirse en otra mesa';
+    end if;
+    foreach v_id in array p_mesa_ids loop
+      select * into v_mesa from public.mesas where id = v_id and empresa_id = v_emp and activa;
+      if not found then
+        raise exception 'la mesa elegida no existe';
+      end if;
+      v_ids := v_ids || v_mesa.id;
+    end loop;
+  elsif coalesce(v_cuenta.mesas_texto, '') <> '' then
+    for v_nom in select btrim(x) from unnest(string_to_array(v_cuenta.mesas_texto, ',')) as x loop
+      select * into v_mesa from public.mesas
+       where empresa_id = v_emp and nombre = v_nom and activa
+       limit 1;
+      if not found then
+        raise exception 'la mesa "%" ya no existe: elige otra mesa libre para reabrir la cuenta', v_nom;
+      end if;
+      v_ids := v_ids || v_mesa.id;
+    end loop;
+  elsif v_cuenta.tipo = 'mesa' then
+    raise exception 'esta cuenta no recuerda su mesa: elige una mesa libre para reabrirla';
+  end if;
+
+  foreach v_id in array v_ids loop
+    select nombre into v_nom from public.mesas where id = v_id;
+    if exists (select 1 from public.cuenta_mesas cm
+                 join public.cuentas cc on cc.id = cm.cuenta_id
+                where cm.mesa_id = v_id and cc.empresa_id = v_emp
+                  and cc.estado <> 'cerrada' and cc.id <> v_cuenta.id) then
+      raise exception 'la mesa "%" ya tiene otra cuenta abierta: elige otra mesa libre', v_nom;
+    end if;
+    insert into public.cuenta_mesas (cuenta_id, mesa_id, empresa_id)
+    values (v_cuenta.id, v_id, v_emp)
+    on conflict do nothing;
+  end loop;
+
+  if coalesce(array_length(v_ids, 1), 0) > 0 then
+    update public.cuentas
+       set mesas_texto = (select string_agg(m.nombre, ', ' order by m.nombre)
+                            from public.mesas m where m.id = any (v_ids))
+     where id = v_cuenta.id;
+  end if;
+
+  -- Inventario: devuelve exactamente lo que descontó el cobro.
+  begin
+    with vivos as (
+      select t.producto_id, sum(t.qty)::numeric as qty from (
+        select i.producto_id, i.qty
+          from public.cuenta_items i
+         where i.cuenta_id = v_cuenta.id and i.empresa_id = v_emp
+           and i.producto_id is not null
+           and i.estado <> 'anulado'
+        union all
+        select (x.value->>'producto_id')::uuid, i.qty
+          from public.cuenta_items i
+          cross join lateral jsonb_array_elements(i.extras) x
+         where i.cuenta_id = v_cuenta.id and i.empresa_id = v_emp
+           and i.estado <> 'anulado'
+           and nullif(x.value->>'producto_id', '') is not null
+      ) t
+       group by t.producto_id
+    ), alta as (
+      select r.insumo_id, sum(v.qty * r.cantidad) as devuelve
+        from vivos v
+        join public.recetas r on r.producto_id = v.producto_id
+       group by r.insumo_id
+    ), upd as (
+      update public.insumos s
+         set stock = s.stock + a.devuelve,
+             actualizado_en = now()
+        from alta a
+       where s.id = a.insumo_id
+      returning s.id as insumo_id, a.devuelve, s.stock as stock_after
+    )
+    insert into public.insumos_movimientos
+      (empresa_id, insumo_id, tipo, cantidad, stock_after, nota, usuario, usuario_nombre)
+    select v_emp, u.insumo_id, 'ajuste', u.devuelve, u.stock_after,
+           'reapertura cuenta ' || coalesce(v_cuenta.numero::text, v_cuenta.id::text),
+           auth.uid(),
+           coalesce((select p.display_name from public.perfiles p where p.user_id = auth.uid()), '')
+      from upd u;
+  exception when others then
+    null; -- el inventario nunca impide reabrir la cuenta
+  end;
+
+  update public.cuentas
+     set estado = 'abierta', cerrada_por = null, cerrada_en = null
+   where id = v_cuenta.id and empresa_id = v_emp;
+
+  begin
+    perform private.auditar(v_emp, 'cuenta_reabierta_cobrada', jsonb_build_object(
+      'cuenta', v_cuenta.id::text, 'numero', v_cuenta.numero, 'motivo', btrim(p_motivo)),
+      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+  exception when others then
+    null; -- una falla de la bitácora nunca revierte la operación
+  end;
+end $fn$;
+
+revoke all on function public.reabrir_cuenta_cobrada(uuid, text, uuid[], uuid) from public, anon;
+grant execute on function public.reabrir_cuenta_cobrada(uuid, text, uuid[], uuid) to authenticated;
 
 commit;

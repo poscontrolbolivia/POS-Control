@@ -5,6 +5,7 @@ import { MONEDA } from '../../../services/config'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { imprimirCuenta } from '../../printing/Ticket.jsx'
 import MesasResumen from '../hall/MesasResumen.jsx'
+import ReabrirForm from './ReabrirForm.jsx'
 import OrderPanel from '../order/OrderPanel.jsx'
 import { VerComprobante } from '../pago/ComprobanteQr.jsx'
 import '../pago/ComprobanteQr.css'
@@ -50,7 +51,8 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
 
   // Un pedido «para llevar» no tiene mesa, así que el mapa de MesasResumen nunca lo lista.
   // Sin esta lista la única forma de cobrarlo era pasarlo a una mesa, que no tiene sentido.
-  const llevar = s.cuentas.filter(c => c.canal === 'llevar' && c.estado !== 'cerrada')
+  // También las ventas de mostrador reabiertas (tienen pagos): no pasan por ninguna mesa y de otro modo no habría dónde cobrarlas.
+  const llevar = s.cuentas.filter(c => c.estado !== 'cerrada' && (c.canal === 'llevar' || (c.tipo === 'directa' && pagadoCuenta(c) > 0.009)))
     .sort((a, b) => (a.numero || 0) - (b.numero || 0))
   const estadoLlevar = c => (c.estado === 'precuenta' ? 'porcobrar' : (c.items || []).some(i => i.estado === 'enviado') ? 'enviada' : 'ocupada')
   // Mismo formato que la lista de mesas: dos tarjetas iguales, una por pedido, para no aprender dos vistas.
@@ -87,6 +89,8 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
   const [cierre, setCierre] = useState(null)
   const [pre, setPre] = useState(null)
   const [aviso, setAviso] = useState('')
+  // Reabrir una cuenta ya cobrada (devolución, error): pide motivo y la deja abierta con sus pagos.
+  const [reabriendo, setReabriendo] = useState(null)
   const avisoTimer = useRef(null)
 
   // Tocar una mesa o un pedido para llevar abre su cuenta en modo cobro AQUÍ MISMO, dentro de Caja:
@@ -137,6 +141,12 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
       : t('caja.cierreDiferencia', { tipo: dif > 0 ? t('caja.sobra') : t('caja.falta'), monto: m(Math.abs(dif)) })
     const sinConf = devDe(turno).filter(x => !x.confirmadaEn).length
     return sinConf ? `${t('caja.devAvisoCierre', { n: sinConf })} ${base}` : base
+  }
+
+  const reabrirCobrada = (c, { motivo, mesaIds }) => {
+    d({ t: 'reabrir-cobrada', cuentaId: c.id, motivo, mesaIds, usuario })
+    setReabriendo(null)
+    avisar(t('caja.reabrirHecho', { nombre: nombreCorto(c) }))
   }
 
   const abrirTurno = e => {
@@ -326,6 +336,10 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
                 <span className="caja-pagos">{(c.pagos || []).map(p => nombreMetodoCorto(p.metodo, t)).join(' + ')}</span>
                 {(c.pagos || []).map((p, k) => <VerComprobante key={k} valor={p.comprobante} />)}
                 <b>{m(totalFinal(c))}</b>
+                {puede(rol, 'reabrir_cobrada') && reabriendo !== c.id && (
+                  <button type="button" className="ghost caja-reabrir" onClick={() => setReabriendo(c.id)}>↺ {tOr('caja.reabrir', 'Reabrir')}</button>
+                )}
+                {reabriendo === c.id && <ReabrirForm cuenta={c} s={s} onConfirmar={r => reabrirCobrada(c, r)} onCancelar={() => setReabriendo(null)} />}
               </li>
             ))}
             {!resumen.tickets.length && <li className="caja-vacio">{t('caja.sinTickets')}</li>}

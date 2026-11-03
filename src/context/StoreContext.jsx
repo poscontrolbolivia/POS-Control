@@ -484,7 +484,15 @@ function reducer(s, a) {
 
     case 'abrir': if (s.cuentas.some(c => c.estado !== 'cerrada' && (c.mesaIds || []).includes(a.mesaId))) return s
       return { ...s, cuentas: [...s.cuentas, nuevaCuenta({ tipo: 'mesa', canal: 'mesa', mesaIds: [a.mesaId], comensales: a.comensales || 1, abiertaPor: a.usuario })] }
-    case 'abrir-descartar': return { ...s, cuentas: s.cuentas.filter(c => !(c.id === a.cuentaId && (c.tipo === 'mesa' || c.canal === 'llevar') && c.estado === 'abierta' && !(c.items || []).length && !(c.pagos || []).length)) }
+    // Cuenta en blanco (sin platos vivos, pagos ni propina): sin ningún ítem se borra; si tenía ítems pero todos
+    // anulados se cierra en cero, como hace el servidor, para que la mesa quede libre y se vea qué se anuló.
+    case 'abrir-descartar': {
+      const b = s.cuentas.find(x => x.id === a.cuentaId)
+      if (!b || !(b.tipo === 'mesa' || b.canal === 'llevar') || !['abierta', 'precuenta'].includes(b.estado)) return s
+      if ((b.pagos || []).length || Number(b.propina) > 0 || itemsVivos(b).length) return s
+      if (!(b.items || []).length) return { ...s, cuentas: s.cuentas.filter(x => x.id !== b.id) }
+      return upd(b.id, x => ({ ...x, estado: 'cerrada', cerradaEn: Date.now(), cerradaPor: a.usuario || '' }))
+    }
     case 'abrir-directa': return { ...s, caja: { ...s.caja, siguienteTurno: s.caja.siguienteTurno + 1 },
       cuentas: [...s.cuentas, nuevaCuenta({ tipo: 'directa', canal: a.canal || 'mostrador', numero: s.caja.siguienteTurno, mesaIds: [], abiertaPor: a.usuario })] }
 
@@ -559,6 +567,17 @@ function reducer(s, a) {
     case 'devolver~': return { ...s, devoluciones: (s.devoluciones || []).map(x => (x.id === a.id && !x.confirmadaEn ? { ...x, confirmadaEn: Date.now(), confirmadaPor: a.usuario || '', nota: a.nota || '' } : x)) }
     case 'precuenta': return upd(a.cuentaId, c => ({ ...c, estado: 'precuenta' }))
     case 'reabrir': return upd(a.cuentaId, c => ({ ...c, estado: 'abierta' }))
+    // Reabrir una cuenta YA COBRADA (devolución, error de cobro): vuelve a 'abierta' conservando sus pagos
+    // (el dinero ya entró a caja) y su mesa, siempre que nadie la haya ocupado mientras tanto.
+    case 'reabrir-cobrada': {
+      const c = s.cuentas.find(x => x.id === a.cuentaId)
+      if (!c || c.estado !== 'cerrada') return s
+      // Si su mesa ya está ocupada se reabre en otra mesa libre (a.mesaIds); sin mesa nueva conserva la suya.
+      const destino = (a.mesaIds || []).length ? a.mesaIds : (c.mesaIds || [])
+      if (destino.some(id => s.cuentas.some(x => x.id !== c.id && x.estado !== 'cerrada' && (x.mesaIds || []).includes(id)))) return s
+      const cambia = (a.mesaIds || []).length > 0
+      return upd(a.cuentaId, x => ({ ...x, estado: 'abierta', cerradaEn: undefined, cerradaPor: undefined, mesaIds: destino, ...(cambia ? { mesaTexto: undefined } : {}), reabiertaEn: Date.now(), reabiertaPor: a.usuario || '', reabiertaMotivo: a.motivo || '' }))
+    }
     case 'extras': return upd(a.cuentaId, c => ({ ...c, propina: a.propina ?? c.propina, descuento: a.descuento ?? c.descuento }))
     case 'comensales~': return upd(a.cuentaId, c => ({ ...c, comensales: a.comensales }))
     case 'cobrar': {
@@ -566,7 +585,7 @@ function reducer(s, a) {
       const cerrado = upd(a.cuentaId, c => ({ ...c, estado: 'cerrada', pagos: [...(c.pagos || []), ...conFecha(a.pagos, a.concepto, a.usuario)], propina: a.propina ?? c.propina, descuento: a.descuento ?? c.descuento, cerradaPor: a.usuario, cerradaEn: Date.now() }))
       // Solo la primera vez que la cuenta pasa a cerrada: una cuenta ya cobrada que vuelve a cobrarse
       // (reabierta) no debe volver a descontar el inventario.
-      if (!s._demo || !previa || previa.estado === 'cerrada') return cerrado
+      if (!s._demo || !previa || previa.estado === 'cerrada' || previa.reabiertaEn) return cerrado
       const baja = descuentoDeVenta(s, previa, a.usuario)
       return baja ? { ...cerrado, insumos: baja.insumos, movimientos: baja.movimientos } : cerrado
     }
@@ -854,6 +873,7 @@ const BITACORA = {
   'abonar': (p, n, a) => ['cuenta_abonada', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { monto: montoPagos(a) }],
   'precuenta': (p, n, a) => ['cuenta_precuenta', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), {}],
   'reabrir': (p, n, a) => ['cuenta_reabierta', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), {}],
+  'reabrir-cobrada': (p, n, a) => ['cuenta_reabierta_cobrada', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { motivo: a.motivo || '' }],
   'extras': (p, n, a) => ['cuenta_extras', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)),
     { propina: a.propina ?? enCuenta(n, a.cuentaId)?.propina, descuento: a.descuento ?? enCuenta(n, a.cuentaId)?.descuento }],
   'comensales~': (p, n, a) => ['comensales', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { comensales: a.comensales }],

@@ -32,7 +32,7 @@ export const rangoDeFechas = (desdeTxt, hastaTxt) => {
   return { desde: d.getTime(), hasta: h.getTime() }
 }
 
-const etiquetaMesa = (s, c) => {
+export const etiquetaMesa = (s, c) => {
   const nombres = (c.mesaIds || []).map(id => (s.mesas || []).find(m => m.id === id)?.nombre).filter(Boolean)
   if (nombres.length) return nombres.join(', ')
   return c.canal === 'llevar' ? 'Para llevar' : 'Mostrador'

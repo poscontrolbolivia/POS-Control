@@ -5,35 +5,18 @@ import { MONEDA } from '../../../services/config'
 import { formatearMonto } from '../../../services/money.js'
 import { round2, limpiarMonto, numMonto } from '../../../services/format.js'
 import { cargarTrabajadores, trabajadoresEnCache } from '../../../services/trabajadores.js'
-import { precalcularCambio } from '../../printing/Ticket.jsx'
+import { imputarPagos, cobroInvalido } from '../../../services/cobro.js'
 import { etiquetaFiscal, pideDatosFiscales } from '../../../services/fiscal.js'
 import ComprobanteQr from './ComprobanteQr.jsx'
 import PagoQrCard from './PagoQrCard.jsx'
 import './ComprobanteQr.css'
 import '../quicksale/QuickSalePage.css'
 
-// Reparte lo recibido sobre el total: lo que sobra en efectivo es cambio. Lo usan Salón, Caja y Venta directa.
-export function imputarPagos(lineas, total) {
-  let saldo = round2(total)
-  const pagos = []
-  let cambio = 0
-  ;(lineas || []).forEach(l => {
-    const n = round2(numMonto(l.monto))
-    if (n <= 0) return
-    const aplica = round2(Math.min(n, saldo))
-    const devuelto = l.metodo === 'efectivo' ? round2(n - aplica) : 0
-    if (aplica > 0) pagos.push({ metodo: l.metodo, monto: aplica, recibido: n, cambio: devuelto, ...(l.metodo === 'qr' && l.comprobante ? { comprobante: l.comprobante } : {}), ...(l.metodo === 'cxc' && l.trabajador_id ? { trabajador_id: l.trabajador_id, trabajador_nombre: l.trabajador_nombre } : {}) })
-    cambio = round2(cambio + devuelto)
-    saldo = round2(saldo - aplica)
-  })
-  return { pagos, cambio, saldo }
-}
+// El reparto del cobro (y el cambio) vive en services/cobro.js; se reexporta para no tocar a quien ya lo importa.
+export { imputarPagos, cobroInvalido }
 
 // Formas de pago poco frecuentes: van detrás del botón «⋯».
 export const METODOS_EXTRA = ['cheque', 'vale', 'cxc', 'otro']
-// Una cuenta por cobrar siempre se asigna a un trabajador registrado: sin él no se puede cobrar.
-export const cobroInvalido = (lineas, tr) => ((lineas || []).some(l => l.metodo === 'cxc' && numMonto(l.monto) > 0 && !l.trabajador_id) ? tr('venta.cxcElegir') : '')
-
 export const cobroNuevo = (extra = {}) => ({ lineas: [{ metodo: 'efectivo', monto: '' }], imprimir: true, comanda: true, fiscal: { nombre: '', numero: '', correo: '' }, ...extra })
 
 // Menú de cobro ÚNICO: el mismo en Salón, Caja y Venta directa.
@@ -84,7 +67,8 @@ export default function CobroForm({ cobro, onChange, total, config, mostrarComan
     const aplicado = lineas.reduce((acc, l) => acc + (numMonto(l.monto) || 0), 0)
     onChange({ ...cobro, lineas: [...lineas, { metodo: 'qr', monto: String(Math.max(0, round2(total - aplicado))) }] })
   }
-  const cambioPreview = precalcularCambio(cobro.lineas.map(l => ({ ...l, monto: numMonto(l.monto) })), total)
+  // Mismo cálculo que al confirmar el cobro, para que lo que se ve sea lo que se anota en la caja.
+  const { cambio: cambioPreview, excedente } = imputarPagos(cobro.lineas, total)
   const pagadoPreview = round2(cobro.lineas.reduce((acc, l) => acc + (numMonto(l.monto) || 0), 0))
   const falta = round2(total - Math.min(pagadoPreview, total))
   const fiscal = cobro.fiscal || { nombre: '', numero: '', correo: '' }
@@ -141,6 +125,7 @@ export default function CobroForm({ cobro, onChange, total, config, mostrarComan
         {cambioPreview > 0 && <span className="vd-cambio">{t('venta.cambioLabel')} {m(cambioPreview)}</span>}
         {falta > 0.009 && <span className="vd-falta">{t('venta.faltaLabel')} {m(round2(total - pagadoPreview))}</span>}
       </div>
+      {excedente > 0.009 && <small className="adm-msg warn">{t('venta.sobraNoEfectivo')}</small>}
       {pideDatosFiscales(config) && (
         <fieldset className="vd-fiscal">
           <legend>{t('fiscal.titulo')}</legend>

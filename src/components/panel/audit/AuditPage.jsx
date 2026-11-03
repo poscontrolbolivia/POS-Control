@@ -30,6 +30,7 @@ const ACCIONES = {
   cuenta_extras: "Propina o descuento aplicado a la cuenta",
   cuenta_precuenta: "Pre-cuenta pedida o impresa",
   cuenta_reabierta: "Cuenta reabierta después de cerrarla",
+  cuenta_reabierta_cobrada: "Cuenta ya cobrada reabierta (devolución o corrección)",
   cuenta_venta_directa: "Venta directa abierta en el mostrador",
   demo_reinicio: "Se reinició el negocio de demostración",
   deuda_abono: "Abono a una deuda con proveedor",

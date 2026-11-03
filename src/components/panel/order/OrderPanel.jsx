@@ -211,11 +211,13 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const puedeUnir = puede(rol, 'unir_mesas')
   const puedeMover = puede(rol, 'mover_items')
   const puedeBorrar = puede(rol, 'borrar_producto')
-  // Mesa en blanco: abierta de un toque por error o sobrante de una división. Sin ítems NI anulados,
-  // que es justo lo que el servidor acepta para borrar (descartar_cuenta_vacia).
-  const mesaVacia = !enCobro && editable && (c.tipo === 'mesa' || c.canal === 'llevar') && c.estado === 'abierta' && !(c.items || []).length && !(c.pagos || []).length
-  // Cuenta en blanco (mesa o pedido para llevar): se puede cerrar con un toque desde las acciones.
-  const cuentaVacia = c.estado === 'abierta' && (c.tipo === 'mesa' || c.canal === 'llevar') && !(c.items || []).length && !(c.pagos || []).length
+  // Cuenta en blanco: sin platos vivos, sin pagos y sin propina. Cuenta también la que se pidió y luego se borró
+  // todo (ítems anulados): no hay nada que cobrar, así que se cierra en cero (descartar_cuenta_vacia).
+  const enBlanco = (c.tipo === 'mesa' || c.canal === 'llevar') && !vivos.length && !(c.pagos || []).length && !(Number(c.propina) > 0)
+  // Mesa en blanco abierta de un toque por error, sobrante de una división o vaciada a mano: se cierra al salir.
+  const mesaVacia = !enCobro && editable && c.estado === 'abierta' && enBlanco
+  // Cuenta en blanco (mesa o pedido para llevar, también ya pedida): se puede cerrar con un toque desde las acciones.
+  const cuentaVacia = (c.estado === 'abierta' || c.estado === 'precuenta') && enBlanco
   const cerrarVacia = () => { d({ t: 'abrir-descartar', cuentaId: c.id }); reset(); onClose() }
   const estadoVisto = tOr('estado.' + c.estado, c.estado)
 
@@ -341,7 +343,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
     // Datos del cliente: se guardan en la cuenta antes de cobrar para que salgan en el comprobante.
     if (fis && !fiscalIgual(fis, fiscalDe(c))) d({ t: 'fiscal~', cuentaId: c.id, nombre: fis.nombre.trim(), numero: fis.numero.trim(), correo: fis.correo.trim() })
     const base = round2(baseCobro)
-    const invalido = cobroInvalido(pagos.lineas, t)
+    const invalido = cobroInvalido(lineasDeCobro(base), t, base)
     if (invalido) return avisar(invalido)
     const { pagos: pg, saldo: falta } = imputarPagos(lineasDeCobro(base), base)
     if (falta > 0.009) return avisar(t('pedido.faltaParaCobrar', { faltan: money(falta), total: money(base) }))
@@ -365,7 +367,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   // Abono libre: se recibió menos que el saldo y no hay platos marcados.
   const abonoLibre = () => {
     if (pagos.lineas.some(l => l.subiendo)) return avisar(t('comp.subiendo'))
-    const invalido = cobroInvalido(pagos.lineas, t)
+    const invalido = cobroInvalido(pagos.lineas, t, round2(saldo))
     if (invalido) return avisar(invalido)
     const { pagos: pg, saldo: falta } = imputarPagos(pagos.lineas, round2(saldo))
     if (!pg.length) return avisar(t('pedido.sinPagos'))

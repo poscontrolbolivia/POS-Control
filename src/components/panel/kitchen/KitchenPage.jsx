@@ -428,7 +428,11 @@ export default function KitchenPage({ rol, sesion }) {
     const salon = canal === 'llevar' ? t('cocina.canalLlevar')
       : canal === 'mostrador' ? t('cocina.canalMostrador')
         : ((s.zonas || []).find(z => z.id === zonaId)?.nombre || '')
-    return { canal, salon, mesero: c.mesero || enStore?.abiertaPor || c.abiertaPor || '' }
+    // Nombre y teléfono del cliente (venta directa y para llevar): vienen en la cola del servidor, en la cuenta
+    // local (demo) o en la cuenta ya cobrada del mostrador.
+    const cliente = c.cliente || c.clienteNombre || enStore?.clienteNombre || ''
+    const telefono = c.cliente_tel || c.clienteTel || enStore?.clienteTel || ''
+    return { canal, salon, cliente, telefono, mesero: c.mesero || enStore?.abiertaPor || c.abiertaPor || '' }
   }
 
   const renderItem = (it, c) => {
@@ -499,14 +503,16 @@ export default function KitchenPage({ rol, sesion }) {
     const clave = claveComanda(c)
     const pendientes = (c.items || []).filter(i => i.estado === 'enviado').length
     const nueva = recien[clave] && ahora - recien[clave] < 8000
-    const { salon, mesero } = datosCuenta(c)
+    const { salon, cliente, telefono, mesero } = datosCuenta(c)
     const tandas = agruparTandas(c.items, ordenRef.current)
     const cuando = c.desde || ms(c.enviada_en)
-    // Encabezado de la comanda: «Salón: x  Mesa: x  Enviado por: x». En mostrador / para llevar no hay mesa:
-    // el canal ya sale como salón y no se repite como «Mesa: Mostrador».
+    // Encabezado de la comanda: «Salón: x  Mesa: x  Cliente: x  Teléfono: x  Enviado por: x». Cliente y teléfono
+    // solo salen si se escribieron (venta directa y para llevar).
     const campos = [
       [tOr('cocina.lblSalon', 'Salón'), salon],
       [tOr('cocina.lblMesa', 'Mesa'), c.mesa ? tituloMesa(c) : ''],
+      [tOr('cocina.lblCliente', 'Cliente'), cliente],
+      [tOr('cocina.lblTelefono', 'Teléfono'), telefono],
       [tOr('cocina.lblEnviadoPor', 'Enviado por'), mesero],
     ].filter(([, v]) => v)
     return (

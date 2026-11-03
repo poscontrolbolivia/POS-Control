@@ -53,13 +53,21 @@
 .rp-filtro-x{flex:0 0 auto;width:38px;height:38px;border-radius:50%;border:1.5px solid var(--line-fuerte);
   background:var(--card);color:var(--ink);font-weight:700;cursor:pointer}
 
-.rp-lienzo{max-height:min(56vh,460px);width:100%;margin:0 auto;touch-action:pan-x pan-y}
-.rp-mesa{cursor:pointer;font:inherit;padding:2px 4px;gap:1px;border-width:3px}
-.rp-mesa .nombre{font-weight:700;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
-.rp-mesa .rp-mesa-cifra{font-size:.85em;line-height:1.15;font-weight:700;font-variant-numeric:tabular-nums}
-.rp-mesa .rp-mesa-pax{font-size:.75em;line-height:1.1;opacity:.85}
-.rp-mesa .etiqueta-zona{font-size:.68em;line-height:1.1;background:rgba(255,255,255,.5);border-radius:999px;padding:0 6px;
+/* El marco da scroll lateral en pantallas chicas: el mapa conserva su tamaño legible (mín. 600px) en vez de encoger las mesas hasta no verse. */
+.rp-marco{width:100%;overflow-x:auto;overflow-y:hidden;border-radius:var(--r-md);-webkit-overflow-scrolling:touch}
+.rp-lienzo{--lienzo-descuento:300px;min-width:600px;width:100%;height:auto;margin:0 auto;touch-action:pan-x pan-y;
+  max-width:calc(max(300px,calc(100vh - var(--lienzo-descuento))) * 1000 / 600);
+  max-width:calc(max(300px,calc(100dvh - var(--lienzo-descuento))) * 1000 / 600)}
+/* Textos relativos al tamaño de la mesa (cqw/cqh), igual que el Salón: siempre se leen y no se salen. */
+.rp-mesa{cursor:pointer;font:inherit;padding:1px 3px;gap:0;border-width:3px;overflow:hidden;container-type:size;touch-action:pan-x pan-y}
+.rp-mesa .nombre{font-weight:800;line-height:1;letter-spacing:-.02em;font-size:min(34cqw,34cqh);white-space:nowrap;max-width:100%}
+.rp-mesa .nombre.largo{font-size:min(17cqw,28cqh);overflow:hidden;text-overflow:ellipsis}
+.rp-mesa .rp-mesa-cifra{font-size:min(22cqw,22cqh);line-height:1.1;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rp-mesa .rp-mesa-pax{font-size:min(14cqw,14cqh);line-height:1.1;opacity:.85;white-space:nowrap}
+.rp-mesa .etiqueta-zona{font-size:min(12cqw,12cqh);line-height:1.1;background:rgba(255,255,255,.55);border-radius:999px;padding:0 6px;
   max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@container (max-height:78px){.rp-mesa .etiqueta-zona{display:none}}
+@container (max-height:52px){.rp-mesa .rp-mesa-pax{display:none}}
 [data-theme="night"] .rp-mesa .etiqueta-zona{background:rgba(0,0,0,.3)}
 
 .rp-mesa-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
@@ -74,7 +82,7 @@
 
 .rp-calor{display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--mut);font-weight:600}
 .rp-calor-barra{flex:1;min-width:60px;height:12px;border-radius:999px;border:1px solid var(--line);
-  background:linear-gradient(90deg,color-mix(in srgb,var(--verde) 6%,var(--card)),var(--verde))}
+  background:linear-gradient(90deg,color-mix(in srgb,var(--verde) 14%,var(--card)),var(--verde))}
 .rp-calor b{font-variant-numeric:tabular-nums;color:var(--ink)}
 
 .rp-fuera-chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -84,8 +92,7 @@
 .rp-fuera-chip.on{border-color:transparent;color:var(--on-btn);background:var(--gloss),var(--verde)}
 
 @media (max-width:768px){
-  .rp-mapa .txt,.rp-mesa .rp-mesa-pax{display:none}
-  .rp-lienzo{max-height:none}
+  .rp-lienzo{min-width:560px}
 }
 
 @media (max-width:640px){
@@ -99,3 +106,13 @@
   .rp-fecha input{width:100%;min-height:44px}
   .rp-tarjetas{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Cuentas cerradas de la mesa elegida (con «Reabrir») */
+.rp-cuentas{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:2px solid var(--line-fuerte);border-radius:var(--r-md);background:var(--card)}
+.rp-cuentas h4{margin:0;font-size:1rem}
+.rp-cuentas-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.rp-cuentas-lista li{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed var(--line);font-size:.92rem}
+.rp-cuentas-lista li:last-child{border-bottom:none}
+.rp-cuenta-cuando,.rp-cuenta-met{color:var(--mut);font-size:.82rem}
+.rp-hecho{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--verde-bg);border:1.5px solid var(--verde-bd);border-radius:var(--r-md);padding:8px 12px;font-size:.92rem}
+.rp-hecho span{flex:1 1 220px}

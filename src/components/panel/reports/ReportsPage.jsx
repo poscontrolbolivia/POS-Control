@@ -11,6 +11,7 @@ import { calcularResumen } from '../cash/calcularResumen.js'
 import { armarReporte, descargarPdfCierre } from '../../../services/reporteCierre.js'
 import DataTable from '../DataTable.jsx'
 import MapaVentas from './MapaVentas.jsx'
+import CuentasMesa from './CuentasMesa.jsx'
 import {
   resumenDeCuentas, rangoHoy, rangoUltimos7, rangoMesActual, rangoMesPasado, rangoDeFechas,
   fechaClave, aMs, csvDe, bajarCsv, csvDeSecciones,
@@ -52,7 +53,7 @@ function traerFechaALaVista(ev) {
 }
 
 export default function ReportsPage({ rol, sesion }) {
-  const { s, error, modo } = useStore()
+  const { s, d, error, modo } = useStore()
   const { t, tOr } = useIdioma()
 
   const [rango, setRango] = useState(() => ({ ...rangoHoy(), preset: 'hoy' }))
@@ -340,7 +341,11 @@ export default function ReportsPage({ rol, sesion }) {
       </section>
 
       <MapaVentas mesas={s.mesas || []} zonas={s.zonas || []} ventas={ventas} fuera={fuera}
-        sel={mesaSel} onSel={setMesaSel} m={m} total={T.total || 0} />
+        sel={mesaSel} onSel={setMesaSel} m={m} total={T.total || 0}
+        cuentasPanel={mesaSel ? (
+          <CuentasMesa etiqueta={mesaSel} rango={rango} s={s} modo={modo} d={d} rol={rol} m={m}
+            usuario={sesion?.usuario || sesion?.nombre || rol || '—'} onCambio={() => setRango(r => ({ ...r }))} />
+        ) : null} />
 
       <p className="rp-nota">{tOr('reportes.tablasAyuda', 'Toca un encabezado para ordenar la columna (▲ y luego ▼); arrastra el borde para cambiar el ancho.')}</p>
       {vistas.map(sec => (

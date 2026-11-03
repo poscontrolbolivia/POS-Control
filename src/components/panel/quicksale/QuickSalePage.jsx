@@ -64,6 +64,8 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   useEffect(() => { if (tira.current) tira.current.scrollLeft = 0 }, [secActiva])
   const [previa, setPrevia] = useState(null)
   const [cobro, setCobro] = useState(null)
+  // Nombre y teléfono del cliente: opcionales. Salen en Despacho y en la comanda impresa, después del salón y la mesa.
+  const [cliente, setCliente] = useState({ nombre: '', tel: '' })
   const [pendiente, setPendiente] = useState(null)
   const [aviso, setAviso] = useState('')
   // Cada paso del cobro (cargar un plato, cobrar) se manda UNA sola vez aunque la pantalla se refresque
@@ -126,7 +128,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   const confirmarCobro = () => {
     if (cobro.lineas.some(l => l.subiendo)) return setAviso(t('comp.subiendo'))
     if (!correoValido(cobro.fiscal?.correo)) return setAviso(t('fiscal.correoInvalido'))
-    const invalido = cobroInvalido(cobro.lineas, t)
+    const invalido = cobroInvalido(cobro.lineas, t, total)
     if (invalido) return setAviso(invalido)
     const { pagos, saldo } = imputarPagos(cobro.lineas, total)
     if (saldo > 0.009) return setAviso(t('venta.faltaTotal', { faltan: m(saldo) }))
@@ -135,7 +137,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
     faseHechaRef.current = -1
     cobroHechoRef.current = false
     d({ t: 'abrir-directa', usuario })
-    setPendiente({ numero, lineas: carrito.map(l => ({ p: l.p, qty: l.qty, nota: l.nota, indicaciones: l.indicaciones, extra: l.extra, sel: l.sel })), fase: 0, pagos, imprimir: cobro.imprimir, comanda: cobro.comanda, fiscal: cobro.fiscal, usuario })
+    setPendiente({ numero, lineas: carrito.map(l => ({ p: l.p, qty: l.qty, nota: l.nota, indicaciones: l.indicaciones, extra: l.extra, sel: l.sel })), fase: 0, pagos, imprimir: cobro.imprimir, comanda: cobro.comanda, fiscal: cobro.fiscal, cliente: { nombre: cliente.nombre.trim(), tel: cliente.tel.trim() }, usuario })
   }
 
   useEffect(() => {
@@ -162,8 +164,11 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
 
     if (cobroHechoRef.current) return
     cobroHechoRef.current = true
-    const { pagos, imprimir, comanda, fiscal, usuario: usr } = pendiente
+    const { pagos, imprimir, comanda, fiscal, cliente: cli, usuario: usr } = pendiente
     const porEnviar = (c.items || []).filter(i => i.estado === 'pendiente')
+    // El cliente se guarda en la cuenta ANTES de enviar y cobrar: así Despacho lo ve en cuanto llega la comanda.
+    const hayCliente = Boolean(cli?.nombre || cli?.tel)
+    if (hayCliente) d({ t: 'llevar~', cuentaId: c.id, nombre: cli.nombre, tel: cli.tel })
     // Enviar antes de cobrar: al cerrarse la cuenta el área ya no la devuelve, pero Despacho la
     // sigue mostrando como «por entregar» hasta que el producto sale. Ambos van a la misma cola,
     // así que el envío queda escrito antes del cierre.
@@ -176,13 +181,14 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
     setPendiente(null)
     setCarrito([])
     setCobro(null)
+    setCliente({ nombre: '', tel: '' })
     const cuentaCerrada = { ...c, ...(fiscalVacio(fiscal) ? {} : fiscalACuenta(fiscal)), estado: 'cerrada', pagos, cerradaEn: Date.now() }
     // La impresión va diferida y después del cobro: el diálogo nativo de Windows congela el hilo
     // y, con la cola de Supabase todavía por escribir, se perdía la venta completa.
     setTimeout(() => {
       if (comanda && porEnviar.length) {
         imprimirComandas({
-          cuenta: c, items: porEnviar, productos: s.productos, config: s.config,
+          cuenta: hayCliente ? { ...c, clienteNombre: cli.nombre, clienteTel: cli.tel } : c, items: porEnviar, productos: s.productos, config: s.config,
           titulo: t('pedido.comandaTitulo', { titulo: t('venta.mostrador') }),
           datos: { salon: t('venta.mostrador'), mesa: `#${c.numero}` },
         }).catch(() => { })
@@ -290,6 +296,15 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
           ))}
         </ul>
         <datalist id="vd-notas-rapidas">{NOTAS_RAPIDAS.map(n => <option key={n} value={n} />)}</datalist>
+
+        {!cobro && !!carrito.length && (
+          <div className="vd-cliente">
+            <input name="clienteNombre" type="text" autoComplete="off" maxLength={80} placeholder={t('venta.clienteNombre')} aria-label={t('venta.clienteNombre')}
+              value={cliente.nombre} onChange={e => setCliente(x => ({ ...x, nombre: e.target.value }))} />
+            <input name="clienteTel" type="tel" inputMode="tel" autoComplete="off" maxLength={40} placeholder={t('venta.clienteTel')} aria-label={t('venta.clienteTel')}
+              value={cliente.tel} onChange={e => setCliente(x => ({ ...x, tel: e.target.value }))} />
+          </div>
+        )}
 
         {!cobro
           ? <div className="vd-total"><span>{t('venta.total')}</span><b>{m(total)}</b></div>

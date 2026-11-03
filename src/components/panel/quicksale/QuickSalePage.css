@@ -53,6 +53,9 @@
    comprobar que el plato salió con el término o los adicionales que el cliente pidió. */
 .vd-ind{color:var(--mut);font-size:.85rem;line-height:1.25;overflow-wrap:anywhere}
 .vd-nota{width:100%;font-size:1rem}
+.vd-cliente{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vd-cliente input{width:100%;min-width:0;font-size:1rem;min-height:44px}
+@media (max-width:420px){.vd-cliente{grid-template-columns:1fr}}
 
 .vd-total{display:flex;justify-content:space-between;align-items:center;font-size:1.25rem;margin-top:4px}
 

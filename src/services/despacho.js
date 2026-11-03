@@ -51,6 +51,7 @@ export function mostradorPendientes(cuentas) {
       return items.length ? {
         cuenta_id: c.id, area: GRUPO_DIRECTA, mesa: c.numero ? `#${c.numero}` : (c.clienteNombre || ''),
         etiqueta: '', comensales: 0, canal: 'mostrador', abiertaPor: c.abiertaPor || '',
+        cliente: c.clienteNombre || '', cliente_tel: c.clienteTel || '',
         enviada_en: en, lote: en, items,
       } : null
     })
