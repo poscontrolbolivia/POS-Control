@@ -91,6 +91,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const tira = useRef(null)
   useEffect(() => { if (tira.current) tira.current.scrollLeft = 0 }, [secActiva, busca])
   const [marcados, setMarcados] = useState([])
+  const [devol, setDevol] = useState(null) // { metodo, motivo } cuando se cierra devolviendo el dinero
   const [destino, setDestino] = useState('')
   const [canje, setCanje] = useState('')
   const [partes, setPartes] = useState({})
@@ -218,6 +219,17 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const mesaVacia = !enCobro && editable && c.estado === 'abierta' && enBlanco
   // Cuenta en blanco (mesa o pedido para llevar, también ya pedida): se puede cerrar con un toque desde las acciones.
   const cuentaVacia = (c.estado === 'abierta' || c.estado === 'precuenta') && enBlanco
+  // Cobrada y reabierta, con todo anulado: no hay nada que cobrar pero sí dinero pagado. Se cierra devolviéndolo.
+  const soloPagos = (c.tipo === 'mesa' || c.canal === 'llevar') && (c.estado === 'abierta' || c.estado === 'precuenta') && !vivos.length && pagado > 0.009
+  const puedeDevolver = soloPagos && puede(rol, 'cobrar')
+  const confirmarDevolucion = () => {
+    if (!devol?.metodo) return avisar(tOr('pedido.devolMetodoFalta', 'Elige cómo se devuelve el dinero.'))
+    if (!String(devol.motivo || '').trim()) return avisar(tOr('pedido.devolMotivoFalta', 'Escribe el motivo de la devolución.'))
+    if (devol.metodo === 'efectivo' && !s.caja?.turno) return avisar(tOr('pedido.devolSinTurno', 'Abre el turno de caja para devolver en efectivo.'))
+    d({ t: 'cerrar-devolviendo', cuentaId: c.id, metodo: devol.metodo, motivo: devol.motivo.trim(), usuario })
+    setDevol(null)
+    cerrar()
+  }
   const cerrarVacia = () => { d({ t: 'abrir-descartar', cuentaId: c.id }); reset(); onClose() }
   const estadoVisto = tOr('estado.' + c.estado, c.estado)
 
@@ -859,8 +871,31 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
                   </div>
                 </div>
               )}
-              {!confirmar && (
+              {puedeDevolver && devol && (
+                <div className="pm-caja pm-confirmar" role="alertdialog">
+                  <b>{tOr('pedido.devolTitulo', 'Devolver')} {money(pagado)} {tOr('pedido.devolAlCliente', 'al cliente y cerrar la cuenta')}</b>
+                  <small>{tOr('pedido.devolAyuda', 'No quedan productos por cobrar. Se registra la devolución y la venta queda en cero.')}</small>
+                  <label className="pm-campo">{tOr('pedido.devolMetodo', 'Método de devolución')}
+                    <select name="devol-metodo" value={devol.metodo} onChange={e => setDevol({ ...devol, metodo: e.target.value })}>
+                      {['efectivo', 'qr', 'tarjeta', 'cheque', 'otro'].map(m => <option key={m} value={m}>{tOr('metodo.' + m, m)}</option>)}
+                    </select>
+                  </label>
+                  {devol.metodo === 'efectivo' && !s.caja?.turno && <small className="txt-mut">{tOr('pedido.devolSinTurno', 'Abre el turno de caja para devolver en efectivo.')}</small>}
+                  <label className="pm-campo">{tOr('pedido.devolMotivo', 'Motivo (obligatorio)')}
+                    <input name="devol-motivo" maxLength={120} autoComplete="off" autoFocus value={devol.motivo}
+                      placeholder={tOr('pedido.devolMotivoEj', 'Ej.: el cliente no consumió, error de cobro')}
+                      onChange={e => setDevol({ ...devol, motivo: e.target.value })} />
+                  </label>
+                  <div className="barra pm-acciones">
+                    <button className="danger solid" onClick={confirmarDevolucion}>{t('comun.confirmar')}</button>
+                    <button className="ghost" onClick={() => setDevol(null)}>{t('comun.cancelar')}</button>
+                  </div>
+                </div>
+              )}
+              {!confirmar && !devol && (
                 <div className="barra pm-acciones">
+                  {/* 0 · todo anulado pero ya pagado: cerrar devolviendo el dinero */}
+                  {puedeDevolver && !devol && <button className="danger solid" onClick={() => setDevol({ metodo: s.caja?.turno ? 'efectivo' : 'qr', motivo: '' })}>↩ {tOr('pedido.cerrarDevolviendo', 'Cerrar y devolver')} {money(pagado)}</button>}
                   {/* 1 · cuenta en blanco */}
                   {cuentaVacia && <button className="danger solid" onClick={cerrarVacia}>✕ {c.tipo === 'mesa' ? tOr('pedido.cerrarVacia', 'Cerrar mesa vacía') : tOr('pedido.cerrarPedidoVacio', 'Cerrar pedido vacío')}</button>}
                   {/* 2 · con productos sin enviar (el botón principal «Enviar a despacho» va flotando arriba) */}

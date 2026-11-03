@@ -1025,6 +1025,7 @@
   "auditoria.acc.cuenta_abonada": "Abono parcial a una cuenta",
   "auditoria.acc.cuenta_cobrada": "Cuenta cobrada y cerrada",
   "auditoria.acc.cuenta_descartada": "Cuenta vacía descartada",
+  "auditoria.acc.cuenta_devuelta": "Cuenta cerrada con devolución",
   "auditoria.acc.cuenta_detalle": "Detalle de la cuenta (orden o referencia)",
   "fiscal.titulo": "Datos para el comprobante (opcional)",
   "fiscal.nombre": "Nombre",

@@ -479,6 +479,9 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     case 'abrir-descartar':
       await rpc('descartar_cuenta_vacia', { p_cuenta_id: rid(mapa, a.cuentaId) })
       return refrescarNegocio(E, { extras: false })
+    case 'cerrar-devolviendo':
+      await rpc('cerrar_cuenta_devolviendo', { p_cuenta_id: rid(mapa, a.cuentaId), p_metodo: a.metodo, p_motivo: a.motivo })
+      return refrescarNegocio(E, { extras: false })
     case 'abrir-directa': {
       const dbId = await rpc('abrir_venta_directa', {})
       const locId = (a._nuevos?.cuentas || [])[0]

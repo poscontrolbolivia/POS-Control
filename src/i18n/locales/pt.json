@@ -1025,6 +1025,7 @@
   "auditoria.acc.cuenta_abonada": "Pagamento parcial de uma conta",
   "auditoria.acc.cuenta_cobrada": "Conta cobrada e encerrada",
   "auditoria.acc.cuenta_descartada": "Conta vazia descartada",
+  "auditoria.acc.cuenta_devuelta": "Conta fechada com devolução",
   "auditoria.acc.cuenta_detalle": "Detalhe da conta (pedido ou referencia)",
   "fiscal.titulo": "Dados para o comprovante (opcional)",
   "fiscal.nombre": "Nome",

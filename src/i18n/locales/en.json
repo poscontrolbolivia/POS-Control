@@ -1025,6 +1025,7 @@
   "auditoria.acc.cuenta_abonada": "Partial payment on a bill",
   "auditoria.acc.cuenta_cobrada": "Bill charged and closed",
   "auditoria.acc.cuenta_descartada": "Empty bill discarded",
+  "auditoria.acc.cuenta_devuelta": "Bill closed with refund",
   "auditoria.acc.cuenta_detalle": "Bill note (order or reference)",
   "fiscal.titulo": "Receipt details (optional)",
   "fiscal.nombre": "Name",

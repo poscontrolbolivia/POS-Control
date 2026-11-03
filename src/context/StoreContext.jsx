@@ -493,6 +493,15 @@ function reducer(s, a) {
       if (!(b.items || []).length) return { ...s, cuentas: s.cuentas.filter(x => x.id !== b.id) }
       return upd(b.id, x => ({ ...x, estado: 'cerrada', cerradaEn: Date.now(), cerradaPor: a.usuario || '' }))
     }
+    case 'cerrar-devolviendo': {
+      const b = s.cuentas.find(x => x.id === a.cuentaId)
+      if (!b || !['abierta', 'precuenta'].includes(b.estado) || itemsVivos(b).length) return s
+      const dev = pagadoCuenta(b)
+      if (dev <= 0 || !a.metodo || !String(a.motivo || '').trim()) return s
+      if (a.metodo === 'efectivo' && !s.caja?.turno) return s
+      return upd(b.id, x => ({ ...x, estado: 'cerrada', cerradaEn: Date.now(), cerradaPor: a.usuario || '',
+        pagos: [...(x.pagos || []), ...conFecha([{ metodo: a.metodo, monto: -dev, devolucion: true }], a.motivo, a.usuario)] }))
+    }
     case 'abrir-directa': return { ...s, caja: { ...s.caja, siguienteTurno: s.caja.siguienteTurno + 1 },
       cuentas: [...s.cuentas, nuevaCuenta({ tipo: 'directa', canal: a.canal || 'mostrador', numero: s.caja.siguienteTurno, mesaIds: [], abiertaPor: a.usuario })] }
 
@@ -843,6 +852,7 @@ const lineasDe = s => s.productos.filter(p => p.precio > 0 && p.activo !== false
 // para los borrados (la fila ya no existe) y el nuevo para las altas (acaba de nacer).
 const BITACORA = {
   'abrir': (p, n, a) => ['cuenta_abierta', 'cuenta', etiquetaCuenta(n, nuevoDe(p, n, 'cuentas')[0]), { comensales: a.comensales || 1 }],
+  'cerrar-devolviendo': (p, n, a) => ['cuenta_devuelta', 'cuenta', etiquetaCuenta(p, enCuenta(p, a.cuentaId)), { metodo: a.metodo, motivo: a.motivo || '' }],
   'abrir-descartar': (p, n, a) => ['cuenta_descartada', 'cuenta', etiquetaCuenta(p, enCuenta(p, a.cuentaId)), {}],
   'abrir-directa': (p, n, a) => ['cuenta_venta_directa', 'cuenta', etiquetaCuenta(n, nuevoDe(p, n, 'cuentas')[0]), { canal: a.canal || 'mostrador' }],
   'abrir-llevar': (p, n, a) => ['cuenta_abierta', 'cuenta', etiquetaCuenta(n, nuevoDe(p, n, 'cuentas')[0]), { canal: 'llevar', cliente: a.nombre || '' }],

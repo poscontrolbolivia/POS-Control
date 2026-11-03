@@ -7925,4 +7925,84 @@ end $fn$;
 revoke all on function public.reabrir_cuenta_cobrada(uuid, text, uuid[], uuid) from public, anon;
 grant execute on function public.reabrir_cuenta_cobrada(uuid, text, uuid[], uuid) to authenticated;
 
+-- ############################################################################
+-- Cerrar una cuenta que ya no tiene platos vivos pero SÍ tiene pagos (se cobró, se reabrió y se anuló todo).
+-- Se devuelve el dinero con el método elegido: queda un pago NEGATIVO (detalle.devolucion) que cuadra la caja
+-- (si es efectivo, sale del cajón) y deja la venta en cero en todos los reportes. La cuenta se cierra y la mesa se libera.
+-- ############################################################################
+alter table public.pagos drop constraint if exists pagos_monto_check;
+alter table public.pagos drop constraint if exists pagos_monto_no_cero;
+-- (sin nueva restricción: ya existen pagos de monto 0 y ahora también puede haber devoluciones negativas)
+
+create or replace function public.cerrar_cuenta_devolviendo(
+  p_cuenta_id  uuid,
+  p_metodo     text,
+  p_motivo     text,
+  p_empresa_id uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp    uuid;
+  c        public.cuentas;
+  v_pagado numeric(10,2);
+  v_turno  public.turnos_caja;
+  v_mesas  text;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+  if coalesce(p_metodo, '') not in ('efectivo','qr','tarjeta','cheque','otro') then
+    raise exception 'elige cómo se devuelve el dinero';
+  end if;
+  if coalesce(btrim(p_motivo), '') = '' then
+    raise exception 'escribe el motivo de la devolución';
+  end if;
+  c := private.load_cuenta(p_cuenta_id, array['abierta','precuenta']::text[]);
+  perform pg_advisory_xact_lock(hashtextextended('cuenta:' || c.id::text, 0));
+  if c.tipo <> 'mesa' and c.canal is distinct from 'llevar' then
+    raise exception 'esta cuenta no admite cierre con devolución';
+  end if;
+  if exists (select 1 from public.cuenta_items i where i.cuenta_id = c.id and i.estado <> 'anulado') then
+    raise exception 'la cuenta todavía tiene productos: se cobra normalmente';
+  end if;
+  select coalesce(sum(p.monto), 0)::numeric(10,2) into v_pagado from public.pagos p where p.cuenta_id = c.id;
+  if v_pagado <= 0 then
+    raise exception 'la cuenta no tiene nada que devolver';
+  end if;
+  if p_metodo = 'efectivo' then
+    v_turno := private.turno_actual(v_emp);
+    if v_turno.id is null then
+      raise exception 'abre el turno de caja para devolver en efectivo';
+    end if;
+  end if;
+
+  insert into public.pagos (empresa_id, cuenta_id, metodo, monto, detalle, creada_por)
+  values (v_emp, c.id, p_metodo, -v_pagado,
+          jsonb_build_object('devolucion', true, 'motivo', btrim(p_motivo)), auth.uid());
+
+  select string_agg(m.nombre, ', ' order by m.nombre) into v_mesas
+    from public.cuenta_mesas cm join public.mesas m on m.id = cm.mesa_id
+   where cm.cuenta_id = c.id;
+  update public.cuentas
+     set estado = 'cerrada', cerrada_por = auth.uid(), cerrada_en = now(),
+         mesas_texto = coalesce(v_mesas, mesas_texto)
+   where id = c.id and empresa_id = v_emp;
+  delete from public.cuenta_mesas where cuenta_id = c.id;
+
+  begin
+    perform private.auditar(v_emp, 'cuenta_devuelta', jsonb_build_object(
+      'cuenta', c.id::text, 'numero', c.numero, 'mesa', v_mesas,
+      'monto', v_pagado, 'metodo', p_metodo, 'motivo', btrim(p_motivo)),
+      'cuenta', coalesce(v_mesas, 'cuenta ' || left(c.id::text, 8)));
+  exception when others then
+    null;
+  end;
+end $fn$;
+revoke all on function public.cerrar_cuenta_devolviendo(uuid, text, text, uuid) from public, anon;
+grant execute on function public.cerrar_cuenta_devolviendo(uuid, text, text, uuid) to authenticated;
+
+
 commit;

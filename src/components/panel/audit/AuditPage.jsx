@@ -24,6 +24,7 @@ const ACCIONES = {
   cuenta_abonada: "Abono parcial a una cuenta",
   cuenta_cobrada: "Cuenta cobrada y cerrada",
   cuenta_descartada: "Cuenta vacía descartada",
+  cuenta_devuelta: "Cuenta cerrada con devolución",
   cuenta_detalle: "Detalle de la cuenta (orden o referencia)",
   cuenta_fiscal: "Datos fiscales del cliente",
   cuenta_dividida: "Cuenta dividida en subcuentas",
