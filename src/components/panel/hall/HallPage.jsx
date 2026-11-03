@@ -166,7 +166,8 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   const zonaAct = zonas.find(z => z.id === activo) || null
   const iZonaAct = zonaAct ? zonas.indexOf(zonaAct) : -1
   const enLlevar = activo === LLEVAR
-  const llevarCuentas = s.cuentas.filter(c => c.canal === 'llevar' && c.estado !== 'cerrada').sort((a, b) => (a.numero || 0) - (b.numero || 0))
+  // Misma regla que Caja: también las ventas de mostrador reabiertas (tienen pagos) y se editan desde acá.
+  const llevarCuentas = s.cuentas.filter(c => c.estado !== 'cerrada' && (c.canal === 'llevar' || (c.tipo === 'directa' && (pagadoCuenta(c) > 0.009 || c.id === llevarSelId)))).sort((a, b) => (a.numero || 0) - (b.numero || 0))
   // Al sincronizar con el servidor el pedido recién creado cambia de id: se resuelve en el mismo render
   // (sin soltar el panel un instante), así no hay parpadeo ni se reabre.
   const llevarSel = llevarSelId
@@ -665,13 +666,13 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
               {llevarCuentas.map(c => (
                 <div key={c.id} className={'llevar-card ' + estadoMesa(c)}>
                   <button type="button" className="llevar-main" onClick={() => abrirLlevar(c.id)}>
-                    <b>{c.clienteNombre ? t('salon.llevarCliente', { n: c.numero }) : tOr('salon.llevarPedido', 'Pedido {n}', { n: c.numero })}</b>
+                    <b>{c.canal !== 'llevar' ? t('caja.ventaNumero', { n: c.numero ?? '—' }) : c.clienteNombre ? t('salon.llevarCliente', { n: c.numero }) : tOr('salon.llevarPedido', 'Pedido {n}', { n: c.numero })}</b>
                     {c.clienteNombre && <span className="llevar-nombre">{c.clienteNombre}</span>}
-                    {!c.clienteNombre && <small className="llevar-sin-nombre">{tOr('salon.llevarSinNombre', 'Sin nombre · escríbelo en el pedido')}</small>}
+                    {c.canal === 'llevar' && !c.clienteNombre && <small className="llevar-sin-nombre">{tOr('salon.llevarSinNombre', 'Sin nombre · escríbelo en el pedido')}</small>}
                     {c.clienteTel && <small>{c.clienteTel}</small>}
                     <small className="importe">{money(saldoCuenta(c))} · {t('salon.' + estadoMesa(c))}</small>
                   </button>
-                  {puede(rol, 'abrir_mesa') && (
+                  {puede(rol, 'abrir_mesa') && c.canal === 'llevar' && (
                     <div className="llevar-acc">
                       <button type="button" className="ghost" onClick={() => setCli({ id: c.id, nombre: c.clienteNombre || '', tel: c.clienteTel || '' })}>✎ {t('salon.llevarEditar')}</button>
                       <button type="button" className="ghost" onClick={() => setAMesa(aMesa?.cuentaId === c.id ? null : { cuentaId: c.id, mesaId: '', com: 1 })}>➜ {t('salon.llevarAMesa')}</button>

@@ -173,6 +173,8 @@ export default function KitchenPage({ rol, sesion }) {
   // servidor, a la cola y a una recarga completa de la empresa (unos 4 s). `optRef` recuerda lo que el
   // usuario ya hizo hasta que el servidor lo confirme, para que un refresco antiguo no lo desmarque.
   const optRef = useRef(new Map())
+  // Devoluciones ya confirmadas en pantalla que el servidor aún no sacó de su lista: se mantienen ocultas.
+  const devOcultasRef = useRef(new Set())
   const ordenRef = useRef(new Map())
   const enVueloRef = useRef(new Map())
   const repetirRef = useRef(false)
@@ -235,7 +237,12 @@ export default function KitchenPage({ rol, sesion }) {
         // Las devoluciones cambian poco: con el tiempo real conectado se piden como mucho cada 30 s.
         if (!realtimeRef.current || Date.now() - devsEnRef.current > 30000) {
           devsEnRef.current = Date.now()
-          rpc('devoluciones_de_area', { p_area: real }).then(r => setDevs(Array.isArray(r) ? r : [])).catch(() => {})
+          rpc('devoluciones_de_area', { p_area: real }).then(r => {
+            const lista = Array.isArray(r) ? r : []
+            const vivas = new Set(lista.map(x => x.id))
+            for (const id of [...devOcultasRef.current]) if (!vivas.has(id)) devOcultasRef.current.delete(id)
+            setDevs(lista.filter(x => !devOcultasRef.current.has(x.id)))
+          }).catch(() => {})
         }
       }
       else setDevs([])
@@ -296,17 +303,27 @@ export default function KitchenPage({ rol, sesion }) {
     } catch (e) { avisar(mensajeError(e)) } finally { setOcupado('') }
   }
 
-  const confirmarDev = async dv => {
-    if (ocupado) return
-    setOcupado(dv.id)
+  const confirmarDev = dv => {
+    if (ocupado === dv.id || devOcultasRef.current.has(dv.id)) return
     const nota = (notasDev[dv.id] || '').trim()
-    try {
-      if (conectado) await rpc('confirmar_devolucion', { p_id: dv.id, p_nota: nota || null })
-      else d({ t: 'devolver~', id: dv.id, nota, usuario })
-      setNotasDev(n => { const { [dv.id]: _x, ...resto } = n; return resto })
-      await cargarRef.current?.()
-      reanudar()
-    } catch (e) { avisar(mensajeError(e)) } finally { setOcupado('') }
+    const limpiarNota = () => setNotasDev(n => { const { [dv.id]: _x, ...resto } = n; return resto })
+    if (!conectado) {
+      d({ t: 'devolver~', id: dv.id, nota, usuario })
+      limpiarNota()
+      return
+    }
+    // Se quita de la pantalla al instante y el servidor lo confirma detrás; si falla, vuelve a aparecer con el aviso.
+    devOcultasRef.current.add(dv.id)
+    setDevs(l => l.filter(x => x.id !== dv.id))
+    limpiarNota()
+    rpc('confirmar_devolucion', { p_id: dv.id, p_nota: nota || null })
+      .then(() => { reanudar() })
+      .catch(e => {
+        devOcultasRef.current.delete(dv.id)
+        setDevs(l => (l.some(x => x.id === dv.id) ? l : [...l, dv]))
+        setNotasDev(n => ({ ...n, [dv.id]: nota }))
+        avisar(mensajeError(e))
+      })
   }
   // Sale/vuelve un plato: se ve ya en pantalla y el servidor lo confirma detrás. Si falla, se deshace solo.
   const cambiarSalida = (item, c, listo) => {
