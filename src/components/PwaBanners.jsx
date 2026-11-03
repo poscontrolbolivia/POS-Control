@@ -3,7 +3,7 @@ import { useIdioma } from '../i18n/index.jsx'
 import { isStandalonePwa, esIos } from '../services/pwa.js'
 import './Banners.css'
 
-const REVISAR_CADA_MS = 10 * 60 * 1000
+const REVISAR_CADA_MS = 2 * 60 * 1000
 const AUTO_AL_ABRIR_MS = 15 * 1000
 const AUTO_TRAS_OCULTA_MS = 30 * 60 * 1000
 const RECORDAR_MS = 15 * 60 * 1000
@@ -12,10 +12,25 @@ const LLAVE_FORZADO = 'pos-actualizado-en'
 async function idRemoto() {
   try {
     const r = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
-    if (!r.ok) return null
-    const d = await r.json()
-    return typeof d?.id === 'string' ? d.id : null
-  } catch { return null }
+    if (r.ok) {
+      const d = await r.json()
+      if (typeof d?.id === 'string') return d.id
+    }
+  } catch { /* se prueba el respaldo */ }
+  return null
+}
+
+// Respaldo: si version.json no se puede leer, se compara el script principal del index.html publicado
+// con el que está corriendo (el nombre lleva un hash que cambia en cada deploy).
+async function scriptRemotoDistinto() {
+  try {
+    const r = await fetch(`/index.html?t=${Date.now()}`, { cache: 'no-store' })
+    if (!r.ok) return false
+    const html = await r.text()
+    const remoto = (html.match(/\/assets\/index-[^"']+\.js/) || [])[0]
+    const local = [...document.scripts].map(s => s.getAttribute('src') || '').find(x => /\/assets\/index-[^"']+\.js/.test(x))
+    return Boolean(remoto && local && !local.endsWith(remoto))
+  } catch { return false }
 }
 
 async function recargaForzada() {
@@ -44,7 +59,7 @@ function useActualizacion() {
     const revisar = async () => {
       try { (await navigator.serviceWorker?.getRegistration?.())?.update?.() } catch {  }
       const remoto = await idRemoto()
-      if (remoto && remoto !== __BUILD_ID__) setDesactualizada(true)
+      if (remoto ? remoto !== __BUILD_ID__ : await scriptRemotoDistinto()) setDesactualizada(true)
     }
     const alVer = () => {
       if (document.hidden) { ocultaDesde = Date.now(); return }
@@ -56,7 +71,12 @@ function useActualizacion() {
     const id = setInterval(() => { if (!document.hidden) revisar() }, REVISAR_CADA_MS)
     document.addEventListener('visibilitychange', alVer)
     window.addEventListener('online', revisar)
-    return () => { clearInterval(id); document.removeEventListener('visibilitychange', alVer); window.removeEventListener('online', revisar) }
+    window.addEventListener('focus', revisar)
+    window.addEventListener('pageshow', revisar)
+    return () => {
+      clearInterval(id); document.removeEventListener('visibilitychange', alVer)
+      window.removeEventListener('online', revisar); window.removeEventListener('focus', revisar); window.removeEventListener('pageshow', revisar)
+    }
   }, [])
 
   const actualizar = useCallback(() => { recargaForzada() }, [])

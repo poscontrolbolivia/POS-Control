@@ -220,7 +220,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   // Cuenta en blanco (mesa o pedido para llevar, también ya pedida): se puede cerrar con un toque desde las acciones.
   const cuentaVacia = (c.estado === 'abierta' || c.estado === 'precuenta') && enBlanco
   // Cobrada y reabierta, con todo anulado: no hay nada que cobrar pero sí dinero pagado. Se cierra devolviéndolo.
-  const soloPagos = (c.tipo === 'mesa' || c.canal === 'llevar') && (c.estado === 'abierta' || c.estado === 'precuenta') && !vivos.length && pagado > 0.009
+  const soloPagos = (c.tipo === 'mesa' || c.tipo === 'directa' || c.canal === 'llevar') && (c.estado === 'abierta' || c.estado === 'precuenta') && !vivos.length && pagado > 0.009
   const puedeDevolver = soloPagos && puede(rol, 'cobrar')
   const confirmarDevolucion = () => {
     if (!devol?.metodo) return avisar(tOr('pedido.devolMetodoFalta', 'Elige cómo se devuelve el dinero.'))
@@ -355,11 +355,13 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
     // Datos del cliente: se guardan en la cuenta antes de cobrar para que salgan en el comprobante.
     if (fis && !fiscalIgual(fis, fiscalDe(c))) d({ t: 'fiscal~', cuentaId: c.id, nombre: fis.nombre.trim(), numero: fis.numero.trim(), correo: fis.correo.trim() })
     const base = round2(baseCobro)
-    const invalido = cobroInvalido(lineasDeCobro(base), t, base)
+    // Cuenta ya pagada por completo (con abonos): no hay nada más que recibir, solo se cierra.
+    const yaPagada = base <= 0.009 && pagado > 0.009 && vivos.length > 0
+    const invalido = yaPagada ? '' : cobroInvalido(lineasDeCobro(base), t, base)
     if (invalido) return avisar(invalido)
-    const { pagos: pg, saldo: falta } = imputarPagos(lineasDeCobro(base), base)
+    const { pagos: pg, saldo: falta } = yaPagada ? { pagos: [], saldo: 0 } : imputarPagos(lineasDeCobro(base), base)
     if (falta > 0.009) return avisar(t('pedido.faltaParaCobrar', { faltan: money(falta), total: money(base) }))
-    if (!pg.length) return avisar(t('pedido.sinPagos'))
+    if (!pg.length && !yaPagada) return avisar(t('pedido.sinPagos'))
     const concepto = marcados.length ? { concepto: conceptoSeleccion } : {}
     if (base < round2(saldo) - 0.009) {
       d({ t: 'abonar', cuentaId: c.id, pagos: pg, ...concepto, usuario })

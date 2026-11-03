@@ -1558,8 +1558,10 @@ begin
   v_rol := private.exigir_rol(array['admin','cajero']::text[]);
   v_cuenta := private.load_cuenta(p_cuenta_id, array['abierta','precuenta']::text[]);
 
-  if jsonb_typeof(p_pagos) <> 'array' or jsonb_array_length(p_pagos) = 0 then
-    raise exception 'p_pagos debe ser un array jsonb no vacío';
+  -- Array vacío permitido: una cuenta ya pagada por completo con abonos solo necesita cerrarse.
+  -- Si lo pagado no cubre el total, más abajo se rechaza igual.
+  if jsonb_typeof(p_pagos) <> 'array' then
+    raise exception 'p_pagos debe ser un array jsonb';
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended('cuenta:' || v_cuenta.id::text, 0));
@@ -7962,9 +7964,6 @@ begin
   end if;
   c := private.load_cuenta(p_cuenta_id, array['abierta','precuenta']::text[]);
   perform pg_advisory_xact_lock(hashtextextended('cuenta:' || c.id::text, 0));
-  if c.tipo <> 'mesa' and c.canal is distinct from 'llevar' then
-    raise exception 'esta cuenta no admite cierre con devolución';
-  end if;
   if exists (select 1 from public.cuenta_items i where i.cuenta_id = c.id and i.estado <> 'anulado') then
     raise exception 'la cuenta todavía tiene productos: se cobra normalmente';
   end if;
