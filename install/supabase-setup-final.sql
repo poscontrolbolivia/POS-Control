@@ -8004,4 +8004,81 @@ revoke all on function public.cerrar_cuenta_devolviendo(uuid, text, text, uuid) 
 grant execute on function public.cerrar_cuenta_devolviendo(uuid, text, text, uuid) to authenticated;
 
 
+-- ############################################################################
+-- Nombre temporal de una mesa (ej. «Mesa 2» → «Ignacio»): vive en la CUENTA, no en la mesa. Al cobrarse la cuenta
+-- (o desaparecer la dividida) la mesa vuelve sola a su nombre normal. Vacío = quitar el nombre.
+-- ############################################################################
+create or replace function public.renombrar_cuenta_mesa(
+  p_cuenta_id  uuid,
+  p_nombre     text,
+  p_empresa_id uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+  c     public.cuentas;
+  v_nom text := left(btrim(coalesce(p_nombre, '')), 80);
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero','mesero']::text[]);
+  c := private.load_cuenta(p_cuenta_id, array['abierta','precuenta']::text[]);
+  if c.tipo is distinct from 'mesa' then raise exception 'solo las cuentas de mesa se pueden renombrar'; end if;
+  update public.cuentas set cliente_nombre = nullif(v_nom, '')
+   where id = c.id and empresa_id = v_emp;
+  begin
+    perform private.auditar(v_emp, 'cuenta_renombrada', jsonb_build_object(
+      'cuenta', c.id::text, 'numero', c.numero, 'nombre', nullif(v_nom, '')),
+      'cuenta', coalesce(nullif(v_nom, ''), 'cuenta ' || left(c.id::text, 8)));
+  exception when others then
+    null;
+  end;
+end $fn$;
+revoke all on function public.renombrar_cuenta_mesa(uuid, text, uuid) from public, anon;
+grant execute on function public.renombrar_cuenta_mesa(uuid, text, uuid) to authenticated;
+
+
+-- ############################################################################
+-- Historial de tiempos de preparación: una fila por ítem y por ÁREA ya sacada dentro del rango.
+-- Un combo cocina+barra devuelve dos filas, cada una con la hora en que ESA área lo sacó.
+-- ############################################################################
+create or replace function public.tiempos_preparacion(
+  p_desde      timestamptz,
+  p_hasta      timestamptz,
+  p_empresa_id uuid default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare
+  v_emp uuid;
+begin
+  v_emp := private.fijar_empresa(p_empresa_id);
+  perform private.exigir_rol(array['admin','cajero']::text[]);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'item_id', x.item_id, 'producto_id', x.producto_id, 'nombre', x.nombre, 'qty', x.qty,
+             'area', x.area, 'enviado_en', x.enviado_en, 'listo_en', x.listo_en) order by x.listo_en)
+      from (
+        select i.id as item_id, i.producto_id, i.nombre_snapshot as nombre, i.qty, ia.area, i.enviado_en, ia.listo_en
+          from public.cuenta_item_areas ia
+          join public.cuenta_items i on i.id = ia.item_id
+         where ia.empresa_id = v_emp
+           and ia.listo_en >= p_desde and ia.listo_en <= p_hasta
+           and i.enviado_en is not null and i.estado <> 'anulado'
+         order by ia.listo_en
+         limit 20000
+      ) x
+  ), '[]'::jsonb);
+end $fn$;
+revoke all on function public.tiempos_preparacion(timestamptz, timestamptz, uuid) from public, anon;
+grant execute on function public.tiempos_preparacion(timestamptz, timestamptz, uuid) to authenticated;
+
+
 commit;

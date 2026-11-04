@@ -66,7 +66,7 @@ export default function ReabrirForm({ cuenta, s, onConfirmar, onCancelar }) {
       </label>
       {error && <p className="reabrir-error" role="alert">⚠️ {error}</p>}
       <div className="reabrir-acc">
-        <button className="danger solid" type="submit" disabled={obliga && opciones.length === 0}>↺ {tOr('caja.reabrirConfirmar', 'Reabrir cuenta')}</button>
+        <button className="danger solid" type="submit" disabled={obliga && opciones.length === 0}>{tOr('caja.reabrirConfirmar', 'Reabrir cuenta')}</button>
         <button className="danger" type="button" onClick={onCancelar}>{t('comun.cancelar')}</button>
       </div>
     </form>

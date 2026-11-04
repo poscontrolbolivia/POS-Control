@@ -493,6 +493,7 @@ function reducer(s, a) {
       if (!(b.items || []).length) return { ...s, cuentas: s.cuentas.filter(x => x.id !== b.id) }
       return upd(b.id, x => ({ ...x, estado: 'cerrada', cerradaEn: Date.now(), cerradaPor: a.usuario || '' }))
     }
+    case 'mesa-alias': return upd(a.cuentaId, c => (c.tipo === 'mesa' && c.estado !== 'cerrada' ? { ...c, clienteNombre: String(a.nombre || '').trim().slice(0, 80) } : c))
     case 'cerrar-devolviendo': {
       const b = s.cuentas.find(x => x.id === a.cuentaId)
       if (!b || !['abierta', 'precuenta'].includes(b.estado) || itemsVivos(b).length) return s
@@ -852,6 +853,7 @@ const lineasDe = s => s.productos.filter(p => p.precio > 0 && p.activo !== false
 // para los borrados (la fila ya no existe) y el nuevo para las altas (acaba de nacer).
 const BITACORA = {
   'abrir': (p, n, a) => ['cuenta_abierta', 'cuenta', etiquetaCuenta(n, nuevoDe(p, n, 'cuentas')[0]), { comensales: a.comensales || 1 }],
+  'mesa-alias': (p, n, a) => ['cuenta_renombrada', 'cuenta', etiquetaCuenta(p, enCuenta(p, a.cuentaId)), { nombre: String(a.nombre || '').trim() }],
   'cerrar-devolviendo': (p, n, a) => ['cuenta_devuelta', 'cuenta', etiquetaCuenta(p, enCuenta(p, a.cuentaId)), { metodo: a.metodo, motivo: a.motivo || '' }],
   'abrir-descartar': (p, n, a) => ['cuenta_descartada', 'cuenta', etiquetaCuenta(p, enCuenta(p, a.cuentaId)), {}],
   'abrir-directa': (p, n, a) => ['cuenta_venta_directa', 'cuenta', etiquetaCuenta(n, nuevoDe(p, n, 'cuentas')[0]), { canal: a.canal || 'mostrador' }],

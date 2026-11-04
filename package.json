@@ -1,7 +1,7 @@
 {
   "name": "pos-control",
   "private": true,
-  "version": "0.61.6",
+  "version": "0.62.4",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-agent.mjs",
@@ -12,7 +12,8 @@
     "agent": "node scripts/copy-agent.mjs",
     "icons": "node scripts/gen-icons.mjs",
     "i18n": "node scripts/check-i18n.mjs",
-    "test": "node scripts/check-i18n.mjs && node tests/avisos.mjs && node tests/optimista.mjs && node tests/descartar.mjs && node tests/cambio.mjs",
+    "estilo": "node scripts/check-estilo.mjs",
+    "test": "node scripts/check-i18n.mjs && node scripts/check-estilo.mjs && node tests/avisos.mjs && node tests/optimista.mjs && node tests/descartar.mjs && node tests/cambio.mjs",
     "test:avisos": "node tests/avisos.mjs"
   },
   "dependencies": {

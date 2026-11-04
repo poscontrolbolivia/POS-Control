@@ -379,7 +379,7 @@ export default function MenuPage({ rol }) {
   const aplicarSeccion = () => { if (seccionTmp) { aplicarASeleccion({ seccionId: seccionTmp }); setSeccionTmp('') } }
   const aplicarAreas = () => { if (areasTmp.length) aplicarASeleccion({ areas: areasTmp }) }
 
-  // ---------- costo, proveedor, margen y CSV (solo rol admin) ----------
+  // ---------- costo, proveedor, margen y PDF (solo rol admin) ----------
   const veCostos = rol === 'admin'
   const conDato = veCostos && datoCol !== 'precio'
   const costoMap = new Map((s.costos || []).map(c => [c.productoId, c]))
@@ -494,9 +494,8 @@ export default function MenuPage({ rol }) {
     } finally { setMasivaCarg(null) }
   }
 
-  const exportarCartaCSV = () => {
+  const exportarCartaPdf = async () => {
     const nomSec = id => secciones.find(x => x.id === id)?.nombre || ''
-    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
     const f2 = v => (v == null || !Number.isFinite(Number(v)) ? '' : Number(v).toFixed(2))
     const cab = [tOr('menu.csvNum', 'Nº'), tOr('menu.csvNombre', 'Nombre'), tOr('menu.csvGrupo', 'Grupo'), tOr('menu.csvPrecio', 'Precio')]
     if (veCostos) cab.push(tOr('menu.csvCosto', 'Costo'), tOr('menu.csvUtilidad', 'Utilidad'), tOr('menu.csvMargen', 'Margen %'), tOr('menu.csvProveedor', 'Proveedor'))
@@ -509,14 +508,13 @@ export default function MenuPage({ rol }) {
       return [...f, f2(c?.costo), u == null ? '' : f2(u), m == null ? '' : m.toFixed(2), nombreProv(c?.proveedorId)]
     })
     try {
-      const csv = '\ufeff' + [cab, ...filas].map(f => f.map(esc).join(',')).join('\r\n')
-      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-      const a = document.createElement('a')
-      a.href = url; a.download = `carta-${new Date().toISOString().slice(0, 10)}.csv`
-      document.body.appendChild(a); a.click(); a.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      const { descargarTablaPdf } = await import('../../../services/exportar.js')
+      await descargarTablaPdf([{ columnas: cab, filas }], {
+        archivo: `carta-${new Date().toISOString().slice(0, 10)}`, titulo: tOr('menu.pdfTitulo', 'Carta'),
+        subtitulo: new Date().toLocaleDateString(), negocio: s.config?.nombre || '', generado: t('cierrePdf.generado'),
+      })
     } catch (err) {
-      setAviso({ tono: 'danger', msg: err?.message || tOr('menu.errorCSV', 'No se pudo generar el CSV.') })
+      setAviso({ tono: 'danger', msg: err?.message || tOr('menu.errorCSV', 'No se pudo generar el PDF.') })
     }
   }
 
@@ -540,7 +538,7 @@ export default function MenuPage({ rol }) {
           {masivaCarg === 'receta' ? tOr('menu.simulando', 'Simulando…') : tOr('menu.recetaBtn', 'Costo desde receta')}
         </button>
       )}
-      <button type="button" className="ghost" onClick={exportarCartaCSV}>{tOr('menu.csvBtn', 'Exportar CSV')}</button>
+      <button type="button" className="ghost" onClick={exportarCartaPdf}>{tOr('menu.csvBtn', 'Descargar PDF')}</button>
     </span>
   )
 
@@ -614,7 +612,7 @@ export default function MenuPage({ rol }) {
                   <button type="button" className="ghost" onClick={salirSeleccion}>✕ {tOr('items.dejarSeleccionar', 'Dejar de seleccionar')}</button>
                 </>
               ) : (
-                <button type="button" className="ghost" onClick={() => setModoSel(true)}>☑ {tOr('items.seleccionarVarios', 'Seleccionar')}</button>
+                <button type="button" className="ghost" onClick={() => setModoSel(true)}>{tOr('items.seleccionarVarios', 'Seleccionar')}</button>
               )}
             </>
           )}
@@ -834,9 +832,8 @@ export default function MenuPage({ rol }) {
                   <button type="button" className="ghost" onClick={() => setConfInd(false)}>{t('comun.cancelar')}</button>
                 </>
               ) : <button type="button" className="danger" onClick={() => setConfInd(true)}>{t('comun.eliminar')}</button>)}
-              <span className="sp" />
-              <button type="button" className="ghost" onClick={() => setVInd(null)}>{t('comun.cancelar')}</button>
               <button type="submit" className="primary" disabled={!vInd.nombre.trim() || (!opcInd.length && !optIndTmp.trim())}>{t('comun.guardar')}</button>
+              <button type="button" className="ghost" onClick={() => setVInd(null)}>{t('comun.cancelar')}</button>
             </div>
           </form>
         </Ventana>
@@ -857,9 +854,8 @@ export default function MenuPage({ rol }) {
                   <button type="button" className="ghost" onClick={() => setConfSeccion(false)}>{t('comun.cancelar')}</button>
                 </>
               ) : <button type="button" className="danger" onClick={() => setConfSeccion(true)}>{t('comun.eliminar')}</button>)}
-              <span className="sp" />
-              <button type="button" className="ghost" onClick={() => setVGrupo(null)}>{t('comun.cancelar')}</button>
               <button type="submit" className="primary" disabled={!vGrupo.nombre.trim()}>{t('comun.guardar')}</button>
+              <button type="button" className="ghost" onClick={() => setVGrupo(null)}>{t('comun.cancelar')}</button>
             </div>
           </form>
         </Ventana>
@@ -1020,9 +1016,8 @@ export default function MenuPage({ rol }) {
                   <button type="button" className="ghost" onClick={() => setConfProd(false)}>{t('comun.cancelar')}</button>
                 </>
               ) : <button type="button" className="danger" onClick={() => setConfProd(true)}>{t('comun.eliminar')}</button>)}
-              <span className="sp" />
-              <button type="button" className="ghost" onClick={() => setVProd(null)}>{t('comun.cancelar')}</button>
               <button type="submit" className="primary" disabled={!vProd.nombre.trim() || vProd.precio === ''}>{t('comun.guardar')}</button>
+              <button type="button" className="ghost" onClick={() => setVProd(null)}>{t('comun.cancelar')}</button>
             </div>
           </form>
         </Ventana>
@@ -1090,7 +1085,7 @@ export default function MenuPage({ rol }) {
 
           {veCostos && (
             <div className="mn-herr">
-              <h4 className="mn-bloque-tit">{tOr('items.herrCosto', 'Costo, margen y CSV')}</h4>
+              <h4 className="mn-bloque-tit">{tOr('items.herrCosto', 'Costo, margen y PDF')}</h4>
               <small className="mn-nota">{tOr('items.herrCostoNota', 'El costo no se cobra ni se imprime: solo alimenta la utilidad y el margen % de esta pantalla y de Reportes.')}</small>
               {controlesCosto}
             </div>
@@ -1149,14 +1144,13 @@ export default function MenuPage({ rol }) {
             )}
           </div>
           <div className="mn-pie">
-            <button type="button" className="ghost" onClick={() => setVMasiva(null)}>{t('comun.cancelar')}</button>
-            <span className="sp" />
             <button type="button" className="primary" disabled={!vMasiva.total || masivaCarg !== null}
               onClick={vMasiva.tipo === 'margen' ? aplicarMargenSimulado : aplicarRecetaSimulada}>
               {masivaCarg === 'aplicar'
                 ? tOr('menu.aplicando', 'Aplicando…')
                 : tOr('menu.aplicarN', `Aplicar a ${vMasiva.total} productos`, { n: vMasiva.total })}
             </button>
+            <button type="button" className="ghost" onClick={() => setVMasiva(null)}>{t('comun.cancelar')}</button>
           </div>
         </Ventana>
       )}

@@ -78,7 +78,7 @@ export default function ImportBlock({ ocupado = false, onEntrar }) {
         <input name="file" ref={entrada} type="file" hidden accept="application/json,.json,application/zip,.zip"
           onChange={e => cargarArchivo(e.target.files?.[0])} />
         <button type="button" className="primary" disabled={ocupadisimo} onClick={() => entrada.current?.click()}>
-          📁 {archivo ? tOr('super.importar.otroArchivo', 'Elegir otro archivo') : tOr('super.importar.elegir', 'Seleccionar archivo')}
+          {archivo ? tOr('super.importar.otroArchivo', 'Elegir otro archivo') : tOr('super.importar.elegir', 'Seleccionar archivo')}
         </button>
         {archivo && <span className="super-chip">{archivo}</span>}
       </div>

@@ -435,25 +435,17 @@ export default function InventoryPage({ rol, sesion }) {
     if (det.motivo) partes.push(`${tOr('inventario.motivoTitulo', 'Motivo')}: ${tOr('inventario.motivo.' + det.motivo, MOTIVO_ETIQUETA[det.motivo] || det.motivo)}`)
     return partes.join(' · ')
   }
-  const exportarCSV = () => {
+  // Los movimientos pueden ser miles de filas: se bajan como JSON (datos), no como documento.
+  const exportarJson = async () => {
     if (!movs.length) return
-    const esc = v => `"${String(v ?? '').replaceAll('"', '""')}"`
-    const cab = [
-      tOr('inventario.colFecha', 'Fecha'), tOr('inventario.colInsumo', 'Insumo'), tOr('inventario.colTipo', 'Tipo'),
-      tOr('inventario.colCantidad', 'Cantidad'), tOr('inventario.colStock', 'Stock después'),
-      tOr('inventario.colNota', 'Nota'), tOr('inventario.colUsuario', 'Usuario'),
-    ]
-    const filas = movs.map(m => [fmtFecha(m.en), m.insumo_nombre, etiquetaTipo(m.tipo), cantidadConSigno(m), m.stock_after, notaMov(m), m.usuario_nombre || ''])
-    const csv = '\ufeff' + [cab, ...filas].map(f => f.map(esc).join(',')).join('\r\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    try {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `inventario-${dias}-dias.csv`
-      a.click()
-    } finally {
-      URL.revokeObjectURL(url)
-    }
+    const { descargarJson } = await import('../../../services/exportar.js')
+    descargarJson(`inventario-${dias}-dias`, {
+      dias,
+      movimientos: movs.map(m => ({
+        fecha: m.en, insumo: m.insumo_nombre, tipo: m.tipo, tipo_texto: etiquetaTipo(m.tipo), cantidad: cantidadConSigno(m),
+        stock_despues: m.stock_after, nota: notaMov(m), usuario: m.usuario_nombre || '',
+      })),
+    })
   }
 
   if (!puedeVer) {
@@ -854,8 +846,8 @@ export default function InventoryPage({ rol, sesion }) {
                 {tOr('inventario.diasRange', `${n} días`, { n })}
               </button>
             ))}
-            <button type="button" className="ghost" disabled={cargandoMovs || !movs.length} onClick={exportarCSV}>
-              {tOr('inventario.exportar', 'Exportar CSV')}
+            <button type="button" className="ghost" disabled={cargandoMovs || !movs.length} onClick={exportarJson}>
+              {tOr('inventario.exportarJson', 'Descargar JSON')}
             </button>
           </div>
 

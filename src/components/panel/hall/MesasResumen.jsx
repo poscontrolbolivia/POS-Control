@@ -1,3 +1,4 @@
+import VistaMapaLista from '../../ui/VistaMapaLista.jsx'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, totalFinal, pagadoCuenta, saldoCuenta } from '../../../context/StoreContext.jsx'
 import { round2 } from '../../../services/format.js'
@@ -82,17 +83,14 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
         <h2>{tOr('caja.mesasTitulo', 'Mesas')}</h2>
         <span className="caja-hora">{mesasZona.length}</span>
         <span className="sp" />
-        <div className="vista-sel" role="group" aria-label={t('salon.vista')}>
-          <button type="button" className={'tab' + (vista === 'mapa' ? ' on' : '')} aria-pressed={vista === 'mapa'} onClick={() => cambiarVista('mapa')}>🗺 <span className="txt">{t('salon.vistaMapa')}</span></button>
-          <button type="button" className={'tab' + (vista === 'lista' ? ' on' : '')} aria-pressed={vista === 'lista'} onClick={() => cambiarVista('lista')}>☰ <span className="txt">{t('salon.vistaLista')}</span></button>
-        </div>
+        <VistaMapaLista valor={vista} onCambiar={cambiarVista} etiqueta={t('salon.vista')} />
       </div>
 
       {/* El salón se elige arriba y siempre: en la vista mapa el selector quedaba debajo de la ayuda y no se veía. */}
       {zonasOrden.length >= 1 && (
         <div className="zonas-scroll mr-zonas" role="group" aria-label={t('salon.salones')}>
           <button type="button" className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS} onClick={() => setZona(TODAS)} title={t('salon.todasTitle')}>
-            <span aria-hidden="true">▦</span> {t('salon.todas')}
+            {t('salon.todas')}
           </button>
           {zonasOrden.map(z => (
             <button type="button" key={z.id} className={activo === z.id ? 'tab on' : 'tab'} aria-pressed={activo === z.id} onClick={() => setZona(z.id)}>{z.nombre}</button>

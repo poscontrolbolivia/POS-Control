@@ -39,7 +39,7 @@ export default function AgentStatus() {
         <span className="sp" />
         <button type="button" className="ghost" onClick={() => sondear(true)}>↻ {t('agente.volverProbar')}</button>
         <button type="button" className="primary" disabled={ocupado} onClick={instalar}>
-          {ocupado ? t('agente.descargando') : '⬇ ' + t('agente.descargar')}
+          {ocupado ? t('agente.descargando') : t('agente.descargar')}
         </button>
       </div>
       <p className="adm-sub" style={{ margin: 0 }}>{linea(info)}</p>

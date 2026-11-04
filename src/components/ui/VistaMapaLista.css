@@ -1,0 +1,3 @@
+/* Mapa / Lista: pegado a la derecha de su encabezado; en pantallas angostas baja a su propia línea, también a la derecha. */
+.vista-ml{display:inline-flex;gap:6px;flex:0 0 auto;margin-left:auto}
+.vista-ml .tab{min-height:44px;white-space:nowrap}

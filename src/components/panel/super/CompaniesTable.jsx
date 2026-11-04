@@ -251,10 +251,10 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
               {cuotaOk && <div className="super-ok">✅ {cuotaOk}</div>}
 
               <div className="super-centro" style={{ justifyContent: 'flex-start' }}>
-                <button type="button" className="super-ghost" disabled={ocupadoCuota} onClick={cerrarCuota}>{tOr('super.cuota.cerrar', 'Cerrar')}</button>
                 <button type="button" className="primary" disabled={ocupadoCuota} onClick={guardarCuota}>
                   {cuotaGuardando ? tOr('super.cuota.guardando', 'Guardando…') : tOr('super.cuota.guardar', 'Guardar cuota')}
                 </button>
+                <button type="button" className="super-ghost" disabled={ocupadoCuota} onClick={cerrarCuota}>{tOr('super.cuota.cerrar', 'Cerrar')}</button>
               </div>
             </>
           )}
@@ -279,10 +279,10 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
           </label>
           {errorDel && <div className="super-error" role="alert">⚠️ {errorDel}</div>}
           <div className="super-centro" style={{ justifyContent: 'flex-start' }}>
-            <button type="button" className="super-ghost" disabled={borrando} onClick={cerrarEliminar}>{tOr('super.entrar.cancelar', 'Cancelar')}</button>
             <button type="button" className="danger solid" disabled={!claveDel || borrando} onClick={confirmarEliminar}>
               {borrando ? tOr('super.eliminar.eliminando', 'Eliminando…') : tOr('super.eliminar.confirmar', 'Eliminar definitivamente')}
             </button>
+            <button type="button" className="super-ghost" disabled={borrando} onClick={cerrarEliminar}>{tOr('super.entrar.cancelar', 'Cancelar')}</button>
           </div>
         </div>
       )}
@@ -297,10 +297,10 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
             {tOr('super.entrar.detalleDespues', 'Verás su salón, su caja y sus tickets como si fueras equipo de esa empresa, con el límite de artículos que definas abajo. Tus datos quedan guardados y recuperas tu empresa con «volver a mi empresa».')}
           </p>
           <div className="super-centro" style={{ justifyContent: 'flex-start' }}>
-            <button type="button" className="super-ghost" disabled={ocupado} onClick={() => setConfirmando(null)}>{tOr('super.entrar.cancelar', 'Cancelar')}</button>
             <button type="button" className="primary" disabled={ocupado} onClick={() => { const e = confirmando; setConfirmando(null); onEntrar?.(e) }}>
               {ocupado ? tOr('super.entrar.entrando', 'Entrando…') : tOr('super.entrar.confirmar', 'Sí, entrar en esa empresa')}
             </button>
+            <button type="button" className="super-ghost" disabled={ocupado} onClick={() => setConfirmando(null)}>{tOr('super.entrar.cancelar', 'Cancelar')}</button>
           </div>
         </div>
       )}

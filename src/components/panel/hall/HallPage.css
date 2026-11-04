@@ -138,7 +138,7 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
     padding-bottom: 4px;
   }
 .zonas-scroll > *{ flex: none; }
-.zona-strip .vista-sel{ order: 2; }
+.zona-strip .vista-ml{ order: 2; }
 .zona-strip > button{ order: 3; margin-left: auto; }
 .salon button{ min-height: 44px; min-width: 44px; }
 .salon .ztab .tab{ min-height: 44px; padding: 8px 14px; font-size: .95rem; }
@@ -362,3 +362,9 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 
 /* Pregunta en línea de «Cancelar edición» (junto a los botones Sí, descartar / Seguir editando) */
 .salon .vt-pregunta{ font-weight:650; color:var(--ink); align-self:center; padding:0 4px; }
+
+.salon .mesa .alias-mesa{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.68rem;font-weight:800;line-height:1.1;padding:1px 6px;border-radius:999px;background:rgba(255,255,255,.75);color:#1c2b3a}
+
+/* Pie del mapa: el zoom (− 100 % +) y, al lado, Editar mapa; al editar, Terminar y Cancelar. */
+.mapa-pie{ display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; margin:6px 0 0; width:100%; }
+.mapa-pie .zoom-ctrl{ margin:0; }

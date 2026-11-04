@@ -58,3 +58,58 @@ Al editar, el mapa guarda cada cambio al instante. **✓ Terminar edición** los
 - **Avisos y vacíos**: siempre `<Aviso>` (icono + texto + botón si hace falta). No crear estilos nuevos.
 - **Tamaños táctiles**: botones de 44 px de alto como mínimo (48 px en Despacho).
 - **Textos**: todo en `es.json`, `en.json` y `pt.json`.
+
+## Iconos en botones (poco y siempre igual)
+Un botón con texto **no lleva emoji** salvo que sea de esta lista corta, y entonces el mismo texto lleva siempre el mismo icono:
+| Acción | Icono |
+|---|---|
+| Añadir / Nuevo / Invitar / Registrar | ＋ |
+| Editar / Renombrar | ✎ |
+| Eliminar | 🗑 |
+| Cancelar / Cerrar / Quitar / Descartar / Rechazar | ✕ |
+| Confirmar / Aprobar / Resolver / Marcar listo / Terminar edición | ✓ |
+| Deshacer | ↩ |
+| Actualizar / Probar de nuevo | ↻ |
+Además se conservan: ← Atrás, ▲▼ ▾▸ (ordenar y desplegar), los métodos de pago (💵 Efectivo · 📱 QR · 💳 Tarjeta),
+los modos 🪑 Mesas · 🥡 Para llevar · 🧾 Mostrador y 🧩 Mapa · ☰ Lista. El resto (🔥 🖨 📄 📷 ↺ ✂ 🔗…) no se usa.
+Un botón solo con icono (sin texto) sí puede llevar cualquiera de los anteriores, con `aria-label`.
+
+## Mapa / Lista
+Siempre con `<VistaMapaLista>` (🧩 Mapa · ☰ Lista), a la **derecha** del encabezado, igual en Salón, Caja y Reportes.
+En Salón, **Editar mapa** (y al editar: Terminar / Cancelar) va **abajo, junto al zoom** (− 100 % +), no arriba.
+
+## Panel de pedido
+Barra fija: **← Atrás · nombre de la mesa · acción principal** (sin icono). Debajo, los pasos; luego la fila
+**Comensales · quién abrió y hora · ⋯**. No se repite el estado («abierta») porque ya lo dicen los pasos.
+
+## Dónde va cada botón (regla de colocación: no se negocia)
+La misma función va **siempre en el mismo sitio**, con el mismo texto, icono y color, en todos los menús.
+| Lugar | Alineación | Orden de izquierda a derecha |
+|---|---|---|
+| **Encabezado** de pantalla o sección (`CabeceraPagina`, `.adm-card-cab`) | Grupo a la **derecha** | herramientas secundarias → Mapa/Lista → **principal al final** (extremo derecho) |
+| **Pie** de formulario, diálogo o confirmación (`.barra`) | A la **izquierda**, justo debajo de los campos | **principal primero** → secundarios → **Cancelar al final**. Si lo que se confirma es destructivo, el rojo sólido va primero |
+| **Fila** de una lista o tabla | A la **derecha** de la fila | lo frecuente → **«Más…» al final**; lo destructivo va dentro de «Más…» |
+| **Pestañas y zonas** | Debajo del encabezado, a la izquierda | las zonas van **siempre arriba** del mapa o lista, nunca debajo |
+| **Móvil** (≤ 640 px) | El grupo de acciones baja a **su propia línea, a todo el ancho** | mismo orden que en escritorio |
+
+Reglas que salen de ahí:
+1. **Mapa/Lista** es siempre `<VistaMapaLista>`, a la derecha del encabezado, igual en Salón, Caja, Venta directa y Reportes.
+2. **Actualizar** es siempre un `ghost` dentro del grupo de acciones del encabezado; nunca suelto en el cuerpo.
+3. **Crear / Nuevo** es siempre el verde principal, al final del grupo derecho del encabezado.
+4. Un botón **nunca flota solo** en el lado opuesto de la pantalla. Si no cabe junto al título, baja a su línea.
+5. Si dos pantallas hacen lo mismo (ej. editar un ítem, añadir un insumo), sus botones se ven y se colocan igual. Antes de
+   inventar una colocación nueva, copia la de la pantalla que ya hace lo mismo.
+
+## Textos y números que no se cortan
+1. **Las mesas de un mapa son `<div role="button" tabIndex={0}>` con `onKeyDown`, jamás `<button>`.** Safari no usa `<button>`
+   como contenedor de medidas y el número sale gigante y cortado. `npm run estilo` lo comprueba.
+2. Todo texto dentro de una caja de tamaño variable (mesas, tarjetas, píldoras) se mide con unidades de contenedor
+   (`cqw`/`cqh`) sobre un elemento con `container-type:size`; nunca con `px` o `rem` fijos.
+3. Lo accesorio (zona, personas, importe, cifra) se oculta con `@container (max-height:…)` cuando no cabe. Lo esencial (el
+   número de la mesa) siempre se ve completo.
+4. Texto en línea: `min-width:0` y `overflow:hidden; text-overflow:ellipsis` (o `overflow-wrap:anywhere`). Nunca
+   `overflow:hidden` solo.
+5. Ventanas nativas del navegador (`alert`, `confirm`, `prompt`): prohibidas; se usa un aviso o recuadro en línea. También lo comprueba `npm run estilo`.
+
+**Lista de revisión antes de entregar una pantalla:** ¿se ve bien a 360 px de ancho y en los tres temas? ¿cada botón está en el
+sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos están en es/en/pt? ¿pasa `npm test`?

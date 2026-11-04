@@ -1,3 +1,4 @@
+import VistaMapaLista from '../../ui/VistaMapaLista.jsx'
 import { useMemo, useState } from 'react'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { round2 } from '../../../services/format.js'
@@ -54,16 +55,13 @@ export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera 
         <h3>🗺️ {tOr('reportes.mapaTitulo', 'Mapa de ventas')}</h3>
         <span className="rp-n">{mesas.length}</span>
         <span className="sp" />
-        <div className="rp-vistas" role="group" aria-label={t('salon.vista')}>
-          <button type="button" className={'tab' + (vista === 'mapa' ? ' on' : '')} aria-pressed={vista === 'mapa'} onClick={() => cambiarVista('mapa')}>🧩 {tOr('reportes.mapaVistaMapa', 'Mapa')}</button>
-          <button type="button" className={'tab' + (vista === 'lista' ? ' on' : '')} aria-pressed={vista === 'lista'} onClick={() => cambiarVista('lista')}>☰ {tOr('reportes.mapaVistaLista', 'Lista')}</button>
-        </div>
+        <VistaMapaLista valor={vista} onCambiar={cambiarVista} etiqueta={t('salon.vista')} />
       </div>
 
       {zonasOrden.length >= 1 && (
         <div className="zonas-scroll rp-zonas" role="group" aria-label={t('salon.salones')}>
           <button type="button" className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS} onClick={() => setZona(TODAS)} title={t('salon.todasTitle')}>
-            <span aria-hidden="true">▦</span> {t('salon.todas')}
+            {t('salon.todas')}
           </button>
           {zonasOrden.map(z => (
             <button type="button" key={z.id} className={activo === z.id ? 'tab on' : 'tab'} aria-pressed={activo === z.id} onClick={() => setZona(z.id)}>{z.nombre}</button>
@@ -103,16 +101,17 @@ export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera 
             {mesasZona.map(mm => {
               const monto = montoDe(mm.nombre)
               return (
-                <button type="button" key={mm.id}
+                <div role="button" tabIndex={0} key={mm.id}
                   className={`mesa ${mm.forma || 'cuadrada'} rp-mesa` + (sel === mm.nombre ? ' sel' : '')}
                   onClick={() => pulsado(mm.nombre)} aria-pressed={sel === mm.nombre}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pulsado(mm.nombre) } }}
                   title={`${mm.nombre}${monto > 0 ? ' · ' + m(monto) : ''} — ${tOr('reportes.mapaTocar', 'Filtrar el reporte por esta mesa')}`}
                   style={{ left: `${(mm.x / W) * 100}%`, top: `${(mm.y / H) * 100}%`, width: `${(mm.w / W) * 100}%`, height: `${(mm.h / H) * 100}%`, ...calor(monto) }}>
                   <b className={'nombre' + (String(mm.nombre).length > 4 ? ' largo' : '')}>{mm.nombre}</b>
                   <span className="rp-mesa-cifra">{corto(monto)}</span>
                   {monto > 0 && <span className="rp-mesa-pax">×{cuentaDe(mm.nombre)}</span>}
                   {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(mm.zona)}</span>}
-                </button>
+                </div>
               )
             })}
           </div>

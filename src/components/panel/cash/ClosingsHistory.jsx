@@ -7,6 +7,8 @@ import { formatearMonto } from '../../../services/money.js'
 import { detalleCierre } from '../../../services/db.js'
 import { calcularResumen } from './calcularResumen.js'
 import { armarReporte, descargarPdfCierre } from '../../../services/reporteCierre.js'
+import { descargarTablaPdf } from '../../../services/exportar.js'
+import { cargarTiempos } from '../../../services/tiempos.js'
 
 const pad = n => String(n).padStart(2, '0')
 const aFecha = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -14,7 +16,7 @@ const hoy = () => aFecha(new Date())
 const hace = dias => { const d = new Date(); d.setDate(d.getDate() - dias); return aFecha(d) }
 
 export default function ClosingsHistory({ moneda = 'Bs' }) {
-  const { t } = useIdioma()
+  const { t, tOr } = useIdioma()
   const { s } = useStore()
   const [desde, setDesde] = useState(hace(6))
   const [hasta, setHasta] = useState(hoy())
@@ -37,12 +39,15 @@ export default function ClosingsHistory({ moneda = 'Bs' }) {
     setFallo({ id: '', msg: '' })
     try {
       const { turno, cuentas, devoluciones } = await detalleCierre(x.id)
+      const tiemposFilas = await cargarTiempos(turno.abiertoEn, turno.cerradoEn || Date.now()).catch(() => null)
       const reporte = armarReporte({
         turno,
         resumen: calcularResumen(turno, cuentas),
         config: s.config,
         productos: s.productos,
         devoluciones,
+        cuentas,
+        tiemposFilas,
         contado: x.contado == null ? null : Number(x.contado),
         cerradoPor: x.cerrado_por || '',
         etiquetaCuenta,
@@ -93,14 +98,26 @@ export default function ClosingsHistory({ moneda = 'Bs' }) {
     : d > 0 ? <span className="caja-diff sobra">{t('caja.sobraM', { monto: m(d) })}</span>
       : <span className="caja-diff falta">{t('caja.faltaM', { monto: m(-d) })}</span>)
 
-  const csv = () => {
-    const cab = ['turno_abierto', 'turno_cerrado', 'abrio', 'cerro', 'fondo', 'efectivo', 'qr', 'tarjeta', 'otros', 'cobrado', 'ingresos', 'egresos', 'esperado', 'contado', 'diferencia', 'cuentas', 'devoluciones_n', 'devoluciones_monto', 'devoluciones_sin_confirmar']
-    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const filas = (turnos || []).map(x => [x.abierto_en, x.cerrado_en || '', x.abierto_por, x.cerrado_por, x.fondo, x.efectivo, x.qr, x.tarjeta, x.otros, x.cobrado, x.ingresos, x.egresos, x.esperado ?? '', x.contado ?? '', x.diferencia ?? '', x.cuentas, x.dev_n, x.dev_monto, x.dev_sin_confirmar].map(esc).join(','))
-    const blob = new Blob(['\ufeff' + [cab.join(','), ...filas].join('\n')], { type: 'text/csv;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob); a.download = `cierres-${desde}_${hasta}.csv`
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  const descargarListaPdf = async () => {
+    const fecha = iso => (iso ? new Date(iso).toLocaleString([], { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '')
+    const mm = v => (v == null || v === '' ? '' : m(v))
+    const columnas = [
+      tOr('cierres.colAbierto', 'Abierto'), tOr('cierres.colCerrado', 'Cerrado'), tOr('cierres.colCajero', 'Cajero'),
+      tOr('cierres.colFondo', 'Fondo'), t('cierrePdf.efectivo'), t('cierrePdf.qr'), t('cierrePdf.tarjeta'), t('cierrePdf.otros'),
+      tOr('cierres.colCobrado', 'Cobrado'), t('cierrePdf.ingresos'), t('cierrePdf.egresos'),
+      t('cierrePdf.esperado'), t('cierrePdf.contado'), t('cierrePdf.diferencia'), t('cierrePdf.cuentas'), tOr('cierres.colDevol', 'Devol.'),
+    ]
+    const filas = (turnos || []).map(x => [
+      fecha(x.abierto_en), fecha(x.cerrado_en), x.cerrado_por || x.abierto_por || '', mm(x.fondo), mm(x.efectivo), mm(x.qr), mm(x.tarjeta), mm(x.otros),
+      mm(x.cobrado), mm(x.ingresos), mm(x.egresos), mm(x.esperado), mm(x.contado), mm(x.diferencia), x.cuentas ?? '',
+      x.dev_n ? `${x.dev_n} (${m(x.dev_monto)})${x.dev_sin_confirmar ? ` · ${x.dev_sin_confirmar} ${tOr('cierres.sinConfirmar', 'sin confirmar')}` : ''}` : '',
+    ])
+    try {
+      await descargarTablaPdf([{ columnas, filas }], {
+        archivo: `cierres-${desde}_${hasta}`, titulo: t('cierres.titulo'), subtitulo: `${desde}  -  ${hasta}`,
+        negocio: s.config?.nombre || '', generado: t('cierrePdf.generado'),
+      })
+    } catch { setError(t('cierrePdf.error')) }
   }
 
   return (
@@ -118,7 +135,7 @@ export default function ClosingsHistory({ moneda = 'Bs' }) {
         <button type="button" className="ghost" onClick={() => rapido(hace(6), hoy())}>{t('cierres.d7')}</button>
         <button type="button" className="ghost" onClick={() => rapido(hace(29), hoy())}>{t('cierres.d30')}</button>
         <span className="sp" />
-        <button type="button" className="ghost" disabled={!turnos?.length} onClick={csv}>{t('cierres.csv')}</button>
+        <button type="button" className="ghost" disabled={!turnos?.length} onClick={descargarListaPdf}>{t('cierres.csv')}</button>
       </div>
       {error && <p className="caja-aviso" role="alert">{error}</p>}
       {turnos && !turnos.length && !error && <p className="caja-nota">{t('cierres.vacio')}</p>}

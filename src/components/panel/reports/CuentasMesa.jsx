@@ -74,7 +74,7 @@ export default function CuentasMesa({ etiqueta, rango, s, modo, d, rol, usuario,
                 <span className="sp" />
                 <b>{m(totalFinal(c))}</b>
                 {puede(rol, 'reabrir_cobrada') && reabriendo !== c.id && (
-                  <button type="button" className="ghost rp-btn" onClick={() => setReabriendo(c.id)}>↺ {tOr('caja.reabrir', 'Reabrir')}</button>
+                  <button type="button" className="ghost rp-btn" onClick={() => setReabriendo(c.id)}>{tOr('caja.reabrir', 'Reabrir')}</button>
                 )}
                 {reabriendo === c.id && <ReabrirForm cuenta={c} s={s} onConfirmar={r => confirmar(c, r)} onCancelar={() => setReabriendo(null)} />}
               </li>

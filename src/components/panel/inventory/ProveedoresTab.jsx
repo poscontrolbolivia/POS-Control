@@ -107,36 +107,19 @@ export default function ProveedoresTab({ onPagar, alta = false, onAltaDone }) {
     cerrarConfirmar()
   }
 
-  const exportarCSV = () => {
+  // Directorio de proveedores: datos reutilizables → JSON.
+  const exportarJson = async () => {
     if (!lista.length) return
-    const esc = v => `"${String(v ?? '').replaceAll('"', '""')}"`
-    const cab = [
-      tOr('inventario.provColNombre', 'Proveedor'), tOr('inventario.provColContacto', 'Contacto'),
-      tOr('inventario.provColPlatos', 'Platos que le compran'), tOr('inventario.provColDeuda', 'Deuda total'),
-      tOr('inventario.provColPagado', 'Pagado'), tOr('inventario.provColPendiente', 'Pendiente'),
-      tOr('inventario.provColEstado', 'Estado'), tOr('inventario.colNota', 'Nota'),
-    ]
-    const filas = lista.map(p => {
-      const r = resumen.get(p.id) || { total: 0, pagado: 0, pendiente: 0, productos: [] }
-      return [
-        p.nombre,
-        [p.telefono, p.email].filter(Boolean).join(' / '),
-        r.productos.join('; '),
-        r.total, r.pagado, r.pendiente,
-        p.activo !== false ? tOr('inventario.provActivo', 'Activo') : tOr('inventario.provInactivo', 'Inactivo'),
-        p.nota || '',
-      ]
+    const { descargarJson } = await import('../../../services/exportar.js')
+    descargarJson('proveedores', {
+      proveedores: lista.map(p => {
+        const r = resumen.get(p.id) || { total: 0, pagado: 0, pendiente: 0, productos: [] }
+        return {
+          nombre: p.nombre, telefono: p.telefono || '', email: p.email || '', activo: p.activo !== false, nota: p.nota || '',
+          platos: r.productos, deuda_total: round2(r.total), pagado: round2(r.pagado), pendiente: round2(r.pendiente),
+        }
+      }),
     })
-    const csv = '\ufeff' + [cab, ...filas].map(f => f.map(esc).join(',')).join('\r\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    try {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'proveedores.csv'
-      a.click()
-    } finally {
-      URL.revokeObjectURL(url)
-    }
   }
 
   const bloqueForm = form && (
@@ -188,8 +171,8 @@ export default function ProveedoresTab({ onPagar, alta = false, onAltaDone }) {
           {nConSaldo > 0 && <> · {nConSaldo} {tOr('inventario.chipConSaldo', 'con saldo pendiente')}</>}
         </span>
         <span className="sp" />
-        <button type="button" className="ghost" disabled={!lista.length} onClick={exportarCSV}>
-          {tOr('inventario.exportar', 'Exportar CSV')}
+        <button type="button" className="ghost" disabled={!lista.length} onClick={exportarJson}>
+          {tOr('inventario.exportarJson', 'Descargar JSON')}
         </button>
         <button type="button" className="primary" disabled={Boolean(form) && !editando} onClick={abrirNuevo}>
           ＋ {tOr('inventario.nuevoProveedor', 'Proveedor')}

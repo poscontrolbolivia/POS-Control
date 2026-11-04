@@ -162,10 +162,9 @@ export default function CuentasTab({ filtroProveedor, onFiltro, alta = false, on
     cerrarConfirmar()
   }
 
-  const exportarCSV = () => {
+  const exportarPdf = async () => {
     if (!visibles.length) return
-    const esc = v => `"${String(v ?? '').replaceAll('"', '""')}"`
-    const cab = [
+    const columnas = [
       tOr('inventario.provColNombre', 'Proveedor'), tOr('inventario.deudaColConcepto', 'Concepto'),
       tOr('inventario.deudaColFecha', 'Fecha'), tOr('inventario.deudaColVencimiento', 'Vencimiento'),
       tOr('inventario.deudaColMonto', 'Monto'), tOr('inventario.provColPagado', 'Pagado'),
@@ -174,18 +173,14 @@ export default function CuentasTab({ filtroProveedor, onFiltro, alta = false, on
     ]
     const filas = visibles.map(de => [
       nombreProv(de.proveedorId), de.concepto || '', de.fecha || '', de.vencimiento || '',
-      num(de.monto), num(de.pagado), num(de.saldo), etiquetaEstado(estadoDeuda(de)), de.nota || '',
+      money(num(de.monto)), money(num(de.pagado)), money(num(de.saldo)), etiquetaEstado(estadoDeuda(de)), de.nota || '',
     ])
-    const csv = '\ufeff' + [cab, ...filas].map(f => f.map(esc).join(',')).join('\r\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    try {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'cuentas-por-pagar.csv'
-      a.click()
-    } finally {
-      URL.revokeObjectURL(url)
-    }
+    const { descargarTablaPdf } = await import('../../../services/exportar.js')
+    await descargarTablaPdf([{ columnas, filas }], {
+      archivo: 'cuentas-por-pagar', titulo: tOr('inventario.cuentasTitulo', 'Cuentas por pagar'),
+      subtitulo: new Date().toLocaleDateString(), negocio: s?.config?.nombre || '',
+      generado: tOr('cierrePdf.generado', 'Generado'),
+    }).catch(() => {})
   }
 
   const provFiltrado = filtroProveedor ? provPorId.get(filtroProveedor) : null
@@ -201,8 +196,8 @@ export default function CuentasTab({ filtroProveedor, onFiltro, alta = false, on
             {nombreProv(provFiltrado.id)} ✕
           </button>
         )}
-        <button type="button" className="ghost" disabled={!visibles.length} onClick={exportarCSV}>
-          {tOr('inventario.exportar', 'Exportar CSV')}
+        <button type="button" className="ghost" disabled={!visibles.length} onClick={exportarPdf}>
+          {tOr('inventario.exportar', 'Descargar PDF')}
         </button>
       </div>
 

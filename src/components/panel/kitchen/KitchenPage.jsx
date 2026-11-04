@@ -19,6 +19,14 @@ const LLAVE_VISTA = 'pos-cocina-vista'
 const BRECHA_LOTE_MS = 1500
 const EN_COLA = ['enviado', 'listo', 'anulacion']
 
+// Duración legible: «45 s», «12 min», «1 h 05 min».
+const dur = n => {
+  if (!Number.isFinite(n) || n < 0) return ''
+  const s = Math.round(n / 1000)
+  if (s < 60) return `${s} s`
+  const m = Math.round(s / 60)
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`
+}
 const ms = ts => { const n = typeof ts === 'number' ? ts : Date.parse(ts); return Number.isFinite(n) ? n : null }
 
 function cronometro(desde, ahora) {
@@ -385,7 +393,8 @@ export default function KitchenPage({ rol, sesion }) {
           enCurso.push({ ...c, area: a, desde: tiempos.length ? Math.min(...tiempos) : ms(c.enviada_en) })
         } else if (items.length) {
           const salidas = items.map(i => ms(i.listo_en)).filter(Boolean)
-          sacadas.push({ ...c, area: a, salioEn: salidas.length ? Math.max(...salidas) : null })
+          const entradas = items.map(i => ms(i.enviada_en)).filter(Boolean)
+          sacadas.push({ ...c, area: a, salioEn: salidas.length ? Math.max(...salidas) : null, entroEn: entradas.length ? Math.min(...entradas) : ms(c.enviada_en) })
         }
       })
       enCurso.sort((x, y) => (x.desde || 0) - (y.desde || 0))
@@ -650,10 +659,14 @@ export default function KitchenPage({ rol, sesion }) {
               <ul>
                 {filas[a].sacadas.map(c => (
                   <li key={claveComanda(c)} className="ck-sac">
-                    <div className="ck-sac-cab"><b>{tituloMesa(c)}</b><small>{c.salioEn ? `${tOr('cocina.salio', 'Salió')} ${hora(c.salioEn)}` : ''}</small></div>
+                    <div className="ck-sac-cab"><b>{tituloMesa(c)}</b><small>{[
+                      c.entroEn ? `${tOr('cocina.entro', 'Entró')} ${hora(c.entroEn)}` : '',
+                      c.entroEn && c.salioEn ? `${tOr('cocina.demoro', 'Demoró')} ${dur(c.salioEn - c.entroEn)}` : '',
+                      c.salioEn ? `${tOr('cocina.salio', 'Salió')} ${hora(c.salioEn)}` : '',
+                    ].filter(Boolean).join(' · ')}</small></div>
                     <ul>
                       {(c.items || []).map(it => (
-                        <li key={it.id}><span>{it.qty}× {it.nombre}{it.nota ? ` · ${it.nota}` : ''}</span>
+                        <li key={it.id}><span>{it.qty}× {it.nombre}{it.nota ? ` · ${it.nota}` : ''}{ms(it.enviada_en) && ms(it.listo_en) ? ` · ${dur(ms(it.listo_en) - ms(it.enviada_en))}` : ''}</span>
                           <button type="button" className="ck-mini ghost" onClick={() => deshacer(it, c)} title={tOr('cocina.deshacer', 'Deshacer')} aria-label={`${tOr('cocina.deshacer', 'Deshacer')}: ${it.nombre}`}>↩</button></li>
                       ))}
                     </ul>

@@ -1,3 +1,4 @@
+import VistaMapaLista from '../../ui/VistaMapaLista.jsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, cuentaActiva, cuentasDeMesa, totalCuenta, totalFinal, pagadoCuenta, saldoCuenta, nuevoId } from '../../../context/StoreContext.jsx'
 import { puede } from '../../../services/permissions'
@@ -378,7 +379,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           <div className="zonas-scroll" ref={ruedaHorizontal} role="group" aria-label={t('salon.salones')}>
             <button className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS}
               title={t('salon.todasTitle')} onClick={() => { setZona(TODAS); setSel(null) }}>
-              <span aria-hidden="true">▦</span> {t('salon.todas')}
+              {t('salon.todas')}
             </button>
             <button className={enLlevar ? 'tab on' : 'tab'} aria-pressed={enLlevar} onClick={() => { setZona(LLEVAR); setSel(null); setEdit(false); setNueva(null); setRen(null); setConf(null) }}>
               <span aria-hidden="true">🥡</span> {t('salon.llevar')}{llevarCuentas.length > 0 && <span className="llevar-n">{llevarCuentas.length}</span>}
@@ -436,27 +437,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
               </button>
             )}
           </div>
-          {!enLlevar && <div className="vista-sel" role="group" aria-label={t('salon.vista')}>
-            <button type="button" className={'tab' + (vista === 'mapa' || edit ? ' on' : '')} aria-pressed={vista === 'mapa' || edit} onClick={() => cambiarVista('mapa')}>🗺 <span className="txt">{t('salon.vistaMapa')}</span></button>
-            <button type="button" className={'tab' + (vista === 'lista' && !edit ? ' on' : '')} aria-pressed={vista === 'lista' && !edit} disabled={edit} onClick={() => cambiarVista('lista')}>☰ <span className="txt">{t('salon.vistaLista')}</span></button>
-          </div>}
-          {admin && !enLlevar && (
-            <button className={(edit ? 'primary' : 'ghost') + ' vt'} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
-              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { if (edit) salirEdicion(); else { entrarEdicion(); setSel(null); setNueva(null) } }}>
-              <span aria-hidden="true">{edit ? '✓' : '✎'}</span><span className="txt">{edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}</span>
-            </button>
-          )}
-          {admin && !enLlevar && edit && (descartando ? (
-            <>
-              <span className="vt-pregunta" role="alert">{t('salon.descartarPregunta')}</span>
-              <button type="button" className="danger solid vt" onClick={cancelarEdicion}><span aria-hidden="true">✕</span><span className="txt">{t('salon.descartarSi')}</span></button>
-              <button type="button" className="ghost vt" onClick={() => setDescartando(false)}><span className="txt">{t('salon.seguirEditando')}</span></button>
-            </>
-          ) : (
-            <button type="button" className="danger solid vt" aria-label={t('salon.cancelarEdicion')} title={t('salon.cancelarEdicion')} onClick={cancelarEdicion}>
-              <span aria-hidden="true">✕</span><span className="txt">{t('salon.cancelarEdicion')}</span>
-            </button>
-          ))}
+          {!enLlevar && <VistaMapaLista valor={edit ? 'mapa' : vista} onCambiar={cambiarVista} bloquearLista={edit} etiqueta={t('salon.vista')} />}
         </div>
 
         {aviso && (
@@ -587,7 +568,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
               const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
               return (
                 <button type="button" key={m.id} className={`mesa-item ${est}`} onClick={() => abrirMesa(m.id)}>
-                  <b className="nombre">{m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : cs.length > 1 ? ` ✂×${cs.length}` : ''}</b>
+                  <b className="nombre">{cs.length === 1 && c.tipo === 'mesa' && c.clienteNombre ? `${c.clienteNombre} (${m.nombre})` : m.nombre}{unida ? ` 🔗×${c.mesaIds.length}` : cs.length > 1 ? ` ✂×${cs.length}` : ''}</b>
                   <span className="mi-est">{t('salon.' + est)}</span>
                   {c && <small className="importe">{money(resto)}{abono > 0.009 && <em className="abonado" title={t('salon.totalAbonado', { total: money(total) })}>✓ {money(abono)}</em>}</small>}
                   {c && <small className="mi-quien">👥 {comDe(c)}/{capacidadCuenta(c, s.mesas) || m.cap || 0}{c.abiertaPor ? ` · 👤 ${c.abiertaPor}` : ''}{c.detalle ? ' · 📝' : ''}</small>}
@@ -622,6 +603,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
                 title={sub}
                 onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) abrirMesa(m.id) }} style={estiloMesa(p, asp)}>
                 <b className="nombre">{num || m.nombre}</b>
+                {cs.length === 1 && c.tipo === 'mesa' && c.clienteNombre && <span className="alias-mesa" title={`${c.clienteNombre} (${m.nombre})`}>{c.clienteNombre}</span>}
                 {c && <span className="importe">{money(resto)}</span>}
                 {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
                 {c && heredadas.includes(c.id) && <span className="badge-heredada" title={t('salon.heredadaTitle')}>↩</span>}
@@ -637,13 +619,37 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
             </div>
           </div>
         </div>
-        {/* Zoom: fuera del recuadro del mapa para que no estorbe a la vista. */}
-        <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
-          <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
-          <button type="button" className="zoom-pct" onClick={zoomReset} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
-          <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
         </div>
-        </div>
+
+        {/* Pie del mapa: zoom y, al lado, Editar mapa (al editar: Terminar y Cancelar). */}
+        {!enLlevar && (
+          <div className="mapa-pie">
+            {!(vista === 'lista' && !edit) && (
+            <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
+              <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
+              <button type="button" className="zoom-pct" onClick={zoomReset} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>
+              <button type="button" className="ico" onClick={zoomAcercar} disabled={zoom >= ZOOM_MAX} title={tOr('salon.zoomAcercar', 'Acercar el mapa')} aria-label={tOr('salon.zoomAcercar', 'Acercar el mapa')}>＋</button>
+            </div>
+            )}
+          {admin && !enLlevar && (
+            <button className={(edit ? 'primary' : 'ghost') + ' vt'} aria-label={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}
+              title={edit ? t('salon.terminarEdicion') : t('salon.editarMapa')} onClick={() => { if (edit) salirEdicion(); else { entrarEdicion(); setSel(null); setNueva(null) } }}>
+              <span aria-hidden="true">{edit ? '✓' : '✎'}</span><span className="txt">{edit ? t('salon.terminarEdicion') : t('salon.editarMapa')}</span>
+            </button>
+          )}
+          {admin && !enLlevar && edit && (descartando ? (
+            <>
+              <span className="vt-pregunta" role="alert">{t('salon.descartarPregunta')}</span>
+              <button type="button" className="danger solid vt" onClick={cancelarEdicion}><span aria-hidden="true">✕</span><span className="txt">{t('salon.descartarSi')}</span></button>
+              <button type="button" className="ghost vt" onClick={() => setDescartando(false)}><span className="txt">{t('salon.seguirEditando')}</span></button>
+            </>
+          ) : (
+            <button type="button" className="danger solid vt" aria-label={t('salon.cancelarEdicion')} title={t('salon.cancelarEdicion')} onClick={cancelarEdicion}>
+              <span aria-hidden="true">✕</span><span className="txt">{t('salon.cancelarEdicion')}</span>
+            </button>
+          ))}
+          </div>
+        )}
 
         {enLlevar && (
           <div className="llevar">
@@ -675,7 +681,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
                   {puede(rol, 'abrir_mesa') && c.canal === 'llevar' && (
                     <div className="llevar-acc">
                       <button type="button" className="ghost" onClick={() => setCli({ id: c.id, nombre: c.clienteNombre || '', tel: c.clienteTel || '' })}>✎ {t('salon.llevarEditar')}</button>
-                      <button type="button" className="ghost" onClick={() => setAMesa(aMesa?.cuentaId === c.id ? null : { cuentaId: c.id, mesaId: '', com: 1 })}>➜ {t('salon.llevarAMesa')}</button>
+                      <button type="button" className="ghost" onClick={() => setAMesa(aMesa?.cuentaId === c.id ? null : { cuentaId: c.id, mesaId: '', com: 1 })}>{t('salon.llevarAMesa')}</button>
                     </div>
                   )}
                   {aMesa?.cuentaId === c.id && (

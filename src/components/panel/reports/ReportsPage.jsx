@@ -14,10 +14,11 @@ import MapaVentas from './MapaVentas.jsx'
 import CuentasMesa from './CuentasMesa.jsx'
 import {
   resumenDeCuentas, rangoHoy, rangoUltimos7, rangoMesActual, rangoMesPasado, rangoDeFechas,
-  fechaClave, aMs, csvDe, bajarCsv, csvDeSecciones,
+  fechaClave, aMs,
 } from './calculos.js'
 import '../../../styles/admin.css'
 import './ReportsPage.css'
+import { cargarTiempos, agruparTiempos, filasLocales, formatoDuracion } from '../../../services/tiempos.js'
 
 const METODO_TXT = { efectivo: 'Efectivo', qr: 'QR', tarjeta: 'Tarjeta', mixed: 'Mixto' }
 const PRESETS = [
@@ -80,6 +81,23 @@ export default function ReportsPage({ rol, sesion }) {
       .catch(() => { if (seq === seqRef.current) setCargando(false) })
     return undefined
   }, [modo, rango])
+
+  // Historial de tiempos: en Supabase viene del servidor (cada área con su hora de salida); en demo, de la memoria.
+  const [tiemposSrv, setTiemposSrv] = useState(null)
+  useEffect(() => {
+    if (modo !== 'supabase') { setTiemposSrv(null); return undefined }
+    let vivo = true
+    cargarTiempos(rango.desde, rango.hasta).then(f => { if (vivo) setTiemposSrv(f) }).catch(() => { if (vivo) setTiemposSrv(null) })
+    return () => { vivo = false }
+  }, [modo, rango])
+  const tiemposGrupos = useMemo(
+    () => agruparTiempos(tiemposSrv || filasLocales(s.cuentas, rango.desde, rango.hasta, s.productos), a => nombreDeArea(s.config, a, a)),
+    [tiemposSrv, s.cuentas, s.productos, s.config, rango],
+  )
+  const tiemposFilas = useMemo(() => tiemposGrupos.flatMap(A => [
+    { area: A.id, areaTxt: A.nombre, nombre: tOr('reportes.tiempoPromedioArea', '— Promedio del área —'), n: A.n, promedio: A.promedio, min: null, max: null, total: true },
+    ...A.filas.map(f => ({ area: A.id, areaTxt: A.nombre, ...f })),
+  ]), [tiemposGrupos])
 
   const memoria = useMemo(() => resumenDeCuentas(s, rango.desde, rango.hasta), [s, rango])
   const resumen = modo === 'supabase' && resumenRpc?.origen === 'rpc' ? resumenRpc : memoria
@@ -155,8 +173,8 @@ export default function ReportsPage({ rol, sesion }) {
         { key: 'cuentas', label: L.cuentas, render: r => r.cuentas },
         { key: 'monto', label: L.monto, render: r => m(r.monto) },
       ],
-      csvColumnas: [L.dia, L.cuentas, L.monto],
-      csvFila: r => [r.dia, r.cuentas, round2(r.monto)],
+      columnasExp: [L.dia, L.cuentas, L.monto],
+      filaExp: r => [r.dia, r.cuentas, round2(r.monto)],
     },
     {
       id: 'metodos', icono: '💳', titulo: tOr('reportes.porMetodo', 'Por método de pago'),
@@ -167,8 +185,8 @@ export default function ReportsPage({ rol, sesion }) {
         { key: 'pct', label: L.pct, render: r => pct(r.monto) },
         { key: 'cuentas', label: L.cuentas, render: r => r.cuentas },
       ],
-      csvColumnas: [L.metodo, L.monto, L.pct, L.cuentas],
-      csvFila: r => [metodoTxt(r.metodo), round2(r.monto), pct(r.monto), r.cuentas],
+      columnasExp: [L.metodo, L.monto, L.pct, L.cuentas],
+      filaExp: r => [metodoTxt(r.metodo), round2(r.monto), pct(r.monto), r.cuentas],
     },
     {
       id: 'productos', icono: '🍽️', titulo: tOr('reportes.masVendidos', 'Más vendidos'),
@@ -178,8 +196,8 @@ export default function ReportsPage({ rol, sesion }) {
         { key: 'qty', label: L.cant, render: r => r.qty },
         { key: 'importe', label: L.importe, render: r => m(r.importe) },
       ],
-      csvColumnas: [L.producto, L.cant, L.importe],
-      csvFila: r => [r.nombre, r.qty, round2(r.importe)],
+      columnasExp: [L.producto, L.cant, L.importe],
+      filaExp: r => [r.nombre, r.qty, round2(r.importe)],
     },
     {
       id: 'meseros', icono: '🧑‍🍳', titulo: tOr('reportes.porMesero', 'Rendimiento por mesero'),
@@ -189,8 +207,8 @@ export default function ReportsPage({ rol, sesion }) {
         { key: 'cuentas', label: L.cuentas, render: r => r.cuentas },
         { key: 'monto', label: L.monto, render: r => m(r.monto) },
       ],
-      csvColumnas: [L.mesero, L.cuentas, L.monto],
-      csvFila: r => [r.usuario, r.cuentas, round2(r.monto)],
+      columnasExp: [L.mesero, L.cuentas, L.monto],
+      filaExp: r => [r.usuario, r.cuentas, round2(r.monto)],
     },
     {
       id: 'mesas', icono: '🪑', titulo: tOr('reportes.porMesa', 'Por mesa'), porMesa: true,
@@ -200,8 +218,8 @@ export default function ReportsPage({ rol, sesion }) {
         { key: 'cuentas', label: L.cuentas, render: r => r.cuentas },
         { key: 'monto', label: L.monto, render: r => m(r.monto) },
       ],
-      csvColumnas: [L.mesa, L.cuentas, L.monto],
-      csvFila: r => [r.mesa, r.cuentas, round2(r.monto)],
+      columnasExp: [L.mesa, L.cuentas, L.monto],
+      filaExp: r => [r.mesa, r.cuentas, round2(r.monto)],
     },
     {
       id: 'areas', icono: '👨‍🍳', titulo: tOr('reportes.porArea', 'Por área'),
@@ -210,8 +228,22 @@ export default function ReportsPage({ rol, sesion }) {
         { key: 'area', label: L.area, render: r => nombreDeArea(s.config, r.area, r.area) },
         { key: 'qty', label: L.cant, render: r => r.qty },
       ],
-      csvColumnas: [L.area, L.cant],
-      csvFila: r => [nombreDeArea(s.config, r.area, r.area), r.qty],
+      columnasExp: [L.area, L.cant],
+      filaExp: r => [nombreDeArea(s.config, r.area, r.area), r.qty],
+    },
+    {
+      id: 'tiempos', icono: '⏱️', titulo: tOr('reportes.tiempos', 'Tiempos de preparación'),
+      filas: tiemposFilas, getRowId: r => `${r.area}|${r.nombre}`,
+      columnas: [
+        { key: 'area', label: L.area, render: r => r.areaTxt },
+        { key: 'nombre', label: L.producto, render: r => (r.total ? <b>{r.nombre}</b> : r.nombre) },
+        { key: 'n', label: L.cant, render: r => r.n },
+        { key: 'promedio', label: tOr('reportes.colPromedio', 'Promedio'), render: r => <b>{formatoDuracion(r.promedio)}</b>, sortValue: r => r.promedio },
+        { key: 'min', label: tOr('reportes.colMasRapido', 'Más rápido'), render: r => (r.min == null ? '' : formatoDuracion(r.min)), sortValue: r => r.min ?? -1 },
+        { key: 'max', label: tOr('reportes.colMasLento', 'Más lento'), render: r => (r.max == null ? '' : formatoDuracion(r.max)), sortValue: r => r.max ?? -1 },
+      ],
+      columnasExp: [L.area, L.producto, L.cant, tOr('reportes.colPromedio', 'Promedio'), tOr('reportes.colMasRapido', 'Más rápido'), tOr('reportes.colMasLento', 'Más lento')],
+      filaExp: r => [r.areaTxt, r.nombre, r.n, formatoDuracion(r.promedio), r.min == null ? '' : formatoDuracion(r.min), r.max == null ? '' : formatoDuracion(r.max)],
     },
     {
       id: 'devoluciones', icono: '↩️', titulo: tOr('reportes.devoluciones', 'Devoluciones'),
@@ -221,8 +253,8 @@ export default function ReportsPage({ rol, sesion }) {
         { key: 'qty', label: L.cant, render: r => r.qty },
         { key: 'monto', label: L.monto, render: r => m(r.monto) },
       ],
-      csvColumnas: [L.nombre, L.cant, L.monto],
-      csvFila: r => [r.nombre, r.qty, round2(r.monto)],
+      columnasExp: [L.nombre, L.cant, L.monto],
+      filaExp: r => [r.nombre, r.qty, round2(r.monto)],
     },
     {
       id: 'pendientes', icono: '⏳', titulo: tOr('reportes.pendientes', 'Cuentas pendientes'), porMesa: true,
@@ -235,8 +267,8 @@ export default function ReportsPage({ rol, sesion }) {
         { key: 'mesero', label: L.mesero, render: r => r.mesero },
         { key: 'antiguedad', label: L.antiguedad, render: r => `${minutos(r)} min`, sortValue: r => minutos(r) },
       ],
-      csvColumnas: [L.mesa, L.total, L.pagado, L.saldo, L.mesero, L.antiguedad],
-      csvFila: r => [r.mesa, round2(r.total), round2(r.pagado), round2(r.saldo), r.mesero, minutos(r)],
+      columnasExp: [L.mesa, L.total, L.pagado, L.saldo, L.mesero, L.antiguedad],
+      filaExp: r => [r.mesa, round2(r.total), round2(r.pagado), round2(r.saldo), r.mesero, minutos(r)],
     },
   ]
 
@@ -248,9 +280,17 @@ export default function ReportsPage({ rol, sesion }) {
   }
   const vistas = mesaSel ? secciones.map(sec => (sec.porMesa ? { ...sec, filas: sec.filas.filter(coincide) } : sec)) : secciones
 
-  const exportarSec = sec => bajarCsv(`reportes-${sec.id}-${tag}.csv`, csvDe(sec.csvColumnas, sec.filas.map(sec.csvFila)))
-  const exportarTodo = () => bajarCsv(`reportes-${tag}.csv`,
-    csvDeSecciones(vistas.map(sec => ({ titulo: sec.titulo, columnas: sec.csvColumnas, filas: sec.filas.map(sec.csvFila) }))))
+  const tablasPdf = async (lista, archivo) => {
+    const { descargarTablaPdf } = await import('../../../services/exportar.js')
+    try {
+      await descargarTablaPdf(
+        lista.map(sec => ({ titulo: sec.titulo, columnas: sec.columnasExp, filas: sec.filas.map(sec.filaExp) })),
+        { archivo, titulo: tOr('reportes.titulo', 'Reportes'), subtitulo: `${legible(rango.desde)} – ${legible(rango.hasta)}`, negocio: s.config?.nombre || '', generado: t('cierrePdf.generado') },
+      )
+    } catch { setAviso(t('cierrePdf.error')) }
+  }
+  const exportarSec = sec => tablasPdf([sec], `reportes-${sec.id}-${tag}`)
+  const exportarTodo = () => tablasPdf(vistas, `reportes-${tag}`)
 
   // Reutiliza el generador del cierre de caja: un turno sintético del rango + armarReporte.
   const pdf = async () => {
@@ -259,7 +299,7 @@ export default function ReportsPage({ rol, sesion }) {
     const turno = { id: 'periodo', abiertoEn: rango.desde, cerradoEn: rango.hasta, modo: 'compartida', fondo: 0, movimientos: [] }
     const reporte = armarReporte({
       turno, resumen: calcularResumen(turno, s.cuentas), config: s.config,
-      productos: s.productos, devoluciones: s.devoluciones || [], contado: null,
+      productos: s.productos, devoluciones: s.devoluciones || [], contado: null, cuentas: s.cuentas, tiemposFilas: tiemposSrv,
       cerradoPor: sesion?.nombre || '',
     })
     try {
@@ -295,7 +335,7 @@ export default function ReportsPage({ rol, sesion }) {
           <span className="sp" />
           <div className="rp-head">
             <button type="button" className="primary" onClick={exportarTodo} disabled={cargando}>
-              {tOr('reportes.exportarTodo', 'Exportar todo (CSV)')}
+              {tOr('reportes.exportarTodo', 'Descargar tablas (PDF)')}
             </button>
             <button type="button" className="ghost" onClick={pdf} disabled={pdfCargando}>
               {pdfCargando ? tOr('reportes.pdfCargando', 'Generando PDF…') : tOr('reportes.pdf', 'PDF del periodo')}
@@ -355,7 +395,7 @@ export default function ReportsPage({ rol, sesion }) {
             <span className="rp-n">{sec.filas.length}</span>
             <span className="sp" />
             <button type="button" className="ghost rp-btn" onClick={() => exportarSec(sec)} disabled={!sec.filas.length}>
-              {tOr('reportes.exportarCsv', 'Exportar CSV')}
+              {tOr('reportes.exportarCsv', 'Descargar PDF')}
             </button>
           </div>
           <DataTable columns={sec.columnas} rows={sec.filas} getRowId={sec.getRowId}

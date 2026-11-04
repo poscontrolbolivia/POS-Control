@@ -1,13 +1,14 @@
 // Reporte de cierre (turno de un cajero o día completo) en PDF. Puro + jsPDF cargado bajo demanda.
-import { totalCuenta, totalFinal } from '../context/StoreContext.jsx'
+import { totalCuenta, totalFinal, pagadoCuenta, saldoCuenta } from '../context/StoreContext.jsx'
 import { areasDelItem, gruposDeComanda } from './printing.js'
 import { round2 } from './format.js'
+import { agruparTiempos, filasLocales } from './tiempos.js'
 import { BUCKET_COMPROBANTES } from './comprobante.js'
 
 const vivos = c => (c.items || []).filter(i => i.estado !== 'anulado')
 
 // Datos del reporte a partir del resumen del turno (calcularResumen). No muta nada.
-export function armarReporte({ turno, resumen, config, productos = [], devoluciones = [], contado = null, cerradoPor = '', etiquetaCuenta = c => c.numero ?? '' }) {
+export function armarReporte({ turno, resumen, config, productos = [], devoluciones = [], contado = null, cerradoPor = '', etiquetaCuenta = c => c.numero ?? '', cuentas = null, abiertas = null, tiemposFilas = null }) {
   const tickets = resumen.tickets
   const grupos = gruposDeComanda(config)
   const nombreArea = id => grupos.find(g => g.id === id)?.nombre || id
@@ -34,6 +35,35 @@ export function armarReporte({ turno, resumen, config, productos = [], devolucio
   const comprobantes = []
   tickets.forEach(c => (c.pagos || []).forEach(p => { if (p.comprobante) comprobantes.push({ cuenta: etiquetaCuenta(c), monto: p.monto, en: p.en ?? p.creadaEn ?? c.cerradaEn, ref: p.comprobante }) }))
   const esperado = resumen.esperado
+  const fin = turno.cerradoEn || Date.now()
+  const enVentana = ts => ts != null && ts >= turno.abiertoEn && ts <= fin
+  // Detalle de control: todo lo que se anuló, devolvió o movió en el turno (aunque la cuenta se cerrara en cero).
+  const todas = cuentas || tickets
+  const idsDev = new Set(dev.map(x => x.itemId).filter(Boolean))
+  const anulaciones = []
+  todas.forEach(c => {
+    const actividad = c.cerradaEn ?? c.abiertaEn ?? fin
+    if (!enVentana(actividad) && !(c.estado !== 'cerrada' && (c.abiertaEn ?? 0) <= fin)) return
+    ;(c.items || []).forEach(i => {
+      if (i.estado !== 'anulado' || idsDev.has(i.id)) return
+      anulaciones.push({ cuenta: etiquetaCuenta(c), nombre: i.nombre, qty: i.qty, monto: round2((Number(i.precio) || 0) * (Number(i.qty) || 0)), motivo: i.motivo || '', por: i.anulacionPor || '' })
+    })
+  })
+  const devolucionesPago = []
+  const descuentosDet = []
+  todas.forEach(c => {
+    ;(c.pagos || []).forEach(p => {
+      const cuando = p.en ?? p.creadaEn ?? c.cerradaEn
+      if (Number(p.monto) < 0 && enVentana(cuando)) devolucionesPago.push({ cuenta: etiquetaCuenta(c), metodo: p.metodo, monto: round2(-Number(p.monto)), motivo: p.motivo || p.concepto || '', en: cuando })
+    })
+  })
+  tickets.forEach(c => { if ((c.descuento || 0) > 0) descuentosDet.push({ cuenta: etiquetaCuenta(c), monto: round2(c.descuento) }) })
+  const movimientos = (turno.movimientos || []).map(x => ({ tipo: x.t, monto: round2(Number(x.monto) || 0), motivo: x.motivo || '', en: x.creadaEn ?? x.en ?? null }))
+  const devDetalle = dev.map(x => ({ en: x.pedidaEn, nombre: x.nombre, qty: x.qty, monto: round2(Number(x.monto) || 0), mesa: x.mesa || '', motivo: x.motivo || '', por: x.pedidaPor || '', confirmada: Boolean(x.confirmadaEn), nota: x.nota || '' }))
+  // Tiempo de preparación por área (el servidor trae una fila por área, así que un combo cuenta en cocina y en barra).
+  const tiempos = agruparTiempos(tiemposFilas || filasLocales(todas, turno.abiertoEn, fin, productos), nombreArea, 25)
+  const abiertasAlCierre = (abiertas || []).filter(c => c.estado !== 'cerrada' && (c.items || []).some(i => i.estado !== 'anulado'))
+    .map(c => ({ cuenta: etiquetaCuenta(c), total: round2(totalFinal(c)), pagado: round2(pagadoCuenta(c)), saldo: round2(saldoCuenta(c)) }))
   return {
     negocio: { nombre: config?.nombre || '', sucursal: config?.sucursal || '', direccion: config?.direccion || '', telefono: config?.telefono || '', nit: config?.nit || '' },
     porCajero: turno.modo === 'por_cajero',
@@ -45,6 +75,9 @@ export function armarReporte({ turno, resumen, config, productos = [], devolucio
     secciones, unidades: secciones.reduce((a, s) => a + s.unidades, 0),
     top: secciones.flatMap(s => s.filas).sort((a, b) => b.qty - a.qty).slice(0, 5),
     devoluciones: { n: dev.length, monto: round2(dev.reduce((a, x) => a + (Number(x.monto) || 0), 0)) },
+    anulaciones: { n: anulaciones.length, monto: round2(anulaciones.reduce((a, x) => a + x.monto, 0)), filas: anulaciones },
+    devolucionesPago: { n: devolucionesPago.length, monto: round2(devolucionesPago.reduce((a, x) => a + x.monto, 0)), filas: devolucionesPago },
+    devDetalle, movimientos, descuentosDet, abiertasAlCierre, tiempos,
     comprobantes,
   }
 }
@@ -70,6 +103,36 @@ export async function descargarPdfCierre(r, { t, m, sb, locale }) {
   const linea = (txt, o = {}) => { salto(6); doc.setFont('helvetica', o.b ? 'bold' : 'normal'); doc.setFontSize(o.s || 10); doc.text(String(txt), o.c ? W / 2 : ML, y, o.c ? { align: 'center' } : undefined); y += o.h || 5.2 }
   const par = (a, b, o = {}) => { salto(6); doc.setFont('helvetica', o.b ? 'bold' : 'normal'); doc.setFontSize(10); doc.text(String(a), ML, y); doc.text(String(b), MR, y, { align: 'right' }); y += 5.2 }
   const titulo = txt => { salto(12); y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.text(txt, ML, y); y += 1.6; doc.setDrawColor(150); doc.line(ML, y, MR, y); y += 5 }
+
+  // Tabla simple con columnas (anchos relativos) y texto envuelto; repite el encabezado al cambiar de página.
+  const tabla = (cols, anchos, filas) => {
+    const U = MR - ML, suma = anchos.reduce((a, b) => a + b, 0)
+    const ax = anchos.map(a => (U * a) / suma)
+    const x0 = ax.map((_, i) => ML + ax.slice(0, i).reduce((a, b) => a + b, 0))
+    const pintar = (vals, neg, der) => {
+      doc.setFont('helvetica', neg ? 'bold' : 'normal'); doc.setFontSize(9)
+      const partes = vals.map((v, i) => doc.splitTextToSize(String(v ?? ''), ax[i] - 2))
+      const n = Math.max(1, ...partes.map(p => p.length))
+      partes.forEach((p, i) => p.forEach((l, k) => { if (der.has(i)) doc.text(l, x0[i] + ax[i] - 1, y + k * 4, { align: 'right' }); else doc.text(l, x0[i] + 1, y + k * 4) }))
+      y += n * 4 + 1.2
+    }
+    const der = new Set(cols.map((c, i) => (c.der ? i : -1)).filter(i => i >= 0))
+    const cab = () => { salto(10); doc.setFillColor(232, 236, 242); doc.rect(ML, y - 3.4, U, 5.6, 'F'); pintar(cols.map(c => c.t), true, der) }
+    cab()
+    filas.forEach(f => {
+      const alto = Math.max(1, ...f.map((v, i) => doc.splitTextToSize(String(v ?? ''), ax[i] - 2).length)) * 4 + 1.2
+      if (y + alto > 282) { doc.addPage(); y = 18; cab() }
+      pintar(f, false, der)
+    })
+    y += 2
+  }
+  const dur = n => {
+    const s = Math.round(n / 1000)
+    if (s < 60) return `${s} s`
+    const mi = Math.round(s / 60)
+    return mi < 60 ? `${mi} min` : `${Math.floor(mi / 60)} h ${String(mi % 60).padStart(2, '0')} min`
+  }
+  const hora = ts => (ts ? new Date(ts).toLocaleTimeString(locale || [], { hour: '2-digit', minute: '2-digit' }) : '')
 
   if (r.negocio.nombre) linea(r.negocio.nombre, { b: 1, s: 16, c: 1, h: 7 })
   if (r.negocio.sucursal) linea(r.negocio.sucursal, { c: 1 })
@@ -97,10 +160,52 @@ export async function descargarPdfCierre(r, { t, m, sb, locale }) {
   if (r.ventas.otros) par(t('cierrePdf.otros'), m(r.ventas.otros))
   if (r.devoluciones.n) par(t('cierrePdf.devoluciones', { n: r.devoluciones.n }), m(r.devoluciones.monto))
 
+  if (r.anulaciones.n || r.devolucionesPago.n) {
+    titulo(t('cierrePdf.control'))
+    par(t('cierrePdf.anulaciones', { n: r.anulaciones.n }), m(r.anulaciones.monto))
+    par(t('cierrePdf.devolucionesPago', { n: r.devolucionesPago.n }), m(r.devolucionesPago.monto))
+  }
+
   titulo(t('cierrePdf.caja'))
   par(t('cierrePdf.fondo'), m(r.fondo)); par(t('cierrePdf.ingresos'), m(r.ingresos)); par(t('cierrePdf.egresos'), m(r.egresos))
   par(t('cierrePdf.esperado'), m(r.esperado))
   if (r.contado != null) { par(t('cierrePdf.contado'), m(r.contado)); par(t('cierrePdf.diferencia'), m(r.diferencia), { b: 1 }) }
+
+  if (r.anulaciones.filas.length) {
+    titulo(`${t('cierrePdf.anulacionesDet')} (${r.anulaciones.n})`)
+    tabla([{ t: t('cierrePdf.colCuenta') }, { t: t('cierrePdf.colProducto') }, { t: t('cierrePdf.colCant'), der: 1 }, { t: t('cierrePdf.colMonto'), der: 1 }, { t: t('cierrePdf.colMotivo') }, { t: t('cierrePdf.colPor') }],
+      [14, 30, 7, 13, 30, 14], r.anulaciones.filas.map(x => [x.cuenta, x.nombre, x.qty, m(x.monto), x.motivo || t('cierrePdf.sinMotivo'), x.por]))
+  }
+  if (r.devDetalle.length) {
+    titulo(`${t('cierrePdf.devolucionesDet')} (${r.devDetalle.length})`)
+    tabla([{ t: t('cierrePdf.colHora') }, { t: t('cierrePdf.colProducto') }, { t: t('cierrePdf.colCant'), der: 1 }, { t: t('cierrePdf.colMonto'), der: 1 }, { t: t('cierrePdf.colMesa') }, { t: t('cierrePdf.colMotivo') }, { t: t('cierrePdf.colPor') }, { t: t('cierrePdf.colEstado') }],
+      [8, 24, 6, 12, 10, 24, 11, 14], r.devDetalle.map(x => [hora(x.en), x.nombre, x.qty, m(x.monto), x.mesa, x.motivo || t('cierrePdf.sinMotivo'), x.por, x.confirmada ? `${t('cierrePdf.confirmada')}${x.nota ? ` - ${x.nota}` : ''}` : t('cierrePdf.pendienteConf')]))
+  }
+  if (r.devolucionesPago.filas.length) {
+    titulo(`${t('cierrePdf.devolucionesPagoDet')} (${r.devolucionesPago.n})`)
+    tabla([{ t: t('cierrePdf.colHora') }, { t: t('cierrePdf.colCuenta') }, { t: t('cierrePdf.colMetodo') }, { t: t('cierrePdf.colMonto'), der: 1 }, { t: t('cierrePdf.colMotivo') }],
+      [8, 16, 12, 12, 40], r.devolucionesPago.filas.map(x => [hora(x.en), x.cuenta, x.metodo, m(x.monto), x.motivo || t('cierrePdf.sinMotivo')]))
+  }
+  if (r.movimientos.length) {
+    titulo(`${t('cierrePdf.movimientos')} (${r.movimientos.length})`)
+    tabla([{ t: t('cierrePdf.colHora') }, { t: t('cierrePdf.colTipo') }, { t: t('cierrePdf.colMonto'), der: 1 }, { t: t('cierrePdf.colMotivo') }],
+      [8, 12, 12, 50], r.movimientos.map(x => [hora(x.en), x.tipo === 'ingreso' ? t('cierrePdf.ingreso') : t('cierrePdf.egreso'), m(x.monto), x.motivo || t('cierrePdf.sinMotivo')]))
+  }
+  if (r.descuentosDet.length) {
+    titulo(`${t('cierrePdf.descuentosDet')} (${r.descuentosDet.length})`)
+    tabla([{ t: t('cierrePdf.colCuenta') }, { t: t('cierrePdf.colMonto'), der: 1 }], [40, 14], r.descuentosDet.map(x => [x.cuenta, m(x.monto)]))
+  }
+  r.tiempos.forEach(A => {
+    titulo(`${t('cierrePdf.tiempos')}: ${A.nombre} - ${t('cierrePdf.promedioGeneral')} ${dur(A.promedio)} (${A.n})`)
+    tabla([{ t: t('cierrePdf.colProducto') }, { t: t('cierrePdf.colCant'), der: 1 }, { t: t('cierrePdf.colPromedio'), der: 1 }, { t: t('cierrePdf.colMin'), der: 1 }, { t: t('cierrePdf.colMax'), der: 1 }],
+      [34, 8, 14, 12, 12], A.filas.map(f => [f.nombre, f.n, dur(f.promedio), dur(f.min), dur(f.max)]))
+  })
+  if (r.tiempos.length) { doc.setFontSize(8.5); doc.setTextColor(110); doc.text(t('cierrePdf.tiemposNota'), ML, y); doc.setTextColor(0); y += 5 }
+  if (r.abiertasAlCierre.length) {
+    titulo(`${t('cierrePdf.abiertasCierre')} (${r.abiertasAlCierre.length})`)
+    tabla([{ t: t('cierrePdf.colCuenta') }, { t: t('cierrePdf.colTotal'), der: 1 }, { t: t('cierrePdf.colPagado'), der: 1 }, { t: t('cierrePdf.colSaldo'), der: 1 }],
+      [30, 14, 14, 14], r.abiertasAlCierre.map(x => [x.cuenta, m(x.total), m(x.pagado), m(x.saldo)]))
+  }
 
   r.secciones.forEach(sec => {
     titulo(`${nombreSec(sec)}  (${sec.unidades})`)

@@ -56,7 +56,7 @@ function fecha(iso, idiom) {
 function EquipoFilaColapsada({ n, error, onToggle, tOr }) {
   return (
     <div className="adm-fila">
-      <button type="button" className="ghost eq-toggle" onClick={onToggle}>👥 {tOr('equipo.mostrar', 'Mostrar equipo')}</button>
+      <button type="button" className="ghost eq-toggle" onClick={onToggle}>{tOr('equipo.mostrar', 'Mostrar equipo')}</button>
       <span className="adm-chip">{n} {n === 1 ? tOr('equipo.una', 'persona') : tOr('equipo.varias', 'personas')}</span>
       {error && <span className="adm-chip" title={error}>⚠️ {tOr('equipo.error', 'Error al cargar el equipo')}</span>}
     </div>
@@ -227,7 +227,7 @@ export default function UsersPage({ rol, sesion, abierto = true, onToggleAbierto
     <>
     <section className="adm-card adm-equipo eq-bloque">
       <div className="adm-card-cab">
-        <button type="button" className="ghost eq-toggle" onClick={onToggleAbierto}>👥 {tOr('equipo.ocultar', 'Ocultar equipo')}</button>
+        <button type="button" className="ghost eq-toggle" onClick={onToggleAbierto}>{tOr('equipo.ocultar', 'Ocultar equipo')}</button>
         <h3>{tOr('equipo.titulo', 'Equipo')}</h3>
         <span className="adm-chip">{miembros.length} {miembros.length === 1 ? tOr('equipo.una', 'persona') : tOr('equipo.varias', 'personas')}</span>
         <span className="sp" />
@@ -449,7 +449,7 @@ function EquipoDemo({ sesion, abierto = true, onToggleAbierto = () => {} }) {
     <>
     <section className="adm-card adm-equipo eq-bloque">
       <div className="adm-card-cab">
-        <button type="button" className="ghost eq-toggle" onClick={onToggleAbierto}>👥 {tOr('equipo.ocultar', 'Ocultar equipo')}</button>
+        <button type="button" className="ghost eq-toggle" onClick={onToggleAbierto}>{tOr('equipo.ocultar', 'Ocultar equipo')}</button>
         <h3>{tOr('equipo.titulo', 'Equipo')}</h3>
         <span className="adm-chip">{usuarios.length}</span>
         <span className="sp" />

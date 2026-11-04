@@ -133,28 +133,3 @@ export function resumenDeCuentas(estado, desde, hasta) {
     productos: productosTop, devoluciones, pendientes,
   }
 }
-
-// ── CSV (patrón de AuditPage: BOM, comas escapadas, blob descargable) ────────
-export function csvDe(columnas, filas) {
-  const limpiar = v => {
-    const txt = String(v ?? '')
-    return /["\n\r,]/.test(txt) ? `"${txt.replaceAll('"', '""')}"` : txt
-  }
-  return [columnas, ...filas].map(fila => fila.map(limpiar).join(',')).join('\r\n')
-}
-
-export function bajarCsv(nombre, texto) {
-  const url = URL.createObjectURL(new Blob(['\ufeff' + texto], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = nombre
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 5000)
-}
-
-// Un solo CSV con todas las secciones, cada una precedida por su línea de título.
-export function csvDeSecciones(secciones) {
-  return secciones.map(sec => `${sec.titulo}\r\n${csvDe(sec.columnas, sec.filas)}`).join('\r\n\r\n')
-}

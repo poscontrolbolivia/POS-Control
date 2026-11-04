@@ -11,6 +11,7 @@ import { VerComprobante } from '../pago/ComprobanteQr.jsx'
 import '../pago/ComprobanteQr.css'
 import { sb } from '../../../services/supabaseClient.js'
 import { armarReporte, descargarPdfCierre } from '../../../services/reporteCierre.js'
+import { cargarTiempos } from '../../../services/tiempos.js'
 import { calcularResumen } from './calcularResumen.js'
 import './CashPage.css'
 import { round2, hora, limpiarMonto, numMonto } from '../../../services/format.js'
@@ -47,7 +48,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
     ? t('caja.llevarNumero', { n: c.numero ?? '—' }) + (c.clienteNombre ? ' · ' + c.clienteNombre : '')
     : c.tipo === 'directa'
     ? t('caja.ventaNumero', { n: c.numero ?? '—' })
-    : (c.mesaTexto || (c.mesaIds || []).map(id => (s.mesas || []).find(m => m.id === id)?.nombre || id).join(', ') || '—')
+    : (c.tipo === 'mesa' && c.clienteNombre && c.estado !== 'cerrada' ? c.clienteNombre + ' · ' : '') + (c.mesaTexto || (c.mesaIds || []).map(id => (s.mesas || []).find(m => m.id === id)?.nombre || id).join(', ') || '—')
 
   // Un pedido «para llevar» no tiene mesa, así que el mapa de MesasResumen nunca lo lista.
   // Sin esta lista la única forma de cobrarlo era pasarlo a una mesa, que no tiene sentido.
@@ -166,21 +167,29 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
     setMov(null)
   }
 
-  const cerrarTurno = e => {
+  const cerrandoRef = useRef(false)
+  // Tiempos de preparación por área del turno (con combos). Si el servidor no responde, el reporte usa lo que hay en memoria.
+  const tiemposDelTurno = () => (modo === 'supabase' ? cargarTiempos(turno.abiertoEn, Date.now()).catch(() => null) : Promise.resolve(null))
+  const cerrarTurno = async e => {
     e.preventDefault()
     const contado = numMonto(cierre.contado)
 
     if (!cierre.pedirConf) return setCierre({ ...cierre, pedirConf: true })
-    // El reporte se arma ANTES de cerrar (después el turno ya no está abierto) y se descarga al cerrar.
-    const reporte = armarReporte({ turno, resumen, config: s.config, productos: s.productos, devoluciones: s.devoluciones || [], contado: round2(contado), cerradoPor: usuario, etiquetaCuenta: nombreCorto })
-    d({ t: 'turno-', contado: round2(contado), usuario })
-    setCierre(null)
-    descargarPdf(reporte)
+    if (cerrandoRef.current) return
+    cerrandoRef.current = true
+    try {
+      // El reporte se arma ANTES de cerrar (después el turno ya no está abierto) y se descarga al cerrar.
+      const tiemposFilas = await tiemposDelTurno()
+      const reporte = armarReporte({ turno, resumen, config: s.config, productos: s.productos, devoluciones: s.devoluciones || [], contado: round2(contado), cerradoPor: usuario, etiquetaCuenta: nombreCorto, cuentas: s.cuentas, abiertas: s.cuentas, tiemposFilas })
+      d({ t: 'turno-', contado: round2(contado), usuario })
+      setCierre(null)
+      descargarPdf(reporte)
+    } finally { cerrandoRef.current = false }
   }
   const descargarPdf = async reporte => {
     try { await descargarPdfCierre(reporte, { t, m, sb: modo === 'supabase' ? sb : null }) } catch { avisar(t('cierrePdf.error')) }
   }
-  const pdfDelTurno = () => descargarPdf(armarReporte({ turno, resumen, config: s.config, productos: s.productos, devoluciones: s.devoluciones || [], contado: null, cerradoPor: usuario, etiquetaCuenta: nombreCorto }))
+  const pdfDelTurno = async () => descargarPdf(armarReporte({ turno, resumen, config: s.config, productos: s.productos, devoluciones: s.devoluciones || [], contado: null, cerradoPor: usuario, etiquetaCuenta: nombreCorto, cuentas: s.cuentas, abiertas: s.cuentas, tiemposFilas: await tiemposDelTurno() }))
 
   const imprimirResumen = async () => {
     const { tickets, ventas } = resumen
@@ -323,7 +332,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
 
         <section className="caja-card">
           <div className="caja-head"><h2>{t('caja.ticketsTurno')}</h2><span className="sp" />
-            <button className="ghost" onClick={pdfDelTurno} disabled={!resumen.tickets.length}>📄 {t('cierrePdf.boton')}</button>
+            <button className="ghost" onClick={pdfDelTurno} disabled={!resumen.tickets.length}>{t('cierrePdf.boton')}</button>
             <button className="primary" onClick={imprimirResumen} disabled={!resumen.tickets.length}>{t('caja.imprimirResumen')}</button>
           </div>
           <p className="caja-nota">{tOr('caja.ticketsAyuda', 'Cuentas ya cobradas en este turno, de mesas y de mostrador.')}</p>
@@ -337,7 +346,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
                 {(c.pagos || []).map((p, k) => <VerComprobante key={k} valor={p.comprobante} />)}
                 <b>{m(totalFinal(c))}</b>
                 {puede(rol, 'reabrir_cobrada') && reabriendo !== c.id && (
-                  <button type="button" className="ghost caja-reabrir" onClick={() => setReabriendo(c.id)}>↺ {tOr('caja.reabrir', 'Reabrir')}</button>
+                  <button type="button" className="ghost caja-reabrir" onClick={() => setReabriendo(c.id)}>{tOr('caja.reabrir', 'Reabrir')}</button>
                 )}
                 {reabriendo === c.id && <ReabrirForm cuenta={c} s={s} onConfirmar={r => reabrirCobrada(c, r)} onCancelar={() => setReabriendo(null)} />}
               </li>

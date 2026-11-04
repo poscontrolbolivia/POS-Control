@@ -15,11 +15,28 @@ const mapProducto = p => ({
   opciones: Array.isArray(p.opciones) ? p.opciones : [],
 })
 
+// Hora en que cada área sacó cada ítem que va a varias áreas (combos cocina+barra): sale de cuenta_item_areas.
+// Solo se piden los ítems con más de un área y alguna ya sacada; así la consulta es chica.
+async function itemsConAreas(promesa) {
+  const items = await promesa
+  const ids = items.filter(i => Array.isArray(i.areas) && i.areas.length > 1 && Array.isArray(i.areas_listas) && i.areas_listas.length).map(i => i.id)
+  if (!ids.length) return items
+  const porItem = {}
+  try {
+    for (let k = 0; k < ids.length; k += 120) {
+      const filas = await selectAll(sb.from('cuenta_item_areas').select('item_id,area,listo_en').in('item_id', ids.slice(k, k + 120)))
+      filas.forEach(f => { (porItem[f.item_id] ||= {})[f.area] = f.listo_en })
+    }
+  } catch { return items }
+  return items.map(i => (porItem[i.id] ? { ...i, areas_en: porItem[i.id] } : i))
+}
+
 const mapItem = i => ({
   id: i.id, productoId: i.producto_id, nombre: i.nombre_snapshot, precio: N(i.precio_snapshot),
   qty: N(i.qty), estado: i.estado, nota: i.nota || '', indicaciones: i.indicaciones || '', motivo: i.anulacion_motivo ?? i.motivo_anulacion,
   areas: Array.isArray(i.areas) && i.areas.length ? i.areas : undefined,
   areasListas: Array.isArray(i.areas_listas) ? i.areas_listas : [],
+  ...(i.areas_en ? { areasEn: Object.fromEntries(Object.entries(i.areas_en).map(([a, t]) => [a, ts(t)])) } : {}),
   enviadoEn: ts(i.enviado_en), creadaEn: ts(i.creada_en),
 
   ...(i.listo_en ? { listoEn: ts(i.listo_en) } : {}),
@@ -87,7 +104,7 @@ async function fetchCuentas(empresaId, caja, desdeMs) {
   if (!cuentas.length) return { cuentas: [], items: [], pagos: [], cms: [] }
   const ids = cuentas.map(c => c.id)
   const [items, pagos, cms] = await Promise.all([
-    selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', ids).order('creada_en')),
+    itemsConAreas(selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', ids).order('creada_en'))),
     selectAll(sb.from('pagos').select('*').in('cuenta_id', ids).order('creada_en')),
     selectAll(sb.from('cuenta_mesas').select('*').in('cuenta_id', ids)),
   ])
@@ -228,7 +245,7 @@ export async function detalleCierre(turnoId) {
   const cuentasRaw = [...cerradas, ...abiertas]
   const ids = cuentasRaw.map(c => c.id)
   const [items, pagos, cms] = ids.length ? await Promise.all([
-    selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', ids).order('creada_en')),
+    itemsConAreas(selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', ids).order('creada_en'))),
     selectAll(sb.from('pagos').select('*').in('cuenta_id', ids).order('creada_en')),
     selectAll(sb.from('cuenta_mesas').select('*').in('cuenta_id', ids)),
   ]) : [[], [], []]
@@ -254,7 +271,7 @@ export async function cuentasCerradasDeMesa({ empresaId, desde, hasta, etiqueta 
   if (!raw.length) return []
   const ids = raw.map(c => c.id)
   const [items, pagos] = await Promise.all([
-    selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', ids).order('creada_en')),
+    itemsConAreas(selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', ids).order('creada_en'))),
     selectAll(sb.from('pagos').select('*').in('cuenta_id', ids).order('creada_en')),
   ])
   return armarCuentas(raw, items, pagos, [], nombres)
@@ -389,7 +406,7 @@ export async function refrescarCuentasIds(estado, ids) {
   const nombres = await fetchNombresCache()
   const [cuentas, items, pagos, cms] = await Promise.all([
     selectAll(sb.from('cuentas').select('*').eq('empresa_id', empresaId).in('id', lista)),
-    selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', lista).order('creada_en')),
+    itemsConAreas(selectAll(sb.from('cuenta_items').select('*').in('cuenta_id', lista).order('creada_en'))),
     selectAll(sb.from('pagos').select('*').in('cuenta_id', lista).order('creada_en')),
     selectAll(sb.from('cuenta_mesas').select('*').in('cuenta_id', lista)),
   ])
@@ -478,6 +495,9 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     }
     case 'abrir-descartar':
       await rpc('descartar_cuenta_vacia', { p_cuenta_id: rid(mapa, a.cuentaId) })
+      return refrescarNegocio(E, { extras: false })
+    case 'mesa-alias':
+      await rpc('renombrar_cuenta_mesa', { p_cuenta_id: rid(mapa, a.cuentaId), p_nombre: a.nombre || '' })
       return refrescarNegocio(E, { extras: false })
     case 'cerrar-devolviendo':
       await rpc('cerrar_cuenta_devolviendo', { p_cuenta_id: rid(mapa, a.cuentaId), p_metodo: a.metodo, p_motivo: a.motivo })

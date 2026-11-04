@@ -229,3 +229,13 @@
 .pm-salir small{color:var(--mut)}
 .pm-salir .barra{flex-direction:column;align-items:stretch}
 .pm-salir .barra button{width:100%;min-height:48px}
+
+/* Barra fija: Atrás · nombre de la mesa · acción principal. El nombre se queda a la vista al bajar por la carta. */
+.pm-mesa{pointer-events:auto;flex:1 1 0;min-width:0;padding:6px 14px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:var(--card);border:1px solid var(--line-fuerte);box-shadow:0 4px 14px rgba(0,0,0,.18);color:var(--ink);font-weight:800;font-size:1.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Fila de comensales: pax · quién abrió y a qué hora · ⋯ (una sola línea; el nombre se acorta antes que desbordar). */
+.pm-sub.fila-wrap{flex-wrap:nowrap;gap:8px}
+.pm-sub .pm-pax{flex:none}
+.pm-sub .pm-abrio{flex:1 1 0;min-width:0;display:block;padding:0 12px;line-height:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-sub .pm-cab-acc{flex:none;margin-left:auto}
+@media(max-width:420px){.pm-sub .pm-pax{gap:6px;font-size:.9rem}.pm-sub .pm-abrio{padding:0 8px;font-size:.85rem}}
+.pm-item .pm-tiempos{display:block;margin-top:2px;color:var(--mut);font-size:.82rem;font-weight:700}

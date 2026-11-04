@@ -291,16 +291,16 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
         </div>
         <div className="ala-acciones">
           {resuelta ? (
-            <button type="button" className="ghost" onClick={() => resolver(a, false)}>↺ {tOr('alertas.reabrir', 'Reabrir')}</button>
+            <button type="button" className="ghost" onClick={() => resolver(a, false)}>{tOr('alertas.reabrir', 'Reabrir')}</button>
           ) : (
-            <button type="button" className="primary" onClick={() => resolver(a, true)}>✔ {tOr('alertas.resolver', 'Resolver')}</button>
+            <button type="button" className="primary" onClick={() => resolver(a, true)}>✓ {tOr('alertas.resolver', 'Resolver')}</button>
           )}
           {a.cuentaId && (
-            <button type="button" className="ghost" onClick={() => abrir(a)}>↗ {tOr('alertas.abrirCuenta', 'Abrir cuenta')}</button>
+            <button type="button" className="ghost" onClick={() => abrir(a)}>{tOr('alertas.abrirCuenta', 'Abrir cuenta')}</button>
           )}
           {!resuelta && (s.mesas || []).length > 1 && (
             <button type="button" className="ghost" onClick={() => setMoviendo(moviendo === a.id ? null : a.id)}>
-              ↪ {moviendo === a.id ? tOr('comun.cerrar', 'Cerrar') : tOr('alertas.mover', 'Mover')}
+              {moviendo === a.id ? <>✕ {tOr('comun.cerrar', 'Cerrar')}</> : tOr('alertas.mover', 'Mover')}
             </button>
           )}
         </div>
@@ -454,7 +454,7 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
             <span className="ala-badge">{sugerencias.length}</span>
             {descartadas.length > 0 && (
               <button type="button" className="ghost ala-descartadas" onClick={mostrarDescartadas}>
-                ↺ {tOr('alertas.auto.descartadasN', `${descartadas.length} descartadas`, { n: descartadas.length })}
+                {tOr('alertas.auto.descartadasN', `${descartadas.length} descartadas`, { n: descartadas.length })}
               </button>
             )}
           </div>
@@ -485,7 +485,7 @@ export default function AlertasPage({ rol, sesion, onAbrirCuenta }) {
                       <button type="button" className="primary" disabled={hecha} onClick={() => convertir(a)}>
                         {hecha ? tOr('alertas.auto.yaConvertida', 'Ya la levantaste') : `＋ ${tOr('alertas.auto.convertir', 'Convertir en alerta')}`}
                       </button>
-                      {a.cuentaId && <button type="button" className="ghost" onClick={() => abrir(a)}>↗ {tOr('alertas.abrirCuenta', 'Abrir cuenta')}</button>}
+                      {a.cuentaId && <button type="button" className="ghost" onClick={() => abrir(a)}>{tOr('alertas.abrirCuenta', 'Abrir cuenta')}</button>}
                       <button type="button" className="peligro" onClick={() => descartar(a)}>✕ {tOr('alertas.auto.descartar', 'Descartar')}</button>
                     </div>
                   </div>

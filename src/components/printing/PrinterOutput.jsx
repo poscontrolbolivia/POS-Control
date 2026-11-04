@@ -108,7 +108,7 @@ export default function PrinterOutput({ g, cfg, onCambio }) {
           </button>
         )}
         {salida === 'agente' && (
-          <button type="button" className="ghost" disabled={ag.cargando} onClick={buscar}>↻ {t('agente.recargar')}</button>
+          <button type="button" className="ghost" disabled={ag.cargando} onClick={buscar}>{t('agente.recargar')}</button>
         )}
         <button type="button" className="success" disabled={!listo || ocupado} onClick={probar}>{t('impresoras.probar')}</button>
         <span className={'imp-chip ' + (listo ? 'ok' : 'off')}>{listo ? t('estacion.listo') : t('estacion.sinSalida')}</span>
