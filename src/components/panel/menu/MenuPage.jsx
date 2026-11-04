@@ -569,14 +569,7 @@ export default function MenuPage({ rol }) {
 
   return (
     <div className="adm-panel">
-      <CabeceraPagina
-        titulo={tOr('items.titulo', 'Ítems')}
-        acciones={(
-          <button type="button" className="success" onClick={vacio ? abrirNuevoGrupo : crearSegunTipo}>
-            + {vacio ? t('menu.grupoMas') : etiquetaNuevo[tipo]}
-          </button>
-        )}
-      />
+      <CabeceraPagina titulo={tOr('items.titulo', 'Ítems')} />
 
       {vacio && <div className="adm-aviso mn-vacio">{t('menu.menuVacio')}</div>}
 
@@ -590,8 +583,13 @@ export default function MenuPage({ rol }) {
         </div>
       )}
 
-      {/* Crear va pegado a la explicación del menú, no al final de la carta:
-          abajo del todo el botón desaparecía cuando la lista era larga. */}
+      {/* Primero el marco que elige QUÉ lista (grupos, productos, indicaciones) y justo debajo el botón para crear
+          en esa lista: lo que contiene va antes que lo que se crea dentro. */}
+      <div className="mn-crear">
+        <button type="button" className="success" onClick={vacio ? abrirNuevoGrupo : crearSegunTipo}>
+          + {vacio ? t('menu.grupoMas') : etiquetaNuevo[tipo]}
+        </button>
+      </div>
       {!vacio && <p className="mn-ayuda">{ayudaTipo[tipo]}</p>}
 
       {!vacio && (

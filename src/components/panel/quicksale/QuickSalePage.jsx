@@ -56,6 +56,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   // «Todos» abre el mostrador: el cajero ve la carta completa sin adivinar en qué sección está el plato
   // que el cliente acaba de nombrar.
   const [sec, setSec] = useState(TODOS)
+  const [busca, setBusca] = useState('')
   const secActiva = sec === TODOS || secciones.some(x => x.id === sec) ? sec : TODOS
   const [carrito, setCarrito] = useState([])
   // La barra de la carta se queda donde el cajero la dejó; al cambiar de grupo eso deja los platos
@@ -73,7 +74,8 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   const faseHechaRef = useRef(-1)
   const cobroHechoRef = useRef(false)
 
-  const productos = s.productos.filter(p => p.activo && (secActiva === TODOS || p.seccionId === secActiva))
+  const q = busca.trim().toLowerCase()
+  const productos = s.productos.filter(p => p.activo && (secActiva === TODOS || p.seccionId === secActiva) && (!q || String(p.nombre).toLowerCase().includes(q)))
   const agotados = agotadosHoy(s.config)
   const agotadosEnSeccion = productos.filter(p => agotados[p.id])
   const total = round2(carrito.reduce((acc, l) => acc + (l.p.precio + (l.extra || 0)) * l.qty, 0))
@@ -222,11 +224,11 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
     <div className="vd">
       <section className="vd-menu">
         <h2 className="vd-titulo">{t('venta.titulo', { nombre: s.config?.nombre || t('venta.mostrador') })}</h2>
-        <div className="vd-vistas" role="group" aria-label={tOr('venta.vistas', 'Qué mostrar')}>
-          <button type="button" className={'vd-tab' + (pantalla === 'mostrador' ? ' on' : '')} aria-pressed={pantalla === 'mostrador'} onClick={() => setPantalla('mostrador')}>
+        <div className="vd-vistas nav-n1" role="group" aria-label={tOr('venta.vistas', 'Qué mostrar')}>
+          <button type="button" className={'tab' + (pantalla === 'mostrador' ? ' on' : '')} aria-pressed={pantalla === 'mostrador'} onClick={() => setPantalla('mostrador')}>
             🧾 {t('venta.mostrador')}
           </button>
-          <button type="button" className={'vd-tab' + (pantalla === 'mesas' ? ' on' : '')} aria-pressed={pantalla === 'mesas'} onClick={() => setPantalla('mesas')}>
+          <button type="button" className={'tab' + (pantalla === 'mesas' ? ' on' : '')} aria-pressed={pantalla === 'mesas'} onClick={() => setPantalla('mesas')}>
             🪑 {tOr('venta.vistaMesas', 'Mesas')}
             {mesasAbiertas > 0 && <em className="vd-vista-n">{mesasAbiertas}</em>}
           </button>
@@ -237,12 +239,20 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
         ) : (
           <>
         <p className="vd-ayuda">{tOr('venta.ayuda', 'Mostrador: el cliente pide, paga y se va, sin mesa ni cuenta abierta. Las mesas se cobran en Caja.')}</p>
-        <div className="vd-tabs nav-n2" role="tablist" ref={ruedaHorizontal}>
+        {/* Un solo marco para buscar, elegir grupo y ver los platos, igual que en el pedido de una mesa. */}
+        <section className="vd-carta marco-b">
+        <div className="vd-busca-fila">
+          <input name="buscar-producto" type="search" inputMode="search" autoComplete="off" value={busca}
+            aria-label={tOr('pedido.buscarProducto', 'Buscar producto')} placeholder={tOr('pedido.buscarProducto', 'Buscar producto…')}
+            onChange={e => setBusca(e.target.value)} />
+          {busca && <button type="button" className="ghost vd-busca-x" onClick={() => setBusca('')} aria-label={t('comun.cancelar')}>✕</button>}
+        </div>
+        <div className="vd-tabs" role="tablist" ref={ruedaHorizontal}>
           <button type="button" role="tab" aria-selected={secActiva === TODOS}
-            className={secActiva === TODOS ? 'vd-tab on' : 'vd-tab'} onClick={() => setSec(TODOS)}>{tOr('venta.todos', 'Todos')}</button>
+            className={secActiva === TODOS ? 'vd-tab on' : 'vd-tab'} onClick={() => { setSec(TODOS); setBusca('') }}>{tOr('venta.todos', 'Todos')}</button>
           {secciones.map(x => (
             <button key={x.id} type="button" role="tab" aria-selected={x.id === secActiva}
-              className={x.id === secActiva ? 'vd-tab on' : 'vd-tab'} onClick={() => setSec(x.id)}>{x.nombre}</button>
+              className={x.id === secActiva ? 'vd-tab on' : 'vd-tab'} onClick={() => { setSec(x.id); setBusca('') }}>{x.nombre}</button>
           ))}
         </div>
         {agotadosEnSeccion.length > 0 && (
@@ -268,6 +278,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
           ))}
         </div>}
         {!productos.length && <p className="vd-vacio">{secActiva === TODOS ? tOr('venta.sinProductosTodos', 'No hay productos activos todavía.') : t('venta.sinProductos')}</p>}
+        </section>
           </>
         )}
       </section>

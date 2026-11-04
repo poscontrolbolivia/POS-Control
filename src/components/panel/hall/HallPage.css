@@ -378,3 +378,10 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .salon-modo .tab{flex:1 1 150px;min-height:44px;justify-content:center;font-weight:700}
 .zona-strip{flex-direction:column;align-items:stretch;gap:8px}
 .salon-vista-fila{justify-content:flex-start}
+
+/* Marcos del Salón: mismo margen de página que el resto, poco espacio entre ellos y un solo recuadro para Mapa/Lista + salones. */
+.salon{ padding: var(--pagina-pad); }
+.salon .mapa-col{ display: flex; flex-direction: column; gap: var(--marco-gap); }
+.zona-strip{ margin: 0; padding: 8px; gap: 8px; background: color-mix(in srgb, var(--ac) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--ac) 26%, var(--line)); border-radius: var(--r-md); }
+.zona-strip > .nav-n2.nav-n2{ background: none; border: 0; padding: 0; margin: 0; box-shadow: none; }
+.salon-vista-fila{ justify-content: flex-end; }

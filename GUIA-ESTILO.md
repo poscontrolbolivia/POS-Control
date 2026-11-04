@@ -140,3 +140,17 @@ sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos e
   falla, se deshace y se avisa.
 - **Editar mapa:** arrastrar una mesa la mueve; arrastrar el fondo vacío desplaza la página (para llegar a las opciones).
 
+## Marcos: colores alternados y un solo espacio
+- Los recuadros que se siguen uno tras otro **alternan**: blanco (`nav-n1`, tarjetas) → tinte azul claro (`nav-n2`, `.marco-b`) → blanco.
+  Lo que va dentro de un tinte vuelve a ser blanco. Así se ve de qué recuadro es cada cosa sin añadir colores nuevos.
+- Entre recuadros hay **un solo espacio**: `--marco-gap` (10 px). El contenedor separa con `gap`; el marco no suma su propio margen.
+- Todas las pantallas usan el mismo margen de página `--pagina-pad`. Una pantalla anidada (p. ej. Caja dentro del hub) no lo duplica.
+- La **carta** (buscar + grupos que corren de lado + platos) es UN marco tinte, igual en el pedido de una mesa y en Venta directa.
+- **Salón:** Mesas/Para llevar (blanco) y debajo un solo recuadro tinte con Mapa/Lista a la derecha y los salones.
+- **Crear** va siempre **debajo** del marco que elige qué se crea (Ítems: Grupos/Productos/Indicaciones → «+ Grupo»).
+
+## Auditoría legible
+Cada movimiento se lee como una frase: *quién* hizo *qué* sobre *qué* («Pidió la cuenta · Mesa 3 · Gonzalo»).
+Nunca se muestran números internos, ids ni «pre-cuenta pedida o impresa»: el servidor guarda el nombre de la mesa
+(`private.etiqueta_cuenta`) y la pantalla oculta los datos técnicos del detalle.
+

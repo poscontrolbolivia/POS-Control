@@ -721,6 +721,45 @@ begin
   values (p_empresa, auth.uid(), p_accion, coalesce(p_detalle, '{}'::jsonb),
           v_actor_nombre, v_actor_rol, p_entity_type, p_entity_label);
 end $fn$;
+
+-- Nombre legible de una cuenta para la bitácora: «Mesa 3 · Gonzalo», «Mesas 2 + 3», «Para llevar · Ernesto»,
+-- «Mostrador #12». Si la cuenta ya se cerró lee las mesas guardadas en mesas_texto. Devuelve null si no existe.
+create or replace function private.etiqueta_cuenta(p_cuenta uuid)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $fn$
+declare
+  c        public.cuentas;
+  v_mesas  text;
+  v_n      integer;
+  v_num    boolean;
+begin
+  select * into c from public.cuentas where id = p_cuenta;
+  if not found then return null; end if;
+  if c.canal = 'llevar' then
+    return 'Para llevar' || coalesce(' · ' || nullif(btrim(c.cliente_nombre), ''), '');
+  end if;
+  if c.tipo = 'directa' then
+    return 'Mostrador' || coalesce(' #' || c.numero::text, '');
+  end if;
+  select string_agg(m.nombre, ' + ' order by m.nombre), count(*), coalesce(bool_and(m.nombre ~ '^[0-9]+$'), false)
+    into v_mesas, v_n, v_num
+    from public.cuenta_mesas cm
+    join public.mesas m on m.id = cm.mesa_id
+   where cm.cuenta_id = c.id;
+  if v_mesas is null then
+    v_mesas := nullif(replace(coalesce(c.mesas_texto, ''), ', ', ' + '), '');
+    v_n     := case when v_mesas is null then 0 else 1 + (length(v_mesas) - length(replace(v_mesas, ' + ', ''))) / 3 end;
+    v_num   := v_mesas is not null and v_mesas ~ '^[0-9]+( \+ [0-9]+)*$';
+  end if;
+  if v_mesas is null then return null; end if;
+  return (case when v_num then (case when v_n > 1 then 'Mesas ' else 'Mesa ' end) else '' end) || v_mesas
+         || coalesce(' · ' || nullif(btrim(c.cliente_nombre), ''), '');
+end $fn$;
+revoke all on function private.etiqueta_cuenta(uuid) from public, anon, authenticated;
 create or replace function public.super_listar_auditoria(
   p_empresa uuid default null,
   p_limite  integer default 200
@@ -1953,7 +1992,7 @@ begin
   begin
     perform private.auditar(v_emp, 'cuenta_fiscal', jsonb_build_object(
       'cuenta', c.id::text, 'nombre', v_nom, 'numero', v_num),
-      'cuenta', 'cuenta ' || coalesce(c.numero::text, left(c.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(c.id), 'cuenta ' || coalesce(c.numero::text, left(c.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -2845,7 +2884,7 @@ begin
         'parcial', p_item_ids is not null,
         'dueno', (select pf.display_name from public.perfiles pf where pf.user_id = v_cuenta.abierta_por),
         'ayuda', (v_cuenta.abierta_por is not null and v_cuenta.abierta_por is distinct from auth.uid())),
-        'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+        'cuenta', coalesce(private.etiqueta_cuenta(v_cuenta.id), 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8))));
     exception when others then
       null; -- una falla de la bitácora nunca revierte la comanda
     end;
@@ -2991,7 +3030,7 @@ begin
   begin
     perform private.auditar(v_emp, 'mesa_unidas', jsonb_build_object(
       'cuenta', v_cuenta.id::text, 'mesas', p_mesa_ids, 'absorbidas', v_absorb),
-      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(v_cuenta.id), 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -3044,7 +3083,7 @@ begin
     perform private.auditar(v_emp, 'mesa_separada', jsonb_build_object(
       'cuenta_origen', v_cuenta.id::text, 'cuenta_nueva', v_nueva::text,
       'mesa', p_mesa_id::text),
-      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(v_cuenta.id), 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -3121,7 +3160,7 @@ begin
     perform private.auditar(v_emp, 'item_movido', jsonb_build_object(
       'origen', v_origen.id::text, 'destino', v_dest::text,
       'mesa_destino', p_mesa_destino::text, 'items', p_item_ids),
-      'cuenta', 'cuenta ' || coalesce(v_origen.numero::text, left(v_origen.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(v_origen.id), 'cuenta ' || coalesce(v_origen.numero::text, left(v_origen.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -3210,7 +3249,7 @@ begin
   begin
     perform private.auditar(v_emp, 'subcuentas_unidas', jsonb_build_object(
       'cuenta', v_cuenta.id::text, 'cuentas', p_cuenta_ids, 'absorbidas', v_absorb),
-      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(v_cuenta.id), 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -3382,7 +3421,7 @@ begin
     perform private.auditar(v_emp, 'cuenta_extras', jsonb_build_object(
       'cuenta', v_cuenta.id::text, 'propina', v_cuenta.propina,
       'descuento', v_cuenta.descuento, 'total', v_final),
-      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(v_cuenta.id), 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -3418,7 +3457,7 @@ begin
   select numero into v_num from public.cuentas where id = p_cuenta_id;
   begin
     perform private.auditar(v_emp, 'cuenta_precuenta', jsonb_build_object('cuenta', p_cuenta_id::text),
-      'cuenta', 'cuenta ' || coalesce(v_num::text, left(p_cuenta_id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(p_cuenta_id), 'cuenta ' || coalesce(v_num::text, left(p_cuenta_id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -3446,7 +3485,7 @@ begin
   select numero into v_num from public.cuentas where id = p_cuenta_id;
   begin
     perform private.auditar(v_emp, 'cuenta_reabierta', jsonb_build_object('cuenta', p_cuenta_id::text),
-      'cuenta', 'cuenta ' || coalesce(v_num::text, left(p_cuenta_id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(p_cuenta_id), 'cuenta ' || coalesce(v_num::text, left(p_cuenta_id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -3622,7 +3661,7 @@ begin
       'cambio', v_pagado - v_final,
       'metodos', (select coalesce(jsonb_agg(distinct p.metodo), '[]'::jsonb)
                     from public.pagos p where p.cuenta_id = v_cuenta.id)),
-      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(v_cuenta.id), 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte el cobro
   end;
@@ -3734,7 +3773,7 @@ begin
     perform private.auditar(v_emp, 'cuenta_abonada', jsonb_build_object(
       'cuenta', v_cuenta.id::text, 'abonado', v_abonado, 'total', v_final,
       'pagado', v_previo + v_abonado, 'saldo', greatest(v_final - v_previo - v_abonado, 0)),
-      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(v_cuenta.id), 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte el abono
   end;
@@ -3935,7 +3974,7 @@ begin
   begin
     perform private.auditar(v_emp, 'cuenta_dividida', jsonb_build_object(
       'cuenta', v_cuenta.id::text, 'nueva', v_nueva::text, 'etiqueta', chr(v_max + 1)),
-      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(v_cuenta.id), 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -3965,7 +4004,7 @@ begin
   begin
     perform private.auditar(v_emp, 'cuenta_detalle', jsonb_build_object(
       'cuenta', c.id::text, 'detalle', left(coalesce(nullif(btrim(coalesce(p_detalle, '')), ''), ''), 120)),
-      'cuenta', 'cuenta ' || coalesce(c.numero::text, left(c.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(c.id), 'cuenta ' || coalesce(c.numero::text, left(c.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -4122,7 +4161,7 @@ begin
   begin
     perform private.auditar(v_emp, 'cuenta_descartada', jsonb_build_object(
       'cuenta', c.id::text, 'numero', c.numero, 'mesa', v_mesas),
-      'cuenta', coalesce(v_mesas, 'cuenta ' || left(c.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(c.id), v_mesas, 'cuenta ' || left(c.id::text, 8)));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -4250,7 +4289,7 @@ begin
   begin
     perform private.auditar(v_emp, 'cuenta_reabierta_cobrada', jsonb_build_object(
       'cuenta', v_cuenta.id::text, 'numero', v_cuenta.numero, 'motivo', btrim(p_motivo)),
-      'cuenta', 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(v_cuenta.id), 'cuenta ' || coalesce(v_cuenta.numero::text, left(v_cuenta.id::text, 8))));
   exception when others then
     null; -- una falla de la bitácora nunca revierte la operación
   end;
@@ -4315,7 +4354,7 @@ begin
     perform private.auditar(v_emp, 'cuenta_devuelta', jsonb_build_object(
       'cuenta', c.id::text, 'numero', c.numero, 'mesa', v_mesas,
       'monto', v_pagado, 'metodo', p_metodo, 'motivo', btrim(p_motivo)),
-      'cuenta', coalesce(v_mesas, 'cuenta ' || left(c.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(c.id), v_mesas, 'cuenta ' || left(c.id::text, 8)));
   exception when others then
     null;
   end;
@@ -4346,7 +4385,7 @@ begin
   begin
     perform private.auditar(v_emp, 'cuenta_renombrada', jsonb_build_object(
       'cuenta', c.id::text, 'numero', c.numero, 'nombre', nullif(v_nom, '')),
-      'cuenta', coalesce(nullif(v_nom, ''), 'cuenta ' || left(c.id::text, 8)));
+      'cuenta', coalesce(private.etiqueta_cuenta(c.id), nullif(v_nom, ''), 'cuenta ' || left(c.id::text, 8)));
   exception when others then
     null;
   end;

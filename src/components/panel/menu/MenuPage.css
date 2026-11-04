@@ -184,3 +184,6 @@
   .mn-pie>button[type=submit]{order:-1;flex:1 1 100%;min-height:48px}
   .mn-pie>button:not([type=submit]){flex:1 1 40%}
 }
+.mn-crear{display:flex}
+.mn-crear .success{flex:1 1 auto;min-height:44px}
+@media(min-width:700px){.mn-crear .success{flex:0 0 auto}}

@@ -181,5 +181,12 @@ input[type=checkbox].sw:disabled{opacity:.5;cursor:not-allowed}
 /* NAVEGACIÓN EN CAPAS: cada nivel de menú vive en su propia caja con borde y margen, para que se vea
    a qué pertenece cada cosa. nav-n1 = menú principal de la pantalla; nav-n2 = submenú o filtro de ese menú. */
 .nav-n1,.nav-n2{display:flex;flex-wrap:wrap;align-items:center;gap:8px;box-sizing:border-box;border-radius:var(--r-md)}
-.nav-n1.nav-n1{padding:8px;margin:0 auto 16px;background:var(--card);border:1.5px solid var(--line-fuerte);box-shadow:var(--sh-1)}
-.nav-n2.nav-n2{padding:6px;margin:0 auto 12px;background:var(--card-2);border:1px solid var(--line)}
+.nav-n1.nav-n1{padding:8px;margin:0 auto var(--marco-gap);background:var(--card);border:1.5px solid var(--line-fuerte);box-shadow:var(--sh-1)}
+.nav-n2.nav-n2{padding:6px;margin:0 auto var(--marco-gap);background:color-mix(in srgb,var(--ac) 8%,var(--card));border:1px solid color-mix(in srgb,var(--ac) 26%,var(--line))}
+/* Marcos que se siguen uno tras otro alternan: blanco → tinte azul claro → blanco. .marco-b es el tinte para cualquier recuadro;
+   lo que va DENTRO de un tinte vuelve a ser blanco, y dentro de un blanco, tinte. */
+.marco-b{background:color-mix(in srgb,var(--ac) 8%,var(--card));border:1.5px solid color-mix(in srgb,var(--ac) 26%,var(--line));border-radius:var(--r-md)}
+.marco-b .nav-n2.nav-n2{background:var(--card)}
+/* Si el contenedor ya separa con «gap», el marco no suma su propio margen (antes se veían ~30 px entre recuadros). */
+:is(.adm-panel,.inv-page,.ala,.super-envoltura,.caja,.vd-menu,.ck,.caja-hub,.mapa-col)>:is(.nav-n1,.nav-n2).nav-n1,
+:is(.adm-panel,.inv-page,.ala,.super-envoltura,.caja,.vd-menu,.ck,.caja-hub,.mapa-col)>:is(.nav-n1,.nav-n2).nav-n2{margin-bottom:0}
