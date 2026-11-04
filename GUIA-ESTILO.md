@@ -93,7 +93,7 @@ La misma función va **siempre en el mismo sitio**, con el mismo texto, icono y 
 | **Móvil** (≤ 640 px) | El grupo de acciones baja a **su propia línea, a todo el ancho** | mismo orden que en escritorio |
 
 Reglas que salen de ahí:
-1. **Mapa/Lista** es siempre `<VistaMapaLista>`, a la derecha del encabezado, igual en Salón, Caja, Venta directa y Reportes.
+1. **Mapa/Lista** es siempre `<VistaMapaLista>`: a la derecha del encabezado en Caja, Venta directa y Reportes; en Salón va en su propia fila `nav-n2` (ver «Jerarquía y capas de navegación»).
 2. **Actualizar** es siempre un `ghost` dentro del grupo de acciones del encabezado; nunca suelto en el cuerpo.
 3. **Crear / Nuevo** es siempre el verde principal, al final del grupo derecho del encabezado.
 4. Un botón **nunca flota solo** en el lado opuesto de la pantalla. Si no cabe junto al título, baja a su línea.
@@ -113,3 +113,30 @@ Reglas que salen de ahí:
 
 **Lista de revisión antes de entregar una pantalla:** ¿se ve bien a 360 px de ancho y en los tres temas? ¿cada botón está en el
 sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos están en es/en/pt? ¿pasa `npm test`?
+
+## Jerarquía y capas de navegación (regla nueva: aplica a TODAS las pantallas)
+- **Cada nivel de menú vive en su propia caja**, con borde y margen, para que se vea a qué pertenece cada cosa:
+  `.nav-n1` = menú principal de la pantalla (ej. Caja · Cierres · Reportes) y `.nav-n2` = submenú o filtro de ese menú
+  (ej. Mesas · Para llevar, grupos de la carta). Nunca dos niveles en la misma fila ni sin separación (ya no se confunden
+  «Caja/Reportes» con «Mesas», ni «Mostrador» con los grupos de ítems). Clases en `src/styles/base.css`.
+- **Orden vertical en Salón:** 1) Mesas · Para llevar, 2) Mapa · Lista, 3) los salones, 4) el contenido. En esa pantalla
+  Mapa/Lista va en su propia fila `nav-n2` (excepción a la regla 1 de la tabla de botones, que sigue valiendo en el resto).
+- **Lo que contiene va antes que lo contenido:** Grupos → Productos → Indicaciones (Ítems abre en Grupos), Salones → Mesas,
+  Insumos → Recetas. Los botones de crear siguen al nivel activo y nunca van por encima de su contenedor.
+- **Activar / desactivar es un interruptor** (`input.sw`, como en Configuración), no un botón que se queda apretado.
+  Ej.: «Total» en Despacho.
+- **Vistas que son pantallas aparte son pestañas**, no botones que abren y cierran un panel: «Sacadas» es una vista de
+  Despacho al mismo nivel que Cocina y Barra.
+- **Sin emoji en pestañas ni botones de vista** (Despacho, Salón). El emoji queda solo en títulos de sección y avisos.
+- **Tamaño/zoom del mapa:** solo se cambia dentro de «Editar mapa».
+- **Barra superior de la cuenta** (Atrás · nombre · acción): amarillo de los menús (`--logo-yellow`).
+- **Propina y descuento** se ven igual: la etiqueta con el monto aplicado y solo «Aplicar»; las opciones aparecen al tocar.
+
+## Rapidez al tocar (regla de datos)
+- **Varias acciones iguales seguidas = UNA sola acción.** «Quitar productos sin enviar» manda `anular-lote` (todas las
+  llamadas salen a la vez y se refresca una sola vez), no un `anular` por producto. Lo que nunca se envió no se deja como
+  fila tachada: desaparece al instante.
+- Toda acción se pinta primero en pantalla y se confirma después en segundo plano (como ✓ en Despacho); si el servidor
+  falla, se deshace y se avisa.
+- **Editar mapa:** arrastrar una mesa la mueve; arrastrar el fondo vacío desplaza la página (para llegar a las opciones).
+

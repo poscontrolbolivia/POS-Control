@@ -544,6 +544,13 @@ export async function despacharSupabase(estado, a, ctx = {}) {
     case 'enviar':
       await rpc('enviar_items', { p_cuenta_id: rid(mapa, a.cuentaId) })
       return refrescarNegocio(E, { extras: false })
+    case 'anular-lote': {
+      const res = await Promise.allSettled((a.itemIds || []).map(id => rpc('anular_item', { p_item_id: rid(mapa, id), p_motivo: a.motivo || '' })))
+      const fallo = res.find(r => r.status === 'rejected')
+      const nuevo = await refrescarNegocio(E, { extras: false })
+      if (fallo) throw fallo.reason
+      return nuevo
+    }
     case 'anular':
       await rpc('anular_item', { p_item_id: rid(mapa, a.itemId), p_motivo: a.motivo || '' })
       return refrescarNegocio(E, { extras: false })

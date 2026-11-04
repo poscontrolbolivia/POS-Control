@@ -16,6 +16,7 @@ const AMARILLO_MIN = 5
 const URGENTE_MIN = 10
 const PERMITIDOS = ['cocina', 'barra', 'admin', 'cajero', 'mesero']
 const LLAVE_VISTA = 'pos-cocina-vista'
+const VISTA_SACADAS = '__sacadas' // vista aparte con lo que ya salió (de todas las áreas)
 const BRECHA_LOTE_MS = 1500
 const EN_COLA = ['enviado', 'listo', 'anulacion']
 
@@ -139,18 +140,18 @@ export default function KitchenPage({ rol, sesion }) {
   const [vista, setVista] = useState(() => {
     const ids = gruposDeComanda(s.config).map(g => g.id)
     if (rol === 'cocina' || rol === 'barra') return ids.includes(rol) ? rol : (ids[0] || 'cocina')
-    try { const v = localStorage.getItem(LLAVE_VISTA); if (v === SIN_AREA || ids.includes(v)) return v } catch {  }
+    try { const v = localStorage.getItem(LLAVE_VISTA); if (v === SIN_AREA || v === VISTA_SACADAS || ids.includes(v)) return v } catch {  }
     return ids[0] || 'cocina'
   })
-  const cambiarVista = v => { setVista(v); setSacadasAbierto(false); try { localStorage.setItem(LLAVE_VISTA, v) } catch {  } }
+  const cambiarVista = v => { setVista(v); try { localStorage.setItem(LLAVE_VISTA, v) } catch {  } }
 
   // "Sin área" solo existe cuando el servidor devuelve ítems de un área borrada; en demo las áreas salen del config local.
   const verSinArea = !restringido && conectado
-  const areasMostradas = useMemo(() => [vista], [vista])
-  const areasVisibles = useMemo(() => (verSinArea && vista !== SIN_AREA ? [vista, SIN_AREA] : [vista]), [vista, verSinArea])
+  const areasMostradas = useMemo(() => (vista === VISTA_SACADAS ? idsVisibles : [vista]), [vista, idsVisibles])
+  const areasVisibles = useMemo(() => (vista === VISTA_SACADAS ? idsVisibles : verSinArea && vista !== SIN_AREA ? [vista, SIN_AREA] : [vista]), [vista, verSinArea, idsVisibles])
 
   useEffect(() => {
-    if (vista === SIN_AREA && verSinArea) return
+    if ((vista === SIN_AREA && verSinArea) || vista === VISTA_SACADAS) return
     if (idsVisibles.length && !idsVisibles.includes(vista)) cambiarVista(idsVisibles[0])
   }, [idsVisibles, vista, verSinArea])
 
@@ -164,7 +165,6 @@ export default function KitchenPage({ rol, sesion }) {
   const [ocupado, setOcupado] = useState('')
   const [anulando, setAnulando] = useState(null)
   const [motivo, setMotivo] = useState('')
-  const [sacadasAbierto, setSacadasAbierto] = useState(false)
   const [totalAbierto, setTotalAbierto] = useState(false)
   const [devs, setDevs] = useState([])
   const [notasDev, setNotasDev] = useState({})
@@ -582,25 +582,27 @@ export default function KitchenPage({ rol, sesion }) {
 
   return (
     <div className="cocina ck">
-      <div className="ck-barra">
+      <div className="ck-barra nav-n1">
         <div className="ck-tabs" role="tablist" aria-label={tOr('cocina.areas', 'Áreas')}>
           {tabs.map(v => (
             <button key={v} type="button" role="tab" aria-selected={vista === v} className={'ck-tab' + (vista === v ? ' on' : '')} onClick={() => cambiarVista(v)}
               aria-label={`${t('cocina.vistaDe', { area: nombreArea(v) })}${badge(v) ? ` · ${badge(v)}` : ''}`}>
-              {icono(v)} {t('cocina.vistaDe', { area: nombreArea(v) })}
+              {t('cocina.vistaDe', { area: nombreArea(v) })}
               {badge(v) > 0 && <span className="ck-n" aria-hidden="true">{badge(v) > 99 ? '99+' : badge(v)}</span>}
             </button>
           ))}
+          <button type="button" role="tab" aria-selected={vista === VISTA_SACADAS} className={'ck-tab' + (vista === VISTA_SACADAS ? ' on' : '')} onClick={() => cambiarVista(VISTA_SACADAS)}
+            title={tOr('cocina.sacadasTitulo', 'Comandas que ya salieron completas')}>
+            {tOr('cocina.sacadas', 'Sacadas')}{vista === VISTA_SACADAS && totalSacadas > 0 && <span className="ck-n" aria-hidden="true">{totalSacadas > 99 ? '99+' : totalSacadas}</span>}
+          </button>
         </div>
         <span className="ck-sp" />
-        <button type="button" className={'ck-sacadas ck-total-btn' + (totalAbierto ? ' on' : '')} aria-expanded={totalAbierto} onClick={() => setTotalAbierto(v => !v)}
-          title={tOr('cocina.totalAyuda', 'Lo que falta sacar, sumado entre todas las comandas y separado por indicación (término, salsa…).')}>
-          Σ {tOr('cocina.total', 'Total')}{totales.unidades > 0 && <em>{totales.unidades}</em>}
-        </button>
-        <button type="button" className={'ck-sacadas' + (sacadasAbierto ? ' on' : '')} aria-expanded={sacadasAbierto} onClick={() => setSacadasAbierto(v => !v)}
-          title={tOr('cocina.sacadasTitulo', 'Comandas que ya salieron completas')}>
-          ✓ {tOr('cocina.sacadas', 'Sacadas')}{totalSacadas > 0 && <em>{totalSacadas}</em>}
-        </button>
+        {vista !== VISTA_SACADAS && (
+          <label className="ck-total-sw" title={tOr('cocina.totalAyuda', 'Lo que falta sacar, sumado entre todas las comandas y separado por indicación (término, salsa…).')}>
+            <input name="ck-total" type="checkbox" className="sw" checked={totalAbierto} onChange={e => setTotalAbierto(e.target.checked)} />
+            <span>{tOr('cocina.total', 'Total')}{totales.unidades > 0 && <em>{totales.unidades}</em>}</span>
+          </label>
+        )}
         {conectado
           ? <span className={'ck-conexion' + (realtime ? ' rt' : '')} title={tOr('cocina.conexionTitle', 'Actualización automática cada 4 segundos')}>{realtime ? '🟢' : '🔄'}</span>
           : <span className="ck-demo" title={tOr('cocina.demoTitulo', 'La cola se arma con los pedidos guardados en este equipo')}>{tOr('cocina.demo', 'Demo')}</span>}
@@ -618,7 +620,7 @@ export default function KitchenPage({ rol, sesion }) {
         </div>
       )}
 
-      {totalAbierto && (
+      {totalAbierto && vista !== VISTA_SACADAS && (
         <section className="ck-panel-total" aria-label={tOr('cocina.totalTitulo', 'Total por producto')}>
           <header>
             <b>Σ {tOr('cocina.totalTitulo', 'Total por producto')}</b>
@@ -647,10 +649,9 @@ export default function KitchenPage({ rol, sesion }) {
         </section>
       )}
 
-      {sacadasAbierto && (
+      {vista === VISTA_SACADAS && (
         <section className="ck-panel-sacadas" aria-label={tOr('cocina.sacadasTitulo', 'Comandas que ya salieron completas')}>
-          <header><b>✓ {tOr('cocina.sacadasTitulo', 'Comandas que ya salieron completas')}</b>
-            <button type="button" className="ico" onClick={() => setSacadasAbierto(false)} aria-label={tOr('comun.cerrar', 'Cerrar')}>✕</button></header>
+          <header><b>{tOr('cocina.sacadasTitulo', 'Comandas que ya salieron completas')}</b></header>
           <p className="ck-ayuda">{tOr('cocina.sacadasAyuda', 'Comandas que ya salieron completas; con ↩ un plato vuelve a preparación.')}</p>
           {totalSacadas === 0 && <p className="ck-vacio-mini">{tOr('cocina.sinSacadas', 'Todavía no hay comandas sacadas.')}</p>}
           {areasMostradas.map(a => (filas[a]?.sacadas.length ? (
@@ -695,7 +696,7 @@ export default function KitchenPage({ rol, sesion }) {
         </div>
       )}
       {vista === SIN_AREA && <Aviso icono="⚠️">{tOr('cocina.sinAreaAviso', 'Estos ítems fueron enviados a un área que ya no existe. Márcalos cuando salgan.')}</Aviso>}
-      <div className={'ck-filas' + (areasMostradas.length > 1 ? ' dos' : '')}>
+      {vista !== VISTA_SACADAS && <div className={'ck-filas' + (areasMostradas.length > 1 ? ' dos' : '')}>
         {areasMostradas.map(a => {
           const { enCurso } = filas[a] || { enCurso: [] }
           return (
@@ -711,7 +712,8 @@ export default function KitchenPage({ rol, sesion }) {
             </section>
           )
         })}
-      </div>
+      </div>}
+
     </div>
   )
 }

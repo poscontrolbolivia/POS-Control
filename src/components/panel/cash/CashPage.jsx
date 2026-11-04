@@ -117,7 +117,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
   const cambiarPanel = p => { setPanel(p); try { localStorage.setItem('pos-caja-panel', p) } catch { /* noop */ } }
   const paneles = (
     <>
-      <div className="caja-pan" role="tablist" aria-label={tOr('caja.paneles', 'Qué se está cobrando')}>
+      <div className="caja-pan nav-n2" role="tablist" aria-label={tOr('caja.paneles', 'Qué se está cobrando')}>
         <button type="button" role="tab" aria-selected={panel === 'mesas'} className={'tab' + (panel === 'mesas' ? ' on' : '')} onClick={() => cambiarPanel('mesas')}>🪑 {tOr('caja.mesasTitulo', 'Mesas')}</button>
         <button type="button" role="tab" aria-selected={panel === 'llevar'} className={'tab' + (panel === 'llevar' ? ' on' : '')} onClick={() => cambiarPanel('llevar')}>🥡 {tOr('caja.llevarTab', 'Para llevar')} <b>{llevar.length}</b></button>
       </div>

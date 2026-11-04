@@ -237,7 +237,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
         ) : (
           <>
         <p className="vd-ayuda">{tOr('venta.ayuda', 'Mostrador: el cliente pide, paga y se va, sin mesa ni cuenta abierta. Las mesas se cobran en Caja.')}</p>
-        <div className="vd-tabs" role="tablist" ref={ruedaHorizontal}>
+        <div className="vd-tabs nav-n2" role="tablist" ref={ruedaHorizontal}>
           <button type="button" role="tab" aria-selected={secActiva === TODOS}
             className={secActiva === TODOS ? 'vd-tab on' : 'vd-tab'} onClick={() => setSec(TODOS)}>{tOr('venta.todos', 'Todos')}</button>
           {secciones.map(x => (

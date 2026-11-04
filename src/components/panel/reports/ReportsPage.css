@@ -116,3 +116,7 @@
 .rp-cuenta-cuando,.rp-cuenta-met{color:var(--mut);font-size:.82rem}
 .rp-hecho{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--verde-bg);border:1.5px solid var(--verde-bd);border-radius:var(--r-md);padding:8px 12px;font-size:.92rem}
 .rp-hecho span{flex:1 1 220px}
+/* Mesa redonda: el círculo recorta las esquinas, así que el texto es más chico y solo queda lo esencial (número y cifra). */
+.rp-mesa.redonda .nombre{font-size:min(26cqw,26cqh)}
+.rp-mesa.redonda .rp-mesa-cifra{font-size:min(17cqw,17cqh)}
+.rp-mesa.redonda .rp-mesa-pax,.rp-mesa.redonda .etiqueta-zona{display:none}

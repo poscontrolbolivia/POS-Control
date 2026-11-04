@@ -177,3 +177,9 @@ input[type=checkbox].sw:checked{background:var(--logo-green);border-color:var(--
 input[type=checkbox].sw:checked::before{transform:translateX(20px);background:#fff}
 input[type=checkbox].sw:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 input[type=checkbox].sw:disabled{opacity:.5;cursor:not-allowed}
+
+/* NAVEGACIÓN EN CAPAS: cada nivel de menú vive en su propia caja con borde y margen, para que se vea
+   a qué pertenece cada cosa. nav-n1 = menú principal de la pantalla; nav-n2 = submenú o filtro de ese menú. */
+.nav-n1,.nav-n2{display:flex;flex-wrap:wrap;align-items:center;gap:8px;box-sizing:border-box;border-radius:var(--r-md)}
+.nav-n1.nav-n1{padding:8px;margin:0 auto 16px;background:var(--card);border:1.5px solid var(--line-fuerte);box-shadow:var(--sh-1)}
+.nav-n2.nav-n2{padding:6px;margin:0 auto 12px;background:var(--card-2);border:1px solid var(--line)}

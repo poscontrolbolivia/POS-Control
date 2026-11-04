@@ -556,6 +556,8 @@ function reducer(s, a) {
       if (previo && (previo.estado === 'listo' || (previo.areasListas || []).length)) return reducer(s, { ...a, t: 'devolver' })
       return upd(a.cuentaId, c => ({ ...c, items: c.items.map(i => (i.id === a.itemId ? { ...i, estado: 'anulado', motivo: a.motivo } : i)) }))
     }
+    // Varios productos de golpe (p. ej. «Quitar productos sin enviar»): una sola acción, un solo refresco.
+    case 'anular-lote': return (a.itemIds || []).reduce((st, id) => reducer(st, { t: 'anular', cuentaId: a.cuentaId, itemId: id, motivo: a.motivo }), s)
     // Una sola marca de tiempo por envío: la cocina agrupa la comanda por ese momento.
     case 'enviar': return upd(a.cuentaId, c => {
       const pend = c.items.filter(i => i.estado === 'pendiente')
@@ -869,6 +871,7 @@ const BITACORA = {
   },
   'qty': (p, n, a) => ['item_cantidad', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { plato: itemDe(n, a.cuentaId, a.itemId)?.nombre || '', cambio: a.d }],
   'nota': (p, n, a) => ['item_nota', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { plato: itemDe(n, a.cuentaId, a.itemId)?.nombre || '', comentario: a.nota || '' }],
+  'anular-lote': (p, n, a) => (a.itemIds || []).map(id => ['item_anulado', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { plato: itemDe(p, a.cuentaId, id)?.nombre || '', motivo: a.motivo || '' }]),
   'anular': (p, n, a) => ['item_anulado', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { plato: itemDe(p, a.cuentaId, a.itemId)?.nombre || '', motivo: a.motivo || '' }],
 
   'cocina-salida': (p, n, a) => ['item_salida', 'cuenta', etiquetaCuenta(n, enCuenta(n, a.cuentaId)), { plato: itemDe(n, a.cuentaId, a.itemId)?.nombre || '', area: a.area }],
@@ -1016,6 +1019,9 @@ function useSupabaseStore(empresaId) {
   const [error, setError] = useState('')
   const estadoRef = useRef(null)
   const colaRef = useRef(Promise.resolve())
+  // Eliminaciones (anular) ya mostradas pero que el servidor aún no procesó: si llega la respuesta de OTRA acción de la cola,
+  // se vuelven a aplicar encima para que los ítems no reaparezcan y parpadeen hasta que el servidor los vaya borrando.
+  const pendRef = useRef([])
   const mapaRef = useRef(new Map())
   const versionRef = useRef(0)
   const completaRef = useRef(0)
@@ -1166,14 +1172,19 @@ function useSupabaseStore(empresaId) {
     }
     estadoRef.current = { ...nuevo, _empresaId: empresaId, _supCargando: false }
     setS(estadoRef.current)
+    if (a.t === 'anular' || a.t === 'anular-lote') pendRef.current.push(accion)
     colaRef.current = colaRef.current.then(async () => {
       if (!estadoRef.current) return
       try {
         const res = await despacharSupabase(estadoRef.current, accion, { mapa: mapaRef.current, setError: avisa })
-        estadoRef.current = { ...res, _empresaId: empresaId }
+        pendRef.current = pendRef.current.filter(p => p !== accion)
+        let vista = res
+        for (const p of pendRef.current) { try { vista = reducer(vista, p) } catch {  } }
+        estadoRef.current = { ...vista, _empresaId: empresaId }
         setS(estadoRef.current)
         setError('')
       } catch (err) {
+        pendRef.current = pendRef.current.filter(p => p !== accion)
         avisa(err)
         try {
           const fresco = await cargarEstadoInicial(empresaId)

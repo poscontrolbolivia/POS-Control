@@ -107,6 +107,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const [aUnirCtas, setAUnirCtas] = useState([])
   const [desc, setDesc] = useState(null)
   const [prop, setProp] = useState(null)
+  const [propOpc, setPropOpc] = useState(false) // opciones de propina visibles (como en descuento: primero solo «Aplicar»)
   const [confirmar, setConfirmar] = useState(null)
   const [salirAviso, setSalirAviso] = useState(false)
   const [destZona, setDestZona] = useState('')
@@ -338,6 +339,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
     const monto = round2(base * pct)
     d({ t: 'extras', cuentaId: c.id, propina: monto })
     setProp(null)
+    setPropOpc(false)
   }
 
   const listo = pasoPedido(c)
@@ -460,7 +462,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   }
   const puedeDividir = !enCobro && editable && puedeUnir && c.tipo === 'mesa' && hermanas.length < 8
   const quitarSinEnviar = () => {
-    c.items.filter(i => i.estado === 'pendiente').forEach(i => d({ t: 'anular', cuentaId: c.id, itemId: i.id, motivo: 'pendiente' }))
+    const ids = c.items.filter(i => i.estado === 'pendiente').map(i => i.id)
+    if (ids.length) d({ t: 'anular-lote', cuentaId: c.id, itemIds: ids, motivo: 'pendiente' })
     setMarcados([]); setConfirmar(null)
   }
   const reenviarComanda = async () => { setConfirmar(null); await reimprimirComanda() }
@@ -687,7 +690,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
         <section className="pm-cuenta">
 
           <ul className="items">
-            {c.items.map(i => (
+            {c.items.filter(i => !(i.estado === 'anulado' && !i.enviadoEn)).map(i => (
               <li key={i.id} className={i.estado + ' pm-item'}>
                 <Thumb producto={s.productos.find(x => x.id === i.productoId)} nombreFallback={i.nombre} />
                 {modo === 'mover' && puedeMover && editable && i.estado !== 'anulado' && <input name="mover-title" type="checkbox" checked={marcados.includes(i.id)} onChange={() => toggle(i.id)} aria-label={t('pedido.moverTitle')} />}
@@ -809,22 +812,29 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
 
           {puedePropina && ajustes && (
             <div className="barra barra-sm">
-              <span>{t('pedido.propina')}{c.propina ? `: ${money(c.propina)}` : ''}:</span>
-              {s.config.propinaPct > 0 && <button className="ghost" style={chico} onClick={() => aplicarPropina(s.config.propinaPct / 100)}>{s.config.propinaPct}% {t('pedido.sugerida')}</button>}
-              <button className="danger" style={chico} onClick={() => aplicarPropina(0)}>{t('comun.quitar')}</button>
-              {prop === null
-                ? <button className="ghost" style={chico} onClick={() => setProp('15')}>{t('pedido.otraPct')}</button>
-                : <>
-                  <input name="prop" type="text" inputMode="numeric" autoComplete="off" value={prop} style={{ width: 64 }} onChange={e => setProp(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))} onFocus={e => e.target.select()} placeholder="%" />
-                  <button className="primary" style={chico} onClick={() => { const v = Number(prop); if (v > 0) aplicarPropina(v / 100); else setProp(null) }}>{t('comun.ok')}</button>
-                  <button className="danger" style={chico} onClick={() => setProp(null)}>✕</button>
-                </>}
+              <span>{t('pedido.propina')}</span>{c.propina > 0 && <b className="pm-aplicado">{money(c.propina)}</b>}
+              {prop === null && !propOpc && <>
+                <button className="primary" style={chico} onClick={() => setPropOpc(true)}>{t('pedido.aplicar')}</button>
+                {c.propina > 0 && <button className="danger" style={chico} onClick={() => aplicarPropina(0)}>{t('comun.quitar')}</button>}
+              </>}
+              {prop === null && propOpc && <>
+                {s.config.propinaPct > 0 && s.config?.propinaMostrar !== false && (
+                  <button className="ghost" style={chico} onClick={() => aplicarPropina(s.config.propinaPct / 100)}>{s.config.propinaPct}% {t('pedido.sugerida')} · {money(propinaAuto)}</button>
+                )}
+                <button className="ghost" style={chico} onClick={() => setProp('15')}>{t('pedido.otraPct')}</button>
+                <button className="danger" style={chico} onClick={() => setPropOpc(false)}>✕</button>
+              </>}
+              {prop !== null && <>
+                <input name="prop" type="text" inputMode="numeric" autoComplete="off" value={prop} style={{ width: 64 }} onChange={e => setProp(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))} onFocus={e => e.target.select()} placeholder="%" />
+                <button className="primary" style={chico} onClick={() => { const v = Number(prop); if (v > 0) aplicarPropina(v / 100); else { setProp(null); setPropOpc(false) } }}>{t('comun.ok')}</button>
+                <button className="danger" style={chico} onClick={() => { setProp(null); setPropOpc(false) }}>✕</button>
+              </>}
             </div>
           )}
 
           {(puedeDescuento || puedeDescuentoPin) && ajustes && (
             <div className="barra barra-sm">
-              <span>{t('pedido.descuento')}{c.descuento ? `: ${money(c.descuento)}` : ''}:</span>
+              <span>{t('pedido.descuento')}</span>{c.descuento > 0 && <b className="pm-aplicado">−{money(c.descuento)}</b>}
               {desc === null ? <>
                 <button className="primary" style={chico} onClick={() => setDesc({ modo: 'monto', valor: '', pin: '' })}>{t('pedido.aplicar')}</button>
                 {c.descuento > 0 && <button className="danger" style={chico} onClick={() => d({ t: 'extras', cuentaId: c.id, descuento: 0 })}>{t('comun.quitar')}</button>}
@@ -844,7 +854,6 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
           <div className="total"><span>{t('pedido.subtotal')}</span><b>{money(subtotal)}</b></div>
           {c.descuento > 0 && <div className="total"><span>{t('pedido.descuento')}</span><b>−{money(c.descuento)}</b></div>}
           {c.propina > 0 && <div className="total"><span>{t('pedido.propina')}</span><b>{money(c.propina)}</b></div>}
-          {s.config?.propinaMostrar !== false && !propinaIncluida && pctProp > 0 && !(c.propina > 0) && baseProp > 0 && <div className="total pm-sugerida"><span>{t('pedido.propinaSugeridaLinea', { pct: pctProp })}</span><b>{money(propinaAuto)}</b></div>}
           <div className="total pm-total" style={{ borderTop: '2px solid var(--line-fuerte)', paddingTop: 8 }}><span>{t('pedido.totalPagar')}</span><b>{money(c.propina > 0 ? baseProp : final)}</b></div>
           {c.propina > 0 && <div className="total pm-conpropina"><span>{tOr('pedido.totalConPropina', 'Total a pagar con propina')}</span><b>{money(final)}</b></div>}
           {pagado > 0 && (

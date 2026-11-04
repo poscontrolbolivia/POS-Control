@@ -36,7 +36,7 @@ export default function CajaHub({ rol, sesion, onAbrirMesa, sub = 'caja', onSub 
     <>
       {lista.length > 1 && (
         <div className="caja-hub">
-          <div className="caja-pan caja-hub-tabs" role="tablist" aria-label={tOr('caja.submenus', 'Secciones de caja')}>
+          <div className="caja-pan caja-hub-tabs nav-n1" role="tablist" aria-label={tOr('caja.submenus', 'Secciones de caja')}>
             {lista.map(x => (
               <button key={x.id} type="button" role="tab" aria-selected={actual === x.id}
                 className={'tab' + (actual === x.id ? ' on' : '')} onClick={() => onSub?.(x.id)}>

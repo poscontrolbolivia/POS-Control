@@ -140,3 +140,6 @@
 .ck-tanda-cab.hecha { background: color-mix(in srgb, var(--btn-green) 12%, var(--card)); border-color: color-mix(in srgb, var(--btn-green) 45%, var(--line)); }
 .ck-tanda-ok { color: var(--ok-ink) !important; }
 .ck-timer.mini { font-size: .95rem; padding: 2px 8px; }
+
+.ck-total-sw{display:inline-flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;min-height:40px}
+.ck-total-sw em{font-style:normal;font-size:.78rem;font-weight:800;padding:1px 7px;border-radius:999px;background:var(--ac);color:var(--on-btn);margin-left:6px}

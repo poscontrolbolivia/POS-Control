@@ -239,3 +239,8 @@
 .pm-sub .pm-cab-acc{flex:none;margin-left:auto}
 @media(max-width:420px){.pm-sub .pm-pax{gap:6px;font-size:.9rem}.pm-sub .pm-abrio{padding:0 8px;font-size:.85rem}}
 .pm-item .pm-tiempos{display:block;margin-top:2px;color:var(--mut);font-size:.82rem;font-weight:700}
+
+/* Barra superior de la cuenta (Atrás · nombre · acción): amarillo de los menús, para que se vea una sola pieza. */
+.pm-flota{pointer-events:auto;padding:8px 10px;border-radius:var(--r-md);background:var(--logo-yellow);border:1.5px solid color-mix(in srgb,var(--logo-yellow) 65%,#000);box-shadow:var(--sh-1)}
+.pm-flota .pm-mesa{background:transparent;border:0;box-shadow:none;color:#3a2c07}
+.pm-aplicado{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border-radius:999px;background:color-mix(in srgb,var(--logo-green) 16%,var(--card));border:1px solid color-mix(in srgb,var(--logo-green) 45%,var(--line));color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums}

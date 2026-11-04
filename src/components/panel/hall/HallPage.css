@@ -70,7 +70,10 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 }
 .salon .lienzo{ touch-action: pan-x pan-y; }
 .salon .lienzo .mesa{ touch-action: pan-x pan-y; -webkit-touch-callout: none; }
-.salon .lienzo.edit, .salon .lienzo.edit .mesa{ touch-action: none; }
+/* Al editar, arrastrar una MESA la mueve (touch-action:none) pero arrastrar el fondo vacío sigue desplazando la página:
+   así se puede bajar a las opciones de la mesa elegida aunque el mapa ocupe toda la pantalla. */
+.salon .lienzo.edit{ touch-action: pan-y; }
+.salon .lienzo.edit .mesa{ touch-action: none; }
 .salon .lienzo.edit .mesa{ cursor: grab; }
 .salon .lienzo .mesa.arrastrando{ cursor: grabbing; z-index: 3; box-shadow: 0 6px 18px rgba(0, 0, 0, .22); opacity: .95; }
 .lienzo-vacio{
@@ -368,3 +371,10 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 /* Pie del mapa: el zoom (− 100 % +) y, al lado, Editar mapa; al editar, Terminar y Cancelar. */
 .mapa-pie{ display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; margin:6px 0 0; width:100%; }
 .mapa-pie .zoom-ctrl{ margin:0; }
+
+/* Edición: el panel de la mesa nunca es más alto que la pantalla y se desplaza por dentro. */
+@media (min-width:901px){.salon .mapa-col.editando .mesa-edit{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}}
+.salon-modo{max-width:var(--pagina-max)}
+.salon-modo .tab{flex:1 1 150px;min-height:44px;justify-content:center;font-weight:700}
+.zona-strip{flex-direction:column;align-items:stretch;gap:8px}
+.salon-vista-fila{justify-content:flex-start}

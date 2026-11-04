@@ -372,17 +372,31 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
     d({ t: 'mesa-', id: sel }); setSel(null)
   }
 
+  // En edición, al elegir una mesa se baja hasta sus opciones (en pantallas chicas quedaban fuera de vista).
+  const panelMesaRef = useRef(null)
+  useEffect(() => {
+    if (edit && sel && panelMesaRef.current) panelMesaRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [edit, sel])
+
   return (
     <div className="salon">
       <section className={'mapa-col' + (edit ? ' editando' : '')}>
+        {/* Nivel 1: qué se mira (mesas o para llevar). Nivel 2: forma de verlo (mapa/lista) y, debajo, los salones. */}
+        <div className="nav-n1 salon-modo" role="tablist" aria-label={tOr('salon.modo', 'Qué quieres ver')}>
+          <button type="button" role="tab" aria-selected={!enLlevar} className={'tab' + (!enLlevar ? ' on' : '')}
+            onClick={() => { if (enLlevar) { setZona(TODAS); setSel(null) } }}>{tOr('salon.modoMesas', 'Mesas')}</button>
+          <button type="button" role="tab" aria-selected={enLlevar} className={'tab' + (enLlevar ? ' on' : '')}
+            onClick={() => { setZona(LLEVAR); setSel(null); setEdit(false); setNueva(null); setRen(null); setConf(null) }}>
+            {t('salon.llevar')}{llevarCuentas.length > 0 && <span className="llevar-n">{llevarCuentas.length}</span>}
+          </button>
+        </div>
+        {!enLlevar && (
         <div className="zona-strip">
-          <div className="zonas-scroll" ref={ruedaHorizontal} role="group" aria-label={t('salon.salones')}>
+          <div className="nav-n2 salon-vista-fila"><VistaMapaLista valor={edit ? 'mapa' : vista} onCambiar={cambiarVista} bloquearLista={edit} etiqueta={t('salon.vista')} /></div>
+          <div className="nav-n2 zonas-scroll" ref={ruedaHorizontal} role="group" aria-label={t('salon.salones')}>
             <button className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS}
               title={t('salon.todasTitle')} onClick={() => { setZona(TODAS); setSel(null) }}>
               {t('salon.todas')}
-            </button>
-            <button className={enLlevar ? 'tab on' : 'tab'} aria-pressed={enLlevar} onClick={() => { setZona(LLEVAR); setSel(null); setEdit(false); setNueva(null); setRen(null); setConf(null) }}>
-              <span aria-hidden="true">🥡</span> {t('salon.llevar')}{llevarCuentas.length > 0 && <span className="llevar-n">{llevarCuentas.length}</span>}
             </button>
             {zonas.map((z, i) => (ren && ren.id === z.id ? (
               <span className="zren" key={z.id}>
@@ -437,8 +451,8 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
               </button>
             )}
           </div>
-          {!enLlevar && <VistaMapaLista valor={edit ? 'mapa' : vista} onCambiar={cambiarVista} bloquearLista={edit} etiqueta={t('salon.vista')} />}
         </div>
+        )}
 
         {aviso && (
           <div className="salon-aviso" role="status">
@@ -500,7 +514,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
         )}
 
         {edit && admin && mesaSel && (
-          <div className="mesa-edit" role="group" aria-label={t('salon.mesaSel')}>
+          <div className="mesa-edit" ref={panelMesaRef} role="group" aria-label={t('salon.mesaSel')}>
             <div className="me-cab"><b>{t('salon.mesaSel')}</b><span className="me-nom">{mesaSel.nombre}</span></div>
             <div className="me-grid">
               <label className="me-campo me-ancho2"><span>{t('pedido.mesaCorta')}</span>
@@ -624,7 +638,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
         {/* Pie del mapa: zoom y, al lado, Editar mapa (al editar: Terminar y Cancelar). */}
         {!enLlevar && (
           <div className="mapa-pie">
-            {!(vista === 'lista' && !edit) && (
+            {edit && (
             <div className="zoom-ctrl" role="group" aria-label={tOr('salon.zoomTitulo', 'Zoom del mapa')}>
               <button type="button" className="ico" onClick={zoomAlejar} disabled={zoom <= ZOOM_MIN} title={tOr('salon.zoomAlejar', 'Alejar el mapa')} aria-label={tOr('salon.zoomAlejar', 'Alejar el mapa')}>−</button>
               <button type="button" className="zoom-pct" onClick={zoomReset} title={tOr('salon.zoomReset', 'Restablecer zoom')} aria-label={tOr('salon.zoomReset', 'Restablecer zoom')}>{Math.round(zoom * 100)} %</button>

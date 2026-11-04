@@ -83,7 +83,7 @@ export default function MenuPage({ rol }) {
   })
   useEffect(() => { try { sessionStorage.setItem('pos-menu-abiertas', JSON.stringify([...abiertas])) } catch { /* sin almacenamiento */ } }, [abiertas])
   const [busqueda, setBusqueda] = useState('')
-  const [tipo, setTipo] = useState('productos')   // qué se lista: 'grupos' | 'productos' | 'indicaciones'
+  const [tipo, setTipo] = useState('grupos')   // qué se lista (la jerarquía empieza por los grupos): 'grupos' | 'productos' | 'indicaciones'
   const [orden, setOrden] = useState({ k: 'numero', dir: 1 })
   const [vGrupo, setVGrupo] = useState(null)   // ventana de grupo: { id|null, nombre, grupoImp }
   const [vProd, setVProd] = useState(null)     // ventana de producto: { id|null, seccionId, nombre, precio, areas, opciones }
@@ -581,7 +581,7 @@ export default function MenuPage({ rol }) {
       {vacio && <div className="adm-aviso mn-vacio">{t('menu.menuVacio')}</div>}
 
       {!vacio && (
-        <div className="mn-tabs" role="group" aria-label={tOr('items.tabsAria', 'Qué lista quieres ver')}>
+        <div className="mn-tabs nav-n1" role="group" aria-label={tOr('items.tabsAria', 'Qué lista quieres ver')}>
           {TIPOS.map(k => (
             <button key={k} type="button" className={'tab' + (tipo === k ? ' on' : '')} aria-pressed={tipo === k} onClick={() => setTipo(k)}>
               {nombreTipo(k)}<span className="mn-tab-n" aria-hidden="true">{conteoTipo[k]}</span>

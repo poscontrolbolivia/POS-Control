@@ -570,7 +570,7 @@ export default function InventoryPage({ rol, sesion }) {
         )}
       />
 
-      <div className="inv-tabs" role="tablist">
+      <div className="inv-tabs nav-n1" role="tablist">
         <button type="button" role="tab" aria-selected={pestana === 'insumos'} className={'tab' + (pestana === 'insumos' ? ' on' : '')} onClick={() => setPestana('insumos')}>
           {tOr('inventario.tabInsumos', 'Insumos')}
         </button>
