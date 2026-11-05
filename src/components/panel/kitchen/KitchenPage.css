@@ -1,7 +1,6 @@
 .cocina.ck { display: flex; flex-direction: column; gap: 10px; padding: 10px var(--pagina-pad); max-width: none; margin: 0 auto; }
 .ck .ck-sp { flex: 1; }
 
-.ck-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ck-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .ck-tab { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; min-height: 48px; padding: 6px 14px; font-weight: 600; }
 /* Contador rojo de la pestaña: lo que falta sacar en esa área, como el badge de una notificación. */
@@ -97,7 +96,6 @@
 @media (max-width: 640px) {
   .cocina.ck { padding: 8px; }
   .ck-grid { grid-template-columns: 1fr; }
-  .ck-barra .ck-sp { display: none; }
 }
 
 .ck-devs{display:flex;flex-direction:column;gap:10px;margin:0 0 12px}
@@ -143,3 +141,7 @@
 
 .ck-total-sw{display:inline-flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;min-height:40px}
 .ck-total-sw em{font-style:normal;font-size:.78rem;font-weight:800;padding:1px 7px;border-radius:999px;background:var(--ac);color:var(--on-btn);margin-left:6px}
+
+/* Herramientas de Despacho (Total y Actualizar): su propio marco, debajo de las vistas, alineadas a la izquierda. */
+.ck-herr{align-items:center;gap:10px}
+.ck-herr .ck-total-sw{margin:0}

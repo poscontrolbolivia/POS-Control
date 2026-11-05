@@ -35,7 +35,9 @@ const iniciaVista = () => {
   return typeof window !== 'undefined' && window.innerWidth <= 768 ? 'lista' : 'mapa'
 }
 
-export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onOpen = () => {} }) {
+// `despuesDe`: nivel del marco que va justo encima ('n1' o 'n2'); los marcos se alternan blanco/tinte, así que el primero
+// de aquí es el contrario.
+export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onOpen = () => {}, despuesDe = 'n2' }) {
   const { money } = useMoneda()
   const { t, tOr } = useIdioma()
   const [vista, setVista] = useState(iniciaVista)
@@ -77,18 +79,16 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
   ) : null)
   const leyenda = [['libre', t('salon.libre')], ['ocupada', t('salon.ocupada')], ['enviada', t('salon.enviada')], ['porcobrar', t('salon.porcobrar')]]
 
+  const primero = despuesDe === 'n2' ? 'nav-n1' : 'nav-n2'
+  const segundo = despuesDe === 'n2' ? 'nav-n2' : 'nav-n1'
   return (
-    <section className="caja-card mr-bloque" aria-label={tOr('caja.mesasTitulo', 'Mesas')}>
-      <div className="caja-head mr-cab">
-        <h2>{tOr('caja.mesasTitulo', 'Mesas')}</h2>
-        <span className="caja-hora">{mesasZona.length}</span>
-        <span className="sp" />
+    <>
+      {/* Igual que en Salón: Mapa · Lista en su marco y los salones en el suyo, cada uno en una sola fila. */}
+      <div className={primero + ' mr-vista-fila'}>
         <VistaMapaLista valor={vista} onCambiar={cambiarVista} etiqueta={t('salon.vista')} />
       </div>
-
-      {/* El salón se elige arriba y siempre: en la vista mapa el selector quedaba debajo de la ayuda y no se veía. */}
       {zonasOrden.length >= 1 && (
-        <div className="zonas-scroll mr-zonas" role="group" aria-label={t('salon.salones')}>
+        <div className={segundo + ' mr-zonas'} role="group" aria-label={t('salon.salones')}>
           <button type="button" className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS} onClick={() => setZona(TODAS)} title={t('salon.todasTitle')}>
             {t('salon.todas')}
           </button>
@@ -97,6 +97,11 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
           ))}
         </div>
       )}
+    <section className="caja-card mr-bloque" aria-label={tOr('caja.mesasTitulo', 'Mesas')}>
+      <div className="caja-head mr-cab">
+        <h2>{tOr('caja.mesasTitulo', 'Mesas')}</h2>
+        <span className="caja-hora">{mesasZona.length}</span>
+      </div>
 
       <p className="caja-nota mr-ayuda">{tOr('caja.mesasAyuda', 'Lee el saldo de cada mesa y toca una para cobrarla. Los pedidos se toman en Salón.')}</p>
 
@@ -164,5 +169,6 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
         {leyenda.map(([k, l]) => <span key={k}><i className={'pt ' + k} />{l}</span>)}
       </div>
     </section>
+    </>
   )
 }

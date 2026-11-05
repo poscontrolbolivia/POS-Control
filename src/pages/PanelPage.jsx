@@ -18,6 +18,7 @@ import { iniciarEstacion, detenerEstacion, estacionRecordada, actualizarConfig, 
 import { gruposDe } from '../services/printing.js'
 import { contarAbiertas } from '../services/alertasApi.js'
 import { totalDespacho } from '../services/despacho.js'
+import { activarRuedaEnMenus } from '../services/ruedaHorizontal.js'
 
 const AuditPage = lazyRetry(() => import('../components/panel/audit/AuditPage.jsx'))
 const InventoryPage = lazyRetry(() => import('../components/panel/inventory/InventoryPage.jsx'))
@@ -54,6 +55,7 @@ export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   const [, setPermTick] = useState(0)
   const permisosDemo = sesion.supabase ? null : ((s.usuariosDemo || []).find(u => u.usuario === sesion.usuario)?.permisos || [])
   const claveDemo = permisosDemo ? permisosDemo.join(',') : ''
+  useEffect(() => { activarRuedaEnMenus() }, [])
   useEffect(() => {
     let vivo = true
     if (sesion.supabase) {

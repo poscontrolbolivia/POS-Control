@@ -15,3 +15,21 @@ export function ruedaHorizontal(el) {
     e.preventDefault()
   }, { passive: false })
 }
+
+// Un solo oyente para todos los marcos de menú (.nav-n1 / .nav-n2): la rueda del mouse los desplaza de lado
+// cuando no caben, sin tener que ponerle la referencia a cada uno.
+export function activarRuedaEnMenus() {
+  if (typeof document === 'undefined' || document.__ruedaMenus) return
+  document.__ruedaMenus = true
+  document.addEventListener('wheel', e => {
+    const el = e.target?.closest?.('.nav-n1,.nav-n2')
+    if (!el || e.ctrlKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
+    const max = el.scrollWidth - el.clientWidth
+    if (max <= 1) return
+    const px = e.deltaMode === 1 ? e.deltaY * 32 : e.deltaMode === 2 ? e.deltaY * el.clientWidth : e.deltaY
+    const next = Math.max(0, Math.min(max, el.scrollLeft + px))
+    if (Math.abs(next - el.scrollLeft) < 0.5) return
+    el.scrollLeft = next
+    e.preventDefault()
+  }, { passive: false })
+}

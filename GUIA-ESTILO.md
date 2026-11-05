@@ -146,7 +146,10 @@ sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos e
 - Entre recuadros hay **un solo espacio**: `--marco-gap` (10 px). El contenedor separa con `gap`; el marco no suma su propio margen.
 - Todas las pantallas usan el mismo margen de página `--pagina-pad`. Una pantalla anidada (p. ej. Caja dentro del hub) no lo duplica.
 - La **carta** (buscar + grupos que corren de lado + platos) es UN marco tinte, igual en el pedido de una mesa y en Venta directa.
-- **Salón:** Mesas/Para llevar (blanco) y debajo un solo recuadro tinte con Mapa/Lista a la derecha y los salones.
+- **Salón:** tres marcos, cada uno en su fila: 1) Mesas · Para llevar (blanco), 2) Mapa · Lista (tinte), 3) los salones (blanco).
+  Lo mismo en Caja (Mesas) y Venta directa (Mesas); en Despacho: 1) Cocina · Barra · Sacadas y 2) Total + Actualizar.
+- **Cada marco de menú es UNA fila:** los botones empiezan a la izquierda y, si no caben, la fila se desplaza de lado
+  (como los grupos de la carta). Nunca saltan a una segunda línea. Va en `.nav-n1` / `.nav-n2` (base.css).
 - **Crear** va siempre **debajo** del marco que elige qué se crea (Ítems: Grupos/Productos/Indicaciones → «+ Grupo»).
 
 ## Auditoría legible

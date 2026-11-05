@@ -1,9 +1,4 @@
-.zona-strip{
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 8px 0;
-}
+
 .zonas-scroll{
   display: flex;
   flex-wrap: wrap;
@@ -130,9 +125,9 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .salon .leyenda .pt.unida{ background: var(--ac); border-radius: 4px; }
 @media (min-width: 769px){.zonas-scroll{ flex-wrap: wrap; }
 .salon .mesa{ font-size: clamp(.68rem, 1.5vw, .95rem); }}
-.zona-strip > button{ margin-left: auto; flex: none; }
+
 @media (max-width: 768px){.salon.salon{ padding: 8px 8px 110px; gap: 8px; }
-.zona-strip{ flex-wrap: wrap; }
+
 .zonas-scroll{
     order: 1;
     flex: 1 1 100%;
@@ -141,8 +136,8 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
     padding-bottom: 4px;
   }
 .zonas-scroll > *{ flex: none; }
-.zona-strip .vista-ml{ order: 2; }
-.zona-strip > button{ order: 3; margin-left: auto; }
+
+
 .salon button{ min-height: 44px; min-width: 44px; }
 .salon .ztab .tab{ min-height: 44px; padding: 8px 14px; font-size: .95rem; }
 .salon button.ico{ min-height: 44px; min-width: 44px; font-size: 1rem; }
@@ -191,10 +186,10 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 @media (min-width: 769px) and (pointer: coarse){.salon .ztab .tab{ min-height: 44px; }
 .salon button.ico{ min-height: 44px; min-width: 44px; }
 .salon .barra button{ min-height: 44px; min-width: 44px; }}
-.zona-strip > button{ margin-left: auto; flex: none; }
+
 .salon .barra:has(> .pista) > button{ order: 2; margin-left: auto; }
 .salon .barra > .pista{ order: 1; flex: 1; margin: 0; }
-.zona-strip :focus-visible, .mesa-edit :focus-visible, .salon .mesa:focus-visible{ outline: 3px solid var(--ac); outline-offset: 2px; }
+
 @media (prefers-reduced-motion: reduce){.salon .lienzo .mesa{ transition: none; }
 .salon .mesa.arrastrando{ box-shadow: none; opacity: 1; }}
 .mesa-edit{margin:8px 0;padding:12px 14px;background:var(--card);border:2px solid var(--ac);border-radius:var(--r-md);box-shadow:var(--sombra)}
@@ -376,12 +371,18 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 @media (min-width:901px){.salon .mapa-col.editando .mesa-edit{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}}
 .salon-modo{max-width:var(--pagina-max)}
 .salon-modo .tab{flex:1 1 150px;min-height:44px;justify-content:center;font-weight:700}
-.zona-strip{flex-direction:column;align-items:stretch;gap:8px}
+
 .salon-vista-fila{justify-content:flex-start}
 
 /* Marcos del Salón: mismo margen de página que el resto, poco espacio entre ellos y un solo recuadro para Mapa/Lista + salones. */
 .salon{ padding: var(--pagina-pad); }
 .salon .mapa-col{ display: flex; flex-direction: column; gap: var(--marco-gap); }
-.zona-strip{ margin: 0; padding: 8px; gap: 8px; background: color-mix(in srgb, var(--ac) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--ac) 26%, var(--line)); border-radius: var(--r-md); }
-.zona-strip > .nav-n2.nav-n2{ background: none; border: 0; padding: 0; margin: 0; box-shadow: none; }
+
+
 .salon-vista-fila{ justify-content: flex-end; }
+
+/* Salón: tres marcos en tres filas (Mesas · Para llevar / Mapa · Lista / Salones). Cada fila empieza a la izquierda y se
+   desplaza de lado si hay más botones; el blanco y el tinte se alternan (ver GUIA-ESTILO). */
+.salon .mapa-col{ gap: var(--marco-gap); }
+.salon .nav-n2.salon-vista-fila .vista-ml{ margin-left: 0; }
+.salon .nav-n1.zonas-scroll{ flex: 0 0 auto; width: 100%; order: 0; padding: 8px; }

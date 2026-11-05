@@ -61,3 +61,6 @@
 .mr-item{min-width:0;overflow:visible}
 .mr-item .mr-nombre{overflow-wrap:anywhere;word-break:break-word}
 @media(max-width:400px){.mr-lista{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mr-item{padding:8px 10px}}
+
+/* Mapa · Lista y Salones son marcos propios (fuera de la tarjeta), alineados a la izquierda. */
+.mr-vista-fila .vista-ml{margin-left:0}

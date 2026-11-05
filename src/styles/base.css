@@ -190,3 +190,9 @@ input[type=checkbox].sw:disabled{opacity:.5;cursor:not-allowed}
 /* Si el contenedor ya separa con «gap», el marco no suma su propio margen (antes se veían ~30 px entre recuadros). */
 :is(.adm-panel,.inv-page,.ala,.super-envoltura,.caja,.vd-menu,.ck,.caja-hub,.mapa-col)>:is(.nav-n1,.nav-n2).nav-n1,
 :is(.adm-panel,.inv-page,.ala,.super-envoltura,.caja,.vd-menu,.ck,.caja-hub,.mapa-col)>:is(.nav-n1,.nav-n2).nav-n2{margin-bottom:0}
+
+/* Cada marco de menú es UNA sola fila: los botones empiezan a la izquierda y, si no caben, la fila se desplaza de lado
+   (igual que los grupos de la carta). Nunca saltan a una segunda línea ni se estiran para llenar el ancho. */
+.nav-n1.nav-n1,.nav-n2.nav-n2{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.nav-n1.nav-n1>*,.nav-n2.nav-n2>*{flex:0 0 auto}
+.nav-n1.nav-n1 .tab,.nav-n2.nav-n2 .tab{flex:0 0 auto;white-space:nowrap}

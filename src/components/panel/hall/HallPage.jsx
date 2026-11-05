@@ -381,7 +381,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
   return (
     <div className="salon">
       <section className={'mapa-col' + (edit ? ' editando' : '')}>
-        {/* Nivel 1: qué se mira (mesas o para llevar). Nivel 2: forma de verlo (mapa/lista) y, debajo, los salones. */}
+        {/* Tres marcos, cada uno en su fila: 1) Mesas · Para llevar, 2) Mapa · Lista, 3) los salones. */}
         <div className="nav-n1 salon-modo" role="tablist" aria-label={tOr('salon.modo', 'Qué quieres ver')}>
           <button type="button" role="tab" aria-selected={!enLlevar} className={'tab' + (!enLlevar ? ' on' : '')}
             onClick={() => { if (enLlevar) { setZona(TODAS); setSel(null) } }}>{tOr('salon.modoMesas', 'Mesas')}</button>
@@ -391,9 +391,9 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           </button>
         </div>
         {!enLlevar && (
-        <div className="zona-strip">
+        <>
           <div className="nav-n2 salon-vista-fila"><VistaMapaLista valor={edit ? 'mapa' : vista} onCambiar={cambiarVista} bloquearLista={edit} etiqueta={t('salon.vista')} /></div>
-          <div className="nav-n2 zonas-scroll" ref={ruedaHorizontal} role="group" aria-label={t('salon.salones')}>
+          <div className="nav-n1 zonas-scroll" ref={ruedaHorizontal} role="group" aria-label={t('salon.salones')}>
             <button className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS}
               title={t('salon.todasTitle')} onClick={() => { setZona(TODAS); setSel(null) }}>
               {t('salon.todas')}
@@ -451,7 +451,7 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
               </button>
             )}
           </div>
-        </div>
+        </>
         )}
 
         {aviso && (

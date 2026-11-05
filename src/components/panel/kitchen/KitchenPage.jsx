@@ -582,8 +582,8 @@ export default function KitchenPage({ rol, sesion }) {
 
   return (
     <div className="cocina ck">
-      <div className="ck-barra nav-n1">
-        <div className="ck-tabs" role="tablist" aria-label={tOr('cocina.areas', 'Áreas')}>
+      {/* Dos marcos, cada uno en su fila: las vistas (Cocina · Barra · Sacadas) y, debajo, las herramientas (Total y Actualizar). */}
+      <div className="ck-tabs nav-n1" role="tablist" aria-label={tOr('cocina.areas', 'Áreas')}>
           {tabs.map(v => (
             <button key={v} type="button" role="tab" aria-selected={vista === v} className={'ck-tab' + (vista === v ? ' on' : '')} onClick={() => cambiarVista(v)}
               aria-label={`${t('cocina.vistaDe', { area: nombreArea(v) })}${badge(v) ? ` · ${badge(v)}` : ''}`}>
@@ -595,8 +595,8 @@ export default function KitchenPage({ rol, sesion }) {
             title={tOr('cocina.sacadasTitulo', 'Comandas que ya salieron completas')}>
             {tOr('cocina.sacadas', 'Sacadas')}{vista === VISTA_SACADAS && totalSacadas > 0 && <span className="ck-n" aria-hidden="true">{totalSacadas > 99 ? '99+' : totalSacadas}</span>}
           </button>
-        </div>
-        <span className="ck-sp" />
+      </div>
+      <div className="ck-herr nav-n2" role="group" aria-label={tOr('cocina.herramientas', 'Herramientas')}>
         {vista !== VISTA_SACADAS && (
           <label className="ck-total-sw" title={tOr('cocina.totalAyuda', 'Lo que falta sacar, sumado entre todas las comandas y separado por indicación (término, salsa…).')}>
             <input name="ck-total" type="checkbox" className="sw" checked={totalAbierto} onChange={e => setTotalAbierto(e.target.checked)} />
