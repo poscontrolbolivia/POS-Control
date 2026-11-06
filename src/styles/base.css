@@ -188,8 +188,8 @@ input[type=checkbox].sw:disabled{opacity:.5;cursor:not-allowed}
 .marco-b{background:color-mix(in srgb,var(--ac) 8%,var(--card));border:1.5px solid color-mix(in srgb,var(--ac) 26%,var(--line));border-radius:var(--r-md)}
 .marco-b .nav-n2.nav-n2{background:var(--card)}
 /* Si el contenedor ya separa con «gap», el marco no suma su propio margen (antes se veían ~30 px entre recuadros). */
-:is(.adm-panel,.inv-page,.ala,.super-envoltura,.caja,.vd-menu,.ck,.caja-hub,.mapa-col)>:is(.nav-n1,.nav-n2).nav-n1,
-:is(.adm-panel,.inv-page,.ala,.super-envoltura,.caja,.vd-menu,.ck,.caja-hub,.mapa-col)>:is(.nav-n1,.nav-n2).nav-n2{margin-bottom:0}
+:is(.adm-panel,.inv-page,.ala,.super-envoltura,.caja,.vd-menu,.ck,.caja-hub,.mapa-col,.rp-mapa)>:is(.nav-n1,.nav-n2).nav-n1,
+:is(.adm-panel,.inv-page,.ala,.super-envoltura,.caja,.vd-menu,.ck,.caja-hub,.mapa-col,.rp-mapa)>:is(.nav-n1,.nav-n2).nav-n2{margin-bottom:0}
 
 /* Cada marco de menú es UNA sola fila: los botones empiezan a la izquierda y, si no caben, la fila se desplaza de lado
    (igual que los grupos de la carta). Nunca saltan a una segunda línea ni se estiran para llenar el ancho. */

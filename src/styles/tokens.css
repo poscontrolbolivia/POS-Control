@@ -1,5 +1,7 @@
 :root{
   --pagina-max:1100px;--pagina-pad:16px;--pagina-gap:10px;--marco-gap:10px;
+  /* Ancho de las pantallas con mapa (Salón, Caja, Cierres, Reportes, Venta directa): todas iguales al Salón. 1100px las limitaría. */
+  --ancho-mapas:none;
   --overlay:rgba(8,14,28,.62);--borde-ventana:1.5px solid var(--line-fuerte);
   /* PALETA DEL LOGO (60 % azul · 30 % verde · 10 % naranja). Cambiar un color aquí lo cambia en toda la app. */
   --logo-navy:#083D7C;--logo-blue:#0B5DA8;--logo-teal:#0B5DA8;
@@ -18,6 +20,9 @@
   --on-warning:#2d2000;--on-orange:#2b1500;
   --gloss:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,0));
 }
+
+/* Móvil: el mismo margen lateral que tiene el Salón (8 px); antes Caja y el resto dejaban 16 px y sus marcos salían más angostos. */
+@media (max-width:768px){:root{--pagina-pad:8px}}
 
 :root{
   --bg:#e4e9ef;--card:#ffffff;--card-2:#F3F5F7;--ink:#1F2937;--mut:#4B5563;--ac:#0B5DA8;

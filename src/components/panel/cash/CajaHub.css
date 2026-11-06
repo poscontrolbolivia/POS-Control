@@ -1,6 +1,8 @@
 /* Submenús de Caja (Caja · Cierres · Reportes): píldoras .tab; la marcada es azul sólido (base.css). */
-.caja-hub{max-width:var(--pagina-max);margin:0 auto;padding:var(--pagina-pad) var(--pagina-pad) 4px;display:flex;flex-direction:column;gap:var(--marco-gap)}
+.caja-hub{max-width:var(--ancho-mapas);margin:0 auto;padding:var(--pagina-pad) var(--pagina-pad) 4px;display:flex;flex-direction:column;gap:var(--marco-gap)}
 /* Lo que sigue al marco del hub no repite el margen de arriba: si es otro marco queda a 4 px; si es un título o tarjeta, a --marco-gap. */
 .caja-hub + .caja{padding-top:0}
 .caja-hub + .adm-panel{padding-top:var(--marco-gap)}
 .caja-hub-tabs .tab{flex:1 1 140px}
+/* Cierres y Reportes tienen el mismo ancho que Caja y que el Salón: al cambiar de submenú el marco no salta. */
+.adm-panel.caja-ancho,.adm-panel.rp{max-width:var(--ancho-mapas)}

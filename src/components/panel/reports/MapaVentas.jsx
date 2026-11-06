@@ -1,12 +1,15 @@
 import VistaMapaLista from '../../ui/VistaMapaLista.jsx'
 import { useMemo, useState } from 'react'
 import { useIdioma } from '../../../i18n/index.jsx'
+import { useStore } from '../../../context/StoreContext.jsx'
 import { round2 } from '../../../services/format.js'
+import LienzoMapa, { numeroDeMesa } from '../hall/LienzoMapa.jsx'
+import { leerZoom, estiloMesa } from '../hall/mapaMesas.js'
 
 // Mapa de calor del periodo: cada mesa pintada según lo que vendió, clicable para filtrar el reporte.
-// Es la misma cartesian del Salón (lienzo 1000×600), pero leyendo resumen.por_mesa, que viene por NOMBRE
-// de mesa tanto de la memoria demo como de la RPC, así funciona en los dos modos.
-const W = 1000, H = 600, TODAS = 'todas'
+// Es el MISMO mapa del Salón (LienzoMapa: misma proporción, tamaño de mesa y zoom), pero leyendo resumen.por_mesa,
+// que viene por NOMBRE de mesa tanto de la memoria demo como de la RPC, así funciona en los dos modos.
+const TODAS = 'todas'
 
 const iniciaVista = () => {
   try { const v = localStorage.getItem('pos-reportes-mesas-vista'); if (v === 'mapa' || v === 'lista') return v } catch { /* noop */ }
@@ -27,6 +30,8 @@ const ordenarZonas = zonas => zonas
 
 export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera = [], sel = null, onSel = () => {}, m, total = 0, cuentasPanel = null }) {
   const { t, tOr } = useIdioma()
+  const { s } = useStore()
+  const zoom = leerZoom(s._empresaId ?? 'demo')
   const [vista, setVista] = useState(iniciaVista)
   const [zona, setZona] = useState(TODAS)
 
@@ -50,16 +55,15 @@ export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera 
   const detalle = sel ? { monto: ventas[sel]?.monto ?? fuera.find(x => x.mesa === sel)?.monto ?? 0, cuentas: ventas[sel]?.cuentas ?? fuera.find(x => x.mesa === sel)?.cuentas ?? 0 } : null
 
   return (
-    <section className="adm-card rp-sec rp-mapa" aria-label={tOr('reportes.mapaTitulo', 'Mapa de ventas')}>
-      <div className="adm-card-cab rp-mapa-cab">
-        <h3>🗺️ {tOr('reportes.mapaTitulo', 'Mapa de ventas')}</h3>
-        <span className="rp-n">{mesas.length}</span>
-        <span className="sp" />
+    <section className="rp-mapa" aria-label={tOr('reportes.mapaTitulo', 'Mapa de ventas')}>
+      <h3 className="rp-mapa-tit">🗺️ {tOr('reportes.mapaTitulo', 'Mapa de ventas')} <span className="rp-n">{mesas.length}</span></h3>
+      {/* Igual que en Salón y Caja: Mapa · Lista en su marco y los salones en el suyo. */}
+      <div className="nav-n2 rp-vista-fila">
         <VistaMapaLista valor={vista} onCambiar={cambiarVista} etiqueta={t('salon.vista')} />
       </div>
 
       {zonasOrden.length >= 1 && (
-        <div className="zonas-scroll rp-zonas" role="group" aria-label={t('salon.salones')}>
+        <div className="nav-n1 rp-zonas" role="group" aria-label={t('salon.salones')}>
           <button type="button" className={activo === TODAS ? 'tab on' : 'tab'} aria-pressed={activo === TODAS} onClick={() => setZona(TODAS)} title={t('salon.todasTitle')}>
             {t('salon.todas')}
           </button>
@@ -96,26 +100,24 @@ export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera 
           })}
         </div>
       ) : (
-        <div className="rp-marco">
-          <div className="lienzo rp-lienzo" style={{ aspectRatio: `${W} / ${H}` }}>
-            {mesasZona.map(mm => {
-              const monto = montoDe(mm.nombre)
-              return (
-                <div role="button" tabIndex={0} key={mm.id}
-                  className={`mesa ${mm.forma || 'cuadrada'} rp-mesa` + (sel === mm.nombre ? ' sel' : '')}
-                  onClick={() => pulsado(mm.nombre)} aria-pressed={sel === mm.nombre}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pulsado(mm.nombre) } }}
-                  title={`${mm.nombre}${monto > 0 ? ' · ' + m(monto) : ''} — ${tOr('reportes.mapaTocar', 'Filtrar el reporte por esta mesa')}`}
-                  style={{ left: `${(mm.x / W) * 100}%`, top: `${(mm.y / H) * 100}%`, width: `${(mm.w / W) * 100}%`, height: `${(mm.h / H) * 100}%`, ...calor(monto) }}>
-                  <b className={'nombre' + (String(mm.nombre).length > 4 ? ' largo' : '')}>{mm.nombre}</b>
-                  <span className="rp-mesa-cifra">{corto(monto)}</span>
-                  {monto > 0 && <span className="rp-mesa-pax">×{cuentaDe(mm.nombre)}</span>}
-                  {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(mm.zona)}</span>}
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <LienzoMapa zoom={zoom}>
+          {asp => mesasZona.map(mm => {
+            const monto = montoDe(mm.nombre)
+            return (
+              <div role="button" tabIndex={0} key={mm.id}
+                className={`mesa ${mm.forma || 'cuadrada'} rp-mesa` + (sel === mm.nombre ? ' sel' : '')}
+                onClick={() => pulsado(mm.nombre)} aria-pressed={sel === mm.nombre}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pulsado(mm.nombre) } }}
+                title={`${mm.nombre}${monto > 0 ? ' · ' + m(monto) : ''} — ${tOr('reportes.mapaTocar', 'Filtrar el reporte por esta mesa')}`}
+                style={{ ...estiloMesa(mm, asp), ...calor(monto) }}>
+                <b className="nombre">{numeroDeMesa(mm) || mm.nombre}</b>
+                <span className="importe">{corto(monto)}</span>
+                {monto > 0 && <span className="rp-mesa-pax">×{cuentaDe(mm.nombre)}</span>}
+                {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(mm.zona)}</span>}
+              </div>
+            )
+          })}
+        </LienzoMapa>
       )}
 
       {cuentasPanel}

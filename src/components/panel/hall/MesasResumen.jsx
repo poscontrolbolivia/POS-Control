@@ -1,12 +1,13 @@
 import VistaMapaLista from '../../ui/VistaMapaLista.jsx'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useStore, totalFinal, pagadoCuenta, saldoCuenta } from '../../../context/StoreContext.jsx'
 import { round2 } from '../../../services/format.js'
 import { useMoneda } from '../../../services/money.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import './HallPage.css'
 import './MesasResumen.css'
-import { W, H, ASP_BASE, leerZoom, estiloMesa, calcularAsp } from './mapaMesas.js'
+import { W, H, ASP_BASE, leerZoom, estiloMesa } from './mapaMesas.js'
+import LienzoMapa, { MesaDatos } from './LienzoMapa.jsx'
 
 // Lectura de solo lectura del mapa/listado de mesas para la pantalla de Caja.
 // No abre pedidos ni edita: al pulsar una mesa llama a onOpen (que navega al Salón).
@@ -30,6 +31,21 @@ const ordenarZonas = zonas => zonas
   .map((z, i) => ({ ...z, _i: i }))
   .sort((a, b) => ((a.orden ?? a._i + 1) - (b.orden ?? b._i + 1)) || (a._i - b._i))
 
+// Dónde van los chips de una mesa dividida DENTRO del mapa. El lienzo recorta lo que se sale, así que el chip se ancla al borde que
+// tenga más espacio: debajo de la mesa si hay sitio (si no, encima) y a la izquierda de la mesa (si está en la mitad derecha, a la derecha).
+const estiloChips = (m, asp) => {
+  const izq = (m.x / W) * 100
+  const ancho = (m.w / W) * 100 * (ASP_BASE / asp)
+  const abajoLibre = m.y + m.h < H - 90
+  const enDerecha = m.x + m.w / 2 > W / 2
+  return {
+    ...(enDerecha ? { right: `${100 - izq - ancho}%`, justifyContent: 'flex-end' } : { left: `${izq}%` }),
+    ...(abajoLibre ? { top: `${((m.y + m.h) / H) * 100}%` } : { top: `${(m.y / H) * 100}%`, transform: 'translateY(-100%)' }),
+    width: 'max-content',
+    flexWrap: 'nowrap',
+  }
+}
+
 const iniciaVista = () => {
   try { const v = localStorage.getItem('pos-caja-mesas-vista'); if (v === 'mapa' || v === 'lista') return v } catch { /* noop */ }
   return typeof window !== 'undefined' && window.innerWidth <= 768 ? 'lista' : 'mapa'
@@ -42,19 +58,10 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
   const { t, tOr } = useIdioma()
   const [vista, setVista] = useState(iniciaVista)
   const [zona, setZona] = useState(TODAS)
-  // Mismo mapa que el Salón: misma proporción, mismo tamaño de mesa y el zoom que se dejó allí.
+  // Mismo mapa que el Salón: LienzoMapa pone la misma proporción y el zoom que se dejó allí.
   const { s } = useStore()
   const zoom = leerZoom(s._empresaId ?? 'demo')
-  const bloque = useRef(null)
-  const [asp, setAsp] = useState(ASP_BASE)
-  useEffect(() => {
-    const calc = () => { const a = calcularAsp(bloque.current); if (a !== null) setAsp(prev => (Math.abs(prev - a) > 0.01 ? a : prev)) }
-    calc()
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(calc) : null
-    if (ro && bloque.current) ro.observe(bloque.current)
-    window.addEventListener('resize', calc)
-    return () => { ro?.disconnect(); window.removeEventListener('resize', calc) }
-  }, [vista])
+  const heredadas = s.caja?.turno?.heredadas || []
 
   const cambiarVista = v => { setVista(v); try { localStorage.setItem('pos-caja-mesas-vista', v) } catch { /* noop */ } }
 
@@ -125,41 +132,31 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
           })}
         </div>
       ) : (
-        <div className="salon mr-salon">
-          <div className="lienzo-bloque" ref={bloque}>
-            <div className="lienzo-area" style={{ ['--asp']: String(asp) }}>
-              <div className="lienzo-wrap">
-                <div className="lienzo" style={{ ['--z']: String(zoom) }}>
-                  {mesasZona.map(m => {
-                    const cs = cuentasDeMesa(cuentas, m.id), c = cs[0], est = estadoVarias(cs)
-                    const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
-                    const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
-                    const num = String(m.nombre).match(/(\d+)\s*$/)?.[1] ?? ''
-                    return (
-                      <Fragment key={m.id}>
-                        <div role="button" tabIndex={0} className={`mesa ${m.forma} ${est}`} title={tOr('caja.mesasAbrir', 'Abrir en el salón')}
-                          onClick={() => abre(m)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') abre(m) }}
-                          style={estiloMesa(m, asp)}>
-                          <b className="nombre">{num || m.nombre}</b>
-                          {c && <span className="importe">{money(resto)}</span>}
-                          {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
-                          {!unida && cs.length > 1 && <span className="badge-unida" title={t('pedido.menuDividir')}>✂ ×{cs.length}</span>}
-                          {unida && <span className="badge-unida">🔗 ×{c.mesaIds.length}</span>}
-                        </div>
-                        {/* Las cuentas divididas se cobran desde abajo del cuadro, pegadas a su mesa. */}
-                        {chips(m, cs, { left: `${(m.x / W) * 100}%`, top: `${((m.y + m.h) / H) * 100}%`, width: estiloMesa(m, asp).width })}
-                      </Fragment>
-                    )
-                  })}
+        <LienzoMapa zoom={zoom} className="mr-salon">
+          {asp => mesasZona.map(m => {
+            const cs = cuentasDeMesa(cuentas, m.id), c = cs[0], est = estadoVarias(cs)
+            const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
+            const capT = capacidadCuenta(c, mesas) || (m.cap || 0)
+            const sub = c ? `${money(resto)} · 👥 ${c.comensales ?? 0}/${capT}${c.abiertaPor ? ` · 👤 ${c.abiertaPor}` : ''}` : `${t('salon.' + est)} · 👥 ${m.cap}`
+            return (
+              <Fragment key={m.id}>
+                <div role="button" tabIndex={0} className={`mesa ${m.forma} ${est}`} title={sub}
+                  onClick={() => abre(m)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') abre(m) }}
+                  style={estiloMesa(m, asp)}>
+                  <MesaDatos m={m} cs={cs} resto={resto} mostrarZona={activo === TODAS} nombreZona={zonaNombre(m.zona)} heredadas={heredadas} />
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
+                {/* Las cuentas divididas se cobran desde abajo del cuadro, pegadas a su mesa. */}
+                {chips(m, cs, estiloChips(m, asp))}
+              </Fragment>
+            )
+          })}
+        </LienzoMapa>
       )}
 
       <div className="leyenda mr-leyenda">
         {leyenda.map(([k, l]) => <span key={k}><i className={'pt ' + k} />{l}</span>)}
+        <span><i className="pt pax" />{t('salon.leyendaPax')}</span>
+        <span><i className="pt unida" />{t('salon.leyendaUnidas')}</span>
       </div>
     </section>
     </>

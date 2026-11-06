@@ -24,6 +24,10 @@ for (const p of archivos) {
     if (/<button[^>]*className=\{?[`"']mesa[ `"']/.test(l) || /<button[^>]*\brp-mesa(?![-\w])/.test(l)) {
       problemas.push(`${p}:${i + 1}  una mesa de mapa es <button>; usa <div role="button" tabIndex={0}> con onKeyDown (regla R-MAPA)`)
     }
+    // R-MAPA-UNICO: el lienzo del mapa solo lo dibuja LienzoMapa (y el Salón, que además edita). Cualquier otra pantalla lo usa, no lo copia.
+    if (/className=\{?[`"']lienzo-area/.test(l) && !/[\\/](LienzoMapa|HallPage)\.jsx$/.test(p)) {
+      problemas.push(`${p}:${i + 1}  dibuja su propio mapa (lienzo-area); usa <LienzoMapa> (regla R-MAPA-UNICO)`)
+    }
     // R-DIALOGO: nada de ventanas nativas del navegador.
     if (/(^|[^.\w])(alert|confirm|prompt)\(/.test(l)) {
       problemas.push(`${p}:${i + 1}  ventana nativa del navegador; usa un aviso en línea o un recuadro de confirmación (regla R-DIALOGO)`)

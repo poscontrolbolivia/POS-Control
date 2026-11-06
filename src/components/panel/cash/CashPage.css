@@ -1,4 +1,4 @@
-.caja{display:flex;flex-direction:column;gap:var(--marco-gap);padding:var(--pagina-pad);width:100%;max-width:var(--pagina-max);margin:0 auto}
+.caja{display:flex;flex-direction:column;gap:var(--marco-gap);padding:var(--pagina-pad);width:100%;max-width:var(--ancho-mapas);margin:0 auto}
 .caja .sp{flex:1}
 
 .caja-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:14px;display:flex;flex-direction:column;gap:10px}
@@ -67,7 +67,7 @@
 .caja-dev small{color:var(--mut)}
 
 /* Caja no abre pedidos: las dos listas se cobran igual y cada una ocupa su propio menú. */
-.caja-pan{display:flex;gap:8px;flex-wrap:wrap;width:100%;max-width:var(--pagina-max);margin:0 auto}
+.caja-pan{display:flex;gap:8px;flex-wrap:wrap;width:100%;max-width:var(--ancho-mapas);margin:0 auto}
 .caja-pan .tab{flex:1 1 150px;min-height:44px;padding:8px 16px;font-size:.95rem;font-weight:700;justify-content:center;white-space:nowrap}
 .caja-pan .tab b{font-weight:800}
 

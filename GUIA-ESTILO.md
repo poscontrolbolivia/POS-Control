@@ -145,6 +145,9 @@ sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos e
   Lo que va dentro de un tinte vuelve a ser blanco. Así se ve de qué recuadro es cada cosa sin añadir colores nuevos.
 - Entre recuadros hay **un solo espacio**: `--marco-gap` (10 px). El contenedor separa con `gap`; el marco no suma su propio margen.
 - Todas las pantallas usan el mismo margen de página `--pagina-pad`. Una pantalla anidada (p. ej. Caja dentro del hub) no lo duplica.
+- **Pantallas con mapa (Salón, Caja, Cierres, Reportes, Venta directa): mismo ancho y mismo margen.** El ancho sale de `--ancho-mapas`
+  (tokens.css; hoy «none» = todo el ancho, como el Salón) y el margen de `--pagina-pad`, que en móvil es 8 px para TODAS las pantallas.
+  Ninguna pantalla con mapa pone su propio `max-width` ni su propio relleno: al cambiar de Salón a Caja o a Reportes los marcos no se mueven.
 - La **carta** (buscar + grupos que corren de lado + platos) es UN marco tinte, igual en el pedido de una mesa y en Venta directa.
 - **Salón:** tres marcos, cada uno en su fila: 1) Mesas · Para llevar (blanco), 2) Mapa · Lista (tinte), 3) los salones (blanco).
   Lo mismo en Caja (Mesas) y Venta directa (Mesas); en Despacho: 1) Cocina · Barra · Sacadas y 2) Total + Actualizar.
@@ -152,6 +155,16 @@ sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos e
   si caben y, si no caben, la fila se desplaza de lado desde el principio (como los grupos de la carta). Nunca saltan a una
   segunda línea. Los marcos apilados quedan casi pegados (4 px) para leerse como un solo bloque de navegación.
 - **Crear** va siempre **debajo** del marco que elige qué se crea (Ítems: Grupos/Productos/Indicaciones → «+ Grupo»).
+
+## Un solo mapa de mesas
+- **El lienzo del mapa es UNO: `LienzoMapa`** (`panel/hall/LienzoMapa.jsx`). Salón, Caja, Venta directa y Reportes lo usan; nadie dibuja su propio
+  `.lienzo`. Así el tamaño, la proporción y el zoom son idénticos en todas partes (el zoom y el tamaño solo se cambian en Salón → Editar mapa).
+- **Lo que lleva cada mesa es UNA pieza: `MesaDatos`** (número, nombre del cliente, importe, salón, ↩ heredada, ✂ dividida, 🔗 unida).
+  Salón y Caja la usan igual; si se añade un dato, se añade ahí y aparece en los dos.
+- La leyenda de colores y de 👥 / 🔗 es la misma en Salón y Caja.
+- Reportes pinta las mesas con el mismo marco, pero con el color de calor de ventas y la cifra compacta en lugar del importe por cobrar.
+- Un mapa nuevo **no** va dentro de una tarjeta con relleno: va directo sobre la página (con sus marcos `nav-n2` / `nav-n1` encima).
+  `npm run estilo` avisa si una pantalla dibuja `className="lienzo-area"` por su cuenta.
 
 ## Auditoría legible
 Cada movimiento se lee como una frase: *quién* hizo *qué* sobre *qué* («Pidió la cuenta · Mesa 3 · Gonzalo»).

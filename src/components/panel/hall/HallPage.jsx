@@ -1,12 +1,13 @@
 import VistaMapaLista from '../../ui/VistaMapaLista.jsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStore, cuentaActiva, cuentasDeMesa, totalCuenta, totalFinal, pagadoCuenta, saldoCuenta, nuevoId } from '../../../context/StoreContext.jsx'
+import { useStore, cuentaActiva, cuentasDeMesa, totalFinal, pagadoCuenta, saldoCuenta, nuevoId } from '../../../context/StoreContext.jsx'
 import { puede } from '../../../services/permissions'
 import { round2 } from '../../../services/format.js'
 import { useMoneda } from '../../../services/money.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { planZonaBorrar, accionesBorrarZona, SIN_SALON, BORRAR_MESAS } from '../../../services/salon.js'
 import OrderPanel from '../order/OrderPanel.jsx'
+import { MesaDatos } from './LienzoMapa.jsx'
 import { ruedaHorizontal } from '../../../services/ruedaHorizontal.js'
 import { accionesDescartar } from './descartarEdicion.js'
 import './HallPage.css'
@@ -60,7 +61,6 @@ const proximaMesaNombre = mesas => {
 }
 
 // El número manda en el mapa: se saca del nombre (las cifras del final); si no hay, se muestra el nombre entero.
-const numeroDeMesa = m => String(m.nombre).match(/(\d+)\s*$/)?.[1] ?? ''
 
 const mesasPorZona = (mesas, id) => mesas.filter(m => m.zona === id).length
 
@@ -605,28 +605,15 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           {mesasZona.map(m => {
             const cs = cuentasDeMesa(s, m.id), c = cs[0], est = estadoVarias(cs)
             const resto = round2(cs.reduce((a, x) => a + saldoCuenta(x), 0))
-            const unida = c && c.tipo === 'mesa' && c.mesaIds.length > 1
-
             const capT = capacidadCuenta(c, s.mesas) || (m.cap || 0)
             const com = c ? comDe(c) : null
             const p = mueve && mueve.id === m.id ? mueve : m
-            const num = numeroDeMesa(m)
             const sub = c ? `${money(resto)} · 👥 ${com}/${capT}${c.abiertaPor ? ` · 👤 ${c.abiertaPor}` : ''}` : `${t('salon.' + est)} · 👥 ${m.cap}`
             return (
               <div key={m.id} className={`mesa ${m.forma} ${est}${sel === m.id ? ' sel' : ''}${mueve?.id === m.id ? ' arrastrando' : ''}`}
                 title={sub}
                 onPointerDown={e => down(e, m)} onClick={() => { if (!(edit && admin)) abrirMesa(m.id) }} style={estiloMesa(p, asp)}>
-                <b className="nombre">{num || m.nombre}</b>
-                {cs.length === 1 && c.tipo === 'mesa' && c.clienteNombre && <span className="alias-mesa" title={`${c.clienteNombre} (${m.nombre})`}>{c.clienteNombre}</span>}
-                {c && <span className="importe">{money(resto)}</span>}
-                {activo === TODAS && <span className="etiqueta-zona">{zonaNombre(m.zona)}</span>}
-                {c && heredadas.includes(c.id) && <span className="badge-heredada" title={t('salon.heredadaTitle')}>↩</span>}
-                {!unida && cs.length > 1 && <span className="badge-unida" title={t('pedido.menuDividir')}>✂ ×{cs.length}</span>}
-                {unida && (
-                  <span className="badge-unida" title={t('salon.unidaTitle', { n: c.mesaIds.length, total: money(totalCuenta(c)) })}>
-                    🔗 ×{c.mesaIds.length}
-                  </span>
-                )}
+                <MesaDatos m={m} cs={cs} resto={resto} mostrarZona={activo === TODAS} nombreZona={zonaNombre(m.zona)} heredadas={heredadas} />
               </div>
             )
           })}

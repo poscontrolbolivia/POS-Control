@@ -385,3 +385,8 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .salon .nav-n1.zonas-scroll{ flex: 0 0 auto; width: 100%; order: 0; padding: 8px; }
 /* Los marcos de Mapa·Lista y salones son hijos directos de la columna, como en Caja: así se apilan con el mismo espacio. */
 .salon .zona-strip{display:contents}
+
+/* Mapa compartido (LienzoMapa) dentro de Caja, Venta directa y Reportes: es el mismo lienzo del Salón, pero sin el relleno de página
+   del Salón (si no, quedaba más chico y con un hueco de 110 px debajo). */
+.salon.salon.mapa-solo{padding:0;gap:0;width:100%}
+

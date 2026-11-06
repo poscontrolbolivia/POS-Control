@@ -49,7 +49,7 @@ export default function CajaHub({ rol, sesion, onAbrirMesa, sub = 'caja', onSub 
       <Suspense fallback={null}>
         {actual === 'caja' && <CashPage rol={rol} sesion={sesion} onAbrirMesa={onAbrirMesa} />}
         {actual === 'cierres' && (
-          <div className="adm-panel">
+          <div className="adm-panel caja-ancho">
             <CabeceraPagina titulo={nombres.cierres} />
             <CierresPanel sesion={sesion} />
           </div>
