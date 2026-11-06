@@ -148,8 +148,9 @@ sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos e
 - La **carta** (buscar + grupos que corren de lado + platos) es UN marco tinte, igual en el pedido de una mesa y en Venta directa.
 - **Salón:** tres marcos, cada uno en su fila: 1) Mesas · Para llevar (blanco), 2) Mapa · Lista (tinte), 3) los salones (blanco).
   Lo mismo en Caja (Mesas) y Venta directa (Mesas); en Despacho: 1) Cocina · Barra · Sacadas y 2) Total + Actualizar.
-- **Cada marco de menú es UNA fila:** los botones empiezan a la izquierda y, si no caben, la fila se desplaza de lado
-  (como los grupos de la carta). Nunca saltan a una segunda línea. Va en `.nav-n1` / `.nav-n2` (base.css).
+- **Cada marco de menú es UNA fila** (`.nav-n1` / `.nav-n2`, base.css): ocupa todo el ancho, los botones van CENTRADOS
+  si caben y, si no caben, la fila se desplaza de lado desde el principio (como los grupos de la carta). Nunca saltan a una
+  segunda línea. Los marcos apilados quedan casi pegados (4 px) para leerse como un solo bloque de navegación.
 - **Crear** va siempre **debajo** del marco que elige qué se crea (Ítems: Grupos/Productos/Indicaciones → «+ Grupo»).
 
 ## Auditoría legible

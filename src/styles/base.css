@@ -193,6 +193,13 @@ input[type=checkbox].sw:disabled{opacity:.5;cursor:not-allowed}
 
 /* Cada marco de menú es UNA sola fila: los botones empiezan a la izquierda y, si no caben, la fila se desplaza de lado
    (igual que los grupos de la carta). Nunca saltan a una segunda línea ni se estiran para llenar el ancho. */
-.nav-n1.nav-n1,.nav-n2.nav-n2{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.nav-n1.nav-n1,.nav-n2.nav-n2{width:100%;max-width:none;flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
 .nav-n1.nav-n1>*,.nav-n2.nav-n2>*{flex:0 0 auto}
 .nav-n1.nav-n1 .tab,.nav-n2.nav-n2 .tab{flex:0 0 auto;white-space:nowrap}
+/* El marco ocupa todo el ancho. Los botones quedan CENTRADOS si caben; si no caben, el margen automático de la punta se
+   anula y la fila se desplaza de lado desde el principio (sin cortar el primer botón). */
+.nav-n1.nav-n1>:first-child,.nav-n2.nav-n2>:first-child{margin-left:auto}
+.nav-n1.nav-n1>:last-child,.nav-n2.nav-n2>:last-child{margin-right:auto}
+/* Marcos uno debajo del otro: casi pegados (4 px), para que se lean como un solo bloque de navegación. */
+.nav-n1.nav-n1+.nav-n1.nav-n1,.nav-n1.nav-n1+.nav-n2.nav-n2,.nav-n2.nav-n2+.nav-n1.nav-n1,.nav-n2.nav-n2+.nav-n2.nav-n2{margin-top:calc(4px - var(--marco-gap))}
+.caja-hub>.nav-n1+.caja:has(>.nav-n2:first-child){margin-top:calc(4px - var(--marco-gap))}

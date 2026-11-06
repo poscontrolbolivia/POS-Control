@@ -384,5 +384,4 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 /* Salón: tres marcos en tres filas (Mesas · Para llevar / Mapa · Lista / Salones). Cada fila empieza a la izquierda y se
    desplaza de lado si hay más botones; el blanco y el tinte se alternan (ver GUIA-ESTILO). */
 .salon .mapa-col{ gap: var(--marco-gap); }
-.salon .nav-n2.salon-vista-fila .vista-ml{ margin-left: 0; }
 .salon .nav-n1.zonas-scroll{ flex: 0 0 auto; width: 100%; order: 0; padding: 8px; }

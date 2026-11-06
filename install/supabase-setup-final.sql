@@ -5,8 +5,9 @@
 --    1) Supabase → SQL Editor → pega TODO este archivo → Run.
 --    2) Sirve igual para una base nueva que para actualizar una que ya tenías:
 --       se puede ejecutar las veces que haga falta (es idempotente).
---    3) Al terminar muestra una tabla de verificación (es lo último que se ejecuta): la columna «estado»
---       debe decir «OK». Si dice otra cosa, la columna «detalle» explica qué falla.
+--    3) Si todo sale bien, el editor dice «Success. No rows returned» (el mensaje normal, sin tablas).
+--       La verificación del final es silenciosa: solo se nota si algo grave está mal, porque entonces la
+--       instalación se detiene con un mensaje de error y no se aplica nada.
 --
 --  ORGANIZACIÓN (en este orden, porque cada parte necesita a la anterior)
 --     1. Extensiones y esquemas        7. Restricciones e índices
@@ -7399,29 +7400,26 @@ revoke all on function public.tiempos_preparacion(timestamptz, timestamptz, uuid
 grant execute on function public.tiempos_preparacion(timestamptz, timestamptz, uuid) to authenticated;
 
 -- ============================================================================
--- 11. Verificación final (esta tabla es lo que verás al terminar)
+-- 11. Verificación final (silenciosa: no devuelve filas)
 -- ============================================================================
-select
-  case
-    when v.super_abiertas > 0 then '❌ ERROR'
-    when v.tablas_sin_rls > 0 then '⚠️ REVISAR'
-    else '✅ OK'
-  end                                   as estado,
-  case
-    when v.super_abiertas > 0 then 'crear_super / quitar_super quedaron abiertas a anon o authenticated'
-    when v.tablas_sin_rls > 0 then v.tablas_sin_rls || ' tabla(s) sin seguridad por filas (RLS)'
-    else 'POS Control instalado: base de datos lista'
-  end                                   as detalle,
-  v.tablas, v.funciones, v.politicas, v.triggers
-from (
-  select
-    (select count(*) from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE')       as tablas,
-    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('public','private')) as funciones,
-    (select count(*) from pg_policies where schemaname = 'public')                                                     as politicas,
-    (select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace
-       where n.nspname = 'public' and not t.tgisinternal)                                                              as triggers,
-    (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
-       where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity)                                         as tablas_sin_rls,
-    (select count(*) from information_schema.routine_privileges rp
-       where rp.routine_name in ('crear_super','quitar_super') and rp.grantee in ('anon','authenticated'))               as super_abiertas
-) v;
+do $chk$
+declare
+  v_abiertas int;
+  v_sin_rls  int;
+begin
+  -- crear_super / quitar_super nunca deben quedar abiertas a anon ni a authenticated.
+  select count(*) into v_abiertas
+    from information_schema.routine_privileges rp
+   where rp.routine_name in ('crear_super', 'quitar_super') and rp.grantee in ('anon', 'authenticated');
+  if v_abiertas > 0 then
+    raise exception 'crear_super / quitar_super quedaron abiertas a anon o authenticated';
+  end if;
+
+  -- Toda tabla de public debe tener seguridad por filas (RLS) activada.
+  select count(*) into v_sin_rls
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
+  if v_sin_rls > 0 then
+    raise exception '% tabla(s) de public sin seguridad por filas (RLS)', v_sin_rls;
+  end if;
+end $chk$;
