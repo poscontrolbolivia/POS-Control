@@ -1738,7 +1738,6 @@
   "caja.mesaLibre": "The table is free: there is no bill to charge.",
   "caja.editarMesa": "Edit table",
   "caja.editarMesaTitle": "Open the waiter view: take orders, move or delete items",
-  "caja.mesasAyuda": "Shows each table’s balance; tap one to charge it. Orders are taken in the Hall.",
   "caja.turnoAyuda": "Shift = how long the drawer stays open: float + charged + income − expenses = Expected.",
   "caja.movimientosAyuda": "Money in or out that is not a sale (purchases, withdrawals); it counts in the closing.",
   "caja.ticketsAyuda": "Bills already paid in this shift, from tables and from the counter.",
@@ -1971,5 +1970,9 @@
   "caja.reabrirMesaFalta": "Choose a free table to reopen the bill.",
   "caja.reabrirMesaAviso": "Table {mesa} already has another open bill: choose another free table to reopen this one.",
   "caja.reabrirSinMesasLibres": "There are no free tables: charge or close an open bill first.",
-  "pedido.areaPendiente": "pending"
+  "pedido.areaPendiente": "pending",
+  "cocina.totalAyudaSacado": "What has already gone out, summed across all tickets and split by note (doneness, sauce…).",
+  "cocina.totalTituloSacado": "Total sent out per product",
+  "cocina.totalSacados": "{n} sent out",
+  "cocina.totalVacioSacado": "Nothing has gone out yet."
 }

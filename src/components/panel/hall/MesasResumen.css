@@ -61,4 +61,5 @@
 .mr-item{min-width:0;overflow:visible}
 .mr-item .mr-nombre{overflow-wrap:anywhere;word-break:break-word}
 @media(max-width:400px){.mr-lista{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.mr-item{padding:8px 10px}}
-
+/* Las mesas de Caja se ven como las del Salón: el mapa va directo sobre la página, sin tarjeta, título ni explicación. */
+.caja-card.mr-mesas{background:none;border:0;box-shadow:none;padding:0;border-radius:0}

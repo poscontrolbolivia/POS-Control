@@ -1738,7 +1738,6 @@
   "caja.mesaLibre": "La mesa está libre: no hay ninguna cuenta que cobrar.",
   "caja.editarMesa": "Editar mesa",
   "caja.editarMesaTitle": "Ver la mesa como mesero: tomar pedido, mover o eliminar ítems",
-  "caja.mesasAyuda": "Lee el saldo de cada mesa y toca una para cobrarla. Los pedidos se toman en Salón.",
   "caja.turnoAyuda": "Turno = el tiempo que la gaveta está abierta: fondo + cobrado + ingresos − egresos = Esperado.",
   "caja.movimientosAyuda": "Dinero que entra o sale sin ser venta (compras, retiros); cuenta en el arqueo.",
   "caja.ticketsAyuda": "Cuentas ya cobradas en este turno, de mesas y de mostrador.",
@@ -1971,5 +1970,9 @@
   "caja.reabrirMesaFalta": "Elige una mesa libre para reabrir la cuenta.",
   "caja.reabrirMesaAviso": "La mesa {mesa} ya tiene otra cuenta abierta: elige otra mesa libre para reabrir esta cuenta.",
   "caja.reabrirSinMesasLibres": "No hay mesas libres: cobra o cierra alguna cuenta abierta primero.",
-  "pedido.areaPendiente": "pendiente"
+  "pedido.areaPendiente": "pendiente",
+  "cocina.totalAyudaSacado": "Lo que ya salió, sumado entre todas las comandas y separado por indicación (término, salsa…).",
+  "cocina.totalTituloSacado": "Total sacado por producto",
+  "cocina.totalSacados": "{n} sacados",
+  "cocina.totalVacioSacado": "Todavía no ha salido nada."
 }

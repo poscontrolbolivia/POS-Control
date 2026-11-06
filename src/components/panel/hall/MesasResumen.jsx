@@ -97,14 +97,7 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
           ))}
         </div>
       )}
-    <section className="caja-card mr-bloque" aria-label={tOr('caja.mesasTitulo', 'Mesas')}>
-      <div className="caja-head mr-cab">
-        <h2>{tOr('caja.mesasTitulo', 'Mesas')}</h2>
-        <span className="caja-hora">{mesasZona.length}</span>
-      </div>
-
-      <p className="caja-nota mr-ayuda">{tOr('caja.mesasAyuda', 'Lee el saldo de cada mesa y toca una para cobrarla. Los pedidos se toman en Salón.')}</p>
-
+    <section className="caja-card mr-bloque mr-mesas" aria-label={tOr('caja.mesasTitulo', 'Mesas')}>
       {mesasZona.length === 0 ? (
         <p className="caja-nota mr-vacio">{t('salon.sinMesasZona')}</p>
       ) : vista === 'lista' ? (

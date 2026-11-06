@@ -160,3 +160,10 @@ Nunca se muestran números internos, ids ni «pre-cuenta pedida o impresa»: el 
 - **Tamaño único:** todos los marcos y sus pestañas miden igual que en Salón (`--nav-pad`, `--nav-tab-h`, `--nav-tab-px`,
   `--nav-tab-fs` en `base.css`). Una pantalla nunca fija su propio alto o relleno de pestaña dentro de un marco.
   Los marcos de Mapa·Lista y salones son hijos directos de la columna para apilarse con el mismo espacio que en Caja.
+
+## Sin explicaciones de más
+- Lo que ya se entiende al verlo no lleva texto explicativo ni contadores sueltos: el mapa de mesas de Caja es el mismo que el del Salón,
+  directo sobre la página, sin tarjeta, sin título «Mesas 9» y sin «Lee el saldo de cada mesa…».
+- **Total (Despacho):** el interruptor existe en todas las vistas. En las áreas suma lo que **falta sacar**; en **Sacadas** suma lo que
+  **ya salió**. Siempre por producto y separado por indicación (término, salsa…).
+

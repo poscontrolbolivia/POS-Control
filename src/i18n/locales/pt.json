@@ -1738,7 +1738,6 @@
   "caja.mesaLibre": "A mesa está livre: não há conta para cobrar.",
   "caja.editarMesa": "Editar mesa",
   "caja.editarMesaTitle": "Abrir a visão do garçom: anotar pedidos, mover ou excluir itens",
-  "caja.mesasAyuda": "Mostra o saldo de cada mesa; toque em uma para cobrar. Os pedidos são anotados no Salão.",
   "caja.turnoAyuda": "Turno = o tempo que a gaveta fica aberta: fundo + cobrado + entradas − saídas = Esperado.",
   "caja.movimientosAyuda": "Dinheiro que entra ou sai sem ser venda (compras, retiradas); conta no fechamento.",
   "caja.ticketsAyuda": "Contas já cobradas neste turno, de mesas e do balcão.",
@@ -1971,5 +1970,9 @@
   "caja.reabrirMesaFalta": "Escolha uma mesa livre para reabrir a conta.",
   "caja.reabrirMesaAviso": "A mesa {mesa} já tem outra conta aberta: escolha outra mesa livre para reabrir esta conta.",
   "caja.reabrirSinMesasLibres": "Não há mesas livres: cobre ou feche uma conta aberta primeiro.",
-  "pedido.areaPendiente": "pendente"
+  "pedido.areaPendiente": "pendente",
+  "cocina.totalAyudaSacado": "O que já saiu, somado entre todas as comandas e separado por observação (ponto, molho…).",
+  "cocina.totalTituloSacado": "Total que saiu por produto",
+  "cocina.totalSacados": "{n} saíram",
+  "cocina.totalVacioSacado": "Ainda não saiu nada."
 }

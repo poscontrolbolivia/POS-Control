@@ -407,11 +407,11 @@ export default function KitchenPage({ rol, sesion }) {
 
   // «Total»: lo que falta sacar sumado entre TODAS las comandas, por producto y separado por indicación
   // (término, salsa…). Con el salón lleno no caben todas las comandas en pantalla: esto da la cuenta de un vistazo.
-  const totales = useMemo(() => {
+  const sumarPor = (comandas, estado) => {
     const por = new Map()
     let unidades = 0
-    areasMostradas.forEach(a => (filas[a]?.enCurso || []).forEach(c => (c.items || []).forEach(it => {
-      if (it.estado !== 'enviado') return
+    comandas.forEach(c => (c.items || []).forEach(it => {
+      if (it.estado !== estado) return
       const q = Number(it.qty) || 1
       const nombre = String(it.nombre || '').trim()
       const e = por.get(nombre) || { nombre, qty: 0, notas: new Map() }
@@ -420,10 +420,16 @@ export default function KitchenPage({ rol, sesion }) {
       e.notas.set(nota, (e.notas.get(nota) || 0) + q)
       por.set(nombre, e)
       unidades += q
-    })))
+    }))
     const lista = [...por.values()].sort((x, y) => y.qty - x.qty || x.nombre.localeCompare(y.nombre))
     return { lista, unidades }
-  }, [filas, areasMostradas])
+  }
+  const totalesPend = useMemo(() => sumarPor(areasMostradas.flatMap(a => filas[a]?.enCurso || []), 'enviado'), [filas, areasMostradas])
+  // En Sacadas el Total es lo que YA salió: todos los platos marcados como listos, también los de comandas que aún
+  // tienen algo pendiente (no solo las comandas completas que se listan abajo).
+  const totalesSacados = useMemo(() => sumarPor(areasMostradas.flatMap(a => [...(filas[a]?.enCurso || []), ...(filas[a]?.sacadas || [])]), 'listo'), [filas, areasMostradas])
+  const enSacadas = vista === VISTA_SACADAS
+  const totales = enSacadas ? totalesSacados : totalesPend
   const hayComandas = areasMostradas.some(a => (filas[a]?.enCurso || []).length > 0)
 
   // Cuántos ítems quedan por sacar en cada área: el contador rojo del botón, como en las
@@ -597,12 +603,12 @@ export default function KitchenPage({ rol, sesion }) {
           </button>
       </div>
       <div className="ck-herr nav-n2" role="group" aria-label={tOr('cocina.herramientas', 'Herramientas')}>
-        {vista !== VISTA_SACADAS && (
-          <label className="ck-total-sw" title={tOr('cocina.totalAyuda', 'Lo que falta sacar, sumado entre todas las comandas y separado por indicación (término, salsa…).')}>
-            <input name="ck-total" type="checkbox" className="sw" checked={totalAbierto} onChange={e => setTotalAbierto(e.target.checked)} />
-            <span>{tOr('cocina.total', 'Total')}{totales.unidades > 0 && <em>{totales.unidades}</em>}</span>
-          </label>
-        )}
+        <label className="ck-total-sw" title={enSacadas
+          ? tOr('cocina.totalAyudaSacado', 'Lo que ya salió, sumado entre todas las comandas y separado por indicación (término, salsa…).')
+          : tOr('cocina.totalAyuda', 'Lo que falta sacar, sumado entre todas las comandas y separado por indicación (término, salsa…).')}>
+          <input name="ck-total" type="checkbox" className="sw" checked={totalAbierto} onChange={e => setTotalAbierto(e.target.checked)} />
+          <span>{tOr('cocina.total', 'Total')}{totales.unidades > 0 && <em>{totales.unidades}</em>}</span>
+        </label>
         {conectado
           ? <span className={'ck-conexion' + (realtime ? ' rt' : '')} title={tOr('cocina.conexionTitle', 'Actualización automática cada 4 segundos')}>{realtime ? '🟢' : '🔄'}</span>
           : <span className="ck-demo" title={tOr('cocina.demoTitulo', 'La cola se arma con los pedidos guardados en este equipo')}>{tOr('cocina.demo', 'Demo')}</span>}
@@ -620,15 +626,15 @@ export default function KitchenPage({ rol, sesion }) {
         </div>
       )}
 
-      {totalAbierto && vista !== VISTA_SACADAS && (
-        <section className="ck-panel-total" aria-label={tOr('cocina.totalTitulo', 'Total por producto')}>
+      {totalAbierto && (
+        <section className="ck-panel-total" aria-label={enSacadas ? tOr('cocina.totalTituloSacado', 'Total sacado por producto') : tOr('cocina.totalTitulo', 'Total por producto')}>
           <header>
-            <b>Σ {tOr('cocina.totalTitulo', 'Total por producto')}</b>
-            <span className="ck-total-n">{tOr('cocina.totalUnidades', `${totales.unidades} por sacar`, { n: totales.unidades })}</span>
+            <b>Σ {enSacadas ? tOr('cocina.totalTituloSacado', 'Total sacado por producto') : tOr('cocina.totalTitulo', 'Total por producto')}</b>
+            <span className="ck-total-n">{enSacadas ? tOr('cocina.totalSacados', `${totales.unidades} sacados`, { n: totales.unidades }) : tOr('cocina.totalUnidades', `${totales.unidades} por sacar`, { n: totales.unidades })}</span>
             <span className="ck-sp" />
             <button type="button" className="ico" onClick={() => setTotalAbierto(false)} aria-label={tOr('comun.cerrar', 'Cerrar')}>✕</button>
           </header>
-          {totales.lista.length === 0 ? <p className="ck-vacio-mini">{tOr('cocina.totalVacio', 'No hay nada pendiente por sumar.')}</p> : (
+          {totales.lista.length === 0 ? <p className="ck-vacio-mini">{enSacadas ? tOr('cocina.totalVacioSacado', 'Todavía no ha salido nada.') : tOr('cocina.totalVacio', 'No hay nada pendiente por sumar.')}</p> : (
             <ul className="ck-total-grid">
               {totales.lista.map(p => {
                 const desglose = [...p.notas.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
