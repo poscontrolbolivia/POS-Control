@@ -61,7 +61,37 @@ export async function eliminarEmpresa(id, clave) {
   if (!esUuid(id)) throw new Error('El identificador de la empresa no es válido.')
   if (!String(clave || '')) throw new Error('Escribe tu contraseña para confirmar.')
   await rpcSuper('super_eliminar_empresa', { p_empresa: id, p_clave: String(clave) })
-  return true
+  // Los archivos (fotos de productos, logo, QR y comprobantes de pago) viven en Storage, no en las tablas: la base no puede
+  // borrarlos. Se quitan aquí; si alguno falla, la empresa ya está eliminada y se avisa cuántos quedaron.
+  return { ok: true, archivos: await borrarArchivosDeEmpresa(id) }
+}
+
+const CARPETAS_EMPRESA = id => [
+  ['pos-imagenes', `productos/${id}`], ['pos-imagenes', `logos/${id}`], ['pos-imagenes', `qr/${id}`],
+  ['pos-comprobantes', `comprobantes/${id}`],
+]
+
+async function vaciarCarpeta(bucket, carpeta) {
+  let borrados = 0
+  for (let vuelta = 0; vuelta < 200; vuelta++) {
+    const { data, error } = await sb.storage.from(bucket).list(carpeta, { limit: 100 })
+    if (error) throw error
+    const rutas = (data || []).filter(f => f.id).map(f => `${carpeta}/${f.name}`)
+    if (!rutas.length) break
+    const { error: e2 } = await sb.storage.from(bucket).remove(rutas)
+    if (e2) throw e2
+    borrados += rutas.length
+  }
+  return borrados
+}
+
+export async function borrarArchivosDeEmpresa(id) {
+  const res = { borrados: 0, fallidos: [] }
+  if (!sb || !esUuid(id)) return res
+  for (const [bucket, carpeta] of CARPETAS_EMPRESA(id)) {
+    try { res.borrados += await vaciarCarpeta(bucket, carpeta) } catch (e) { res.fallidos.push(`${bucket}/${carpeta}: ${mensajeError(e)}`) }
+  }
+  return res
 }
 
 export async function verCuota(id) {

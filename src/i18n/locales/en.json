@@ -1933,7 +1933,7 @@
   "super.tabla.eliminar": "Delete",
   "super.eliminar.titulo": "Delete business",
   "super.eliminar.pregunta": "Delete “{empresa}” forever?",
-  "super.eliminar.detalle": "ALL its data is deleted: floor plan, menu, bills, cash and team.",
+  "super.eliminar.detalle": "ALL its data is deleted: floor plan, menu, bills, cash, team, audit log and photos.",
   "super.eliminar.irreversible": "This cannot be undone.",
   "super.eliminar.respaldo": "If you may need it, download its backup first with “Full (.zip)”.",
   "super.eliminar.clave": "Re-enter your super admin password to confirm",

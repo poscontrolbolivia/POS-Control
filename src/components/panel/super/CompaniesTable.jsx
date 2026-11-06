@@ -20,9 +20,11 @@ export default function CompaniesTable({ empresas = [], cargando = false, error 
     if (!eliminando || !claveDel || borrando) return
     setErrorDel(''); setBorrando(true)
     try {
-      await eliminarEmpresa(eliminando.id, claveDel)
+      const r = await eliminarEmpresa(eliminando.id, claveDel)
       cerrarEliminar()
       onRefrescar?.()
+      const fallidos = r?.archivos?.fallidos || []
+      if (fallidos.length) window.alert(`La empresa se eliminó, pero algunos archivos no se pudieron borrar de Storage (siguen ocupando espacio):\n\n${fallidos.join('\n')}\n\nBórralos a mano en Supabase → Storage.`)
     } catch (err) { setErrorDel(mensajeError(err)) } finally { setBorrando(false) }
   }
 

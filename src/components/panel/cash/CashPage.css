@@ -1,4 +1,4 @@
-.caja{display:flex;flex-direction:column;gap:var(--marco-gap);padding:0 0 var(--pagina-pad);width:100%;max-width:none;margin:0 auto}
+.caja{display:flex;flex-direction:column;gap:var(--marco-gap);padding:var(--pagina-pad);width:100%;max-width:var(--pagina-max);margin:0 auto}
 .caja .sp{flex:1}
 
 .caja-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:14px;display:flex;flex-direction:column;gap:10px}

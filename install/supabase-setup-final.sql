@@ -1769,8 +1769,8 @@ begin
   return jsonb_build_object('empresa_id', v_emp, 'fotos', v_fotos);
 end $fn$;
 -- La clave se comprueba AQUÍ, en la base, contra auth.users: el navegador no puede saltarse la confirmación.
--- Todo lo de la empresa cae en cascada (mesas, cuentas, carta, equipo...). Queda una fila en auditoria,
--- que no tiene FK a empresas, con quién la borró y cuántas cosas tenía.
+-- Todo lo de la empresa cae en cascada (mesas, cuentas, carta, equipo...). De auditoria se borra lo suyo y queda UNA fila
+-- con quién la eliminó y cuántas cosas tenía. Las fotos y comprobantes (Storage) los borra la app justo después.
 drop function if exists public.super_eliminar_empresa(uuid, text);
 create or replace function public.super_eliminar_empresa(p_empresa uuid, p_clave text)
 returns boolean
@@ -1823,6 +1823,9 @@ begin
     execute format('delete from public.%I where empresa_id = $1', r.table_name) using p_empresa;
   end loop;
 
+  -- La auditoría no tiene FK a empresas y no se purgaba nunca una vez borrada la empresa: se limpia aquí y solo
+  -- queda UNA fila (la de abajo) con quién la eliminó y cuánto tenía.
+  delete from public.auditoria where empresa_id = p_empresa;
   perform private.auditar(p_empresa, 'super_eliminar_empresa', v_resumen);
   return true;
 end $fn$;
@@ -7126,6 +7129,16 @@ using (
                                     and m.user_id = auth.uid()
                                     and m.rol = 'admin')))
 );
+-- Super administrador: listar y borrar los archivos de una empresa que acaba de eliminar (ya no existe en public.empresas,
+-- así que las políticas de arriba no le sirven). Sin esto, las fotos y comprobantes quedarían ocupando espacio.
+drop policy if exists "pos_super_storage_select" on storage.objects;
+create policy "pos_super_storage_select" on storage.objects
+for select to authenticated
+using (bucket_id in ('pos-imagenes', 'pos-comprobantes') and public.es_super());
+drop policy if exists "pos_super_storage_delete" on storage.objects;
+create policy "pos_super_storage_delete" on storage.objects
+for delete to authenticated
+using (bucket_id in ('pos-imagenes', 'pos-comprobantes') and public.es_super());
 alter table public.personal enable row level security;
 
 -- ============================================================================

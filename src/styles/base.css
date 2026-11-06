@@ -202,7 +202,6 @@ input[type=checkbox].sw:disabled{opacity:.5;cursor:not-allowed}
 .nav-n1.nav-n1>:last-child,.nav-n2.nav-n2>:last-child{margin-right:auto}
 /* Marcos uno debajo del otro: casi pegados (4 px), para que se lean como un solo bloque de navegación. */
 .nav-n1.nav-n1+.nav-n1.nav-n1,.nav-n1.nav-n1+.nav-n2.nav-n2,.nav-n2.nav-n2+.nav-n1.nav-n1,.nav-n2.nav-n2+.nav-n2.nav-n2{margin-top:calc(4px - var(--marco-gap))}
-.caja-hub>.nav-n1+.caja:has(>.nav-n2:first-child){margin-top:calc(4px - var(--marco-gap))}
 
 /* TAMAÑO ÚNICO DE MARCOS Y PESTAÑAS (el de Salón): todas las cajas de la web miden igual por dentro. Las pantallas no
    definen su propio alto ni relleno; el espacio ENTRE cajas ya sale de --marco-gap (y 4 px cuando se apilan). */

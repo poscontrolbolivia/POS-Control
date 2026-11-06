@@ -1933,7 +1933,7 @@
   "super.tabla.eliminar": "Eliminar",
   "super.eliminar.titulo": "Eliminar empresa",
   "super.eliminar.pregunta": "Eliminar «{empresa}» para sempre?",
-  "super.eliminar.detalle": "TODOS os dados são apagados: salão, cardápio, contas, caixa e equipe.",
+  "super.eliminar.detalle": "TODOS os dados são apagados: salão, cardápio, contas, caixa, equipe, auditoria e fotos.",
   "super.eliminar.irreversible": "Não dá para desfazer.",
   "super.eliminar.respaldo": "Se puder precisar, baixe antes o backup com «Completo (.zip)».",
   "super.eliminar.clave": "Digite novamente sua senha de super administrador para confirmar",
