@@ -203,3 +203,9 @@ input[type=checkbox].sw:disabled{opacity:.5;cursor:not-allowed}
 /* Marcos uno debajo del otro: casi pegados (4 px), para que se lean como un solo bloque de navegación. */
 .nav-n1.nav-n1+.nav-n1.nav-n1,.nav-n1.nav-n1+.nav-n2.nav-n2,.nav-n2.nav-n2+.nav-n1.nav-n1,.nav-n2.nav-n2+.nav-n2.nav-n2{margin-top:calc(4px - var(--marco-gap))}
 .caja-hub>.nav-n1+.caja:has(>.nav-n2:first-child){margin-top:calc(4px - var(--marco-gap))}
+
+/* TAMAÑO ÚNICO DE MARCOS Y PESTAÑAS (el de Salón): todas las cajas de la web miden igual por dentro. Las pantallas no
+   definen su propio alto ni relleno; el espacio ENTRE cajas ya sale de --marco-gap (y 4 px cuando se apilan). */
+:root{--nav-pad:8px;--nav-tab-h:44px;--nav-tab-px:16px;--nav-tab-fs:.95rem}
+.nav-n1.nav-n1,.nav-n2.nav-n2{padding:var(--nav-pad)}
+html .nav-n1.nav-n1 :is(.tab,.ck-tab,.vd-tab,.rp-preset),html .nav-n2.nav-n2 :is(.tab,.ck-tab,.vd-tab,.rp-preset){min-height:var(--nav-tab-h);padding:8px var(--nav-tab-px);font-size:var(--nav-tab-fs);font-weight:700;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}

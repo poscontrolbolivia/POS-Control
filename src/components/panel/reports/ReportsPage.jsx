@@ -343,7 +343,7 @@ export default function ReportsPage({ rol, sesion }) {
           </div>
         </div>
 
-        <div className="rp-periodo">
+        <div className="nav-n2 rp-periodo">
           {PRESETS.map(p => (
             <button key={p.id} type="button" className={'rp-preset' + (rango.preset === p.id ? ' on' : '')} onClick={() => aplicarPreset(p)}>
               {tOr(p.clave, p.texto)}

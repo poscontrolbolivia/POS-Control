@@ -157,4 +157,6 @@ sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos e
 Cada movimiento se lee como una frase: *quién* hizo *qué* sobre *qué* («Pidió la cuenta · Mesa 3 · Gonzalo»).
 Nunca se muestran números internos, ids ni «pre-cuenta pedida o impresa»: el servidor guarda el nombre de la mesa
 (`private.etiqueta_cuenta`) y la pantalla oculta los datos técnicos del detalle.
-
+- **Tamaño único:** todos los marcos y sus pestañas miden igual que en Salón (`--nav-pad`, `--nav-tab-h`, `--nav-tab-px`,
+  `--nav-tab-fs` en `base.css`). Una pantalla nunca fija su propio alto o relleno de pestaña dentro de un marco.
+  Los marcos de Mapa·Lista y salones son hijos directos de la columna para apilarse con el mismo espacio que en Caja.

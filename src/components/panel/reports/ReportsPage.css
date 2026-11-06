@@ -5,7 +5,7 @@
 
 .rp-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
-.rp-periodo{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:12px}
+.rp-periodo{align-items:flex-end}
 /* Selección de periodo = información/estado: azul del tema, nunca el verde de acción. */
 .rp-preset.on{
   border-color:transparent;color:var(--on-btn);font-weight:650;text-shadow:0 1px 1px rgba(0,0,0,.25);
@@ -101,8 +101,6 @@
   .rp-head button{flex:1}
   /* En el teléfono los campos van uno debajo del otro (columna) y con más aire entre filas,
      para que la rueda nativa de fecha no caiga justo sobre el campo siguiente ni bajo el teclado. */
-  .rp-periodo{flex-direction:column;align-items:stretch;gap:16px}
-  .rp-preset{width:100%}
   .rp-fecha input{width:100%;min-height:44px}
   .rp-tarjetas{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
