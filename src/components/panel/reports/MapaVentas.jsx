@@ -4,7 +4,7 @@ import { useIdioma } from '../../../i18n/index.jsx'
 import { useStore } from '../../../context/StoreContext.jsx'
 import { round2 } from '../../../services/format.js'
 import LienzoMapa, { numeroDeMesa } from '../hall/LienzoMapa.jsx'
-import { leerZoom, estiloMesa } from '../hall/mapaMesas.js'
+import { leerZoom, estiloMesa, leerZonaCaja, guardarZonaCaja } from '../hall/mapaMesas.js'
 
 // Mapa de calor del periodo: cada mesa pintada según lo que vendió, clicable para filtrar el reporte.
 // Es el MISMO mapa del Salón (LienzoMapa: misma proporción, tamaño de mesa y zoom), pero leyendo resumen.por_mesa,
@@ -33,7 +33,8 @@ export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera 
   const { s } = useStore()
   const zoom = leerZoom(s._empresaId ?? 'demo')
   const [vista, setVista] = useState(iniciaVista)
-  const [zona, setZona] = useState(TODAS)
+  const [zona, setZonaEstado] = useState(leerZonaCaja)
+  const setZona = id => { setZonaEstado(id); guardarZonaCaja(id) }
 
   const cambiarVista = v => { setVista(v); try { localStorage.setItem('pos-reportes-mesas-vista', v) } catch { /* noop */ } }
   const zonasOrden = useMemo(() => ordenarZonas(zonas), [zonas])

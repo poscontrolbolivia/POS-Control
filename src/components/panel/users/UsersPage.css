@@ -46,7 +46,7 @@
 
 .eq-acciones{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .eq-acciones button{min-height:40px;padding:7px 12px;font-size:.86rem}
-.eq-quitar{color:var(--rojo-txt);border-color:var(--rojo-bd);background:var(--rojo-bg)}
+.eq-quitar{color:var(--rojo-on);border-color:transparent;background:var(--gloss),var(--rojo)}
 .eq-quitar:hover:not(:disabled){background:var(--rojo-hover);border-color:color-mix(in srgb,var(--rojo) 45%,var(--rojo-bd))}
 .eq-quitar.preguntando{
   background:var(--rojo);border-color:var(--rojo);color:var(--rojo-on);font-weight:700;

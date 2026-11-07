@@ -31,8 +31,8 @@ button.ico{
   font-size: .8rem;
 }
 button.ico:hover:not(:disabled){ background: var(--libre); border-color: var(--line); }
-button.ico.danger{ color: var(--rojo-txt); border-color: var(--rojo-bd); }
-button.ico.danger:hover:not(:disabled){ background: var(--rojo-bg); color: var(--rojo-txt); border-color: var(--rojo-bd); }
+button.ico.danger{ color: var(--rojo-on); border-color: transparent; }
+button.ico.danger:hover:not(:disabled){ background: var(--rojo); color: var(--rojo-on); border-color: transparent; filter: brightness(.94); }
 button.ico.ok{ color: var(--ac); }
 button.ico:disabled{ opacity: .35; cursor: not-allowed; }
 .zren{ display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--ac); border-radius: 999px; background: var(--card); }

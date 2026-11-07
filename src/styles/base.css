@@ -4,21 +4,21 @@
 h1, h2, h3, button.primary, .cc-btn{font-family:var(--font-display)}
 body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink)}
 button, select, input, textarea{font:inherit;color:inherit}
-button{border:1.5px solid var(--chip-bd);background:var(--chip-bg);border-radius:999px;padding:8px 12px;cursor:pointer;min-height:40px;min-width:40px;color:var(--chip-ink);transition:transform .12s ease,box-shadow .12s ease,filter .12s ease,background .12s ease}
+button{border:1.5px solid var(--chip-bd);background:var(--chip-bg);border-radius:999px;padding:8px 12px;cursor:pointer;min-height:44px;min-width:44px;color:var(--chip-ink);transition:transform .12s ease,box-shadow .12s ease,filter .12s ease,background .12s ease}
 button:hover:not(:disabled){background:var(--chip-hover)}
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 button:disabled{opacity:.5;cursor:not-allowed}
 /* JERARQUÍA DE BOTONES (igual en toda la app; la guía completa está en GUIA-ESTILO.md):
    1) PRINCIPAL  = verde sólido (primary / success): UNA sola acción clave por paso, pantalla o diálogo.
    2) SECUNDARIO = «ghost»: AZUL SÓLIDO con texto blanco (nunca fondo blanco ni transparente); todo lo demás que no es la acción clave.
-   3) DESTRUCTIVO = rojo suave (danger) y rojo sólido solo para confirmar algo irreversible.
+   3) DESTRUCTIVO = danger: rojo SÓLIDO con el mismo brillo y sombra que los demás (nada de rosa pastel).
    Azul oscuro (violet / teal / slate) = acción de apoyo sólida; naranja y amarillo solo marcan estado o atención. */
 button.ghost{--pc:var(--btn-sec);border:0;background:var(--gloss),var(--pc);color:var(--on-btn);font-weight:650;box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 38%,transparent);text-shadow:0 1px 1px rgba(0,0,0,.25)}
 button.ghost:hover:not(:disabled){background:var(--gloss),var(--pc);transform:none;filter:brightness(1.12)}
 button.big{width:100%;padding:16px;font-size:1.1rem}
 /* En los paneles de administración «big» ya no es gigante: mismo tamaño que los demás botones. */
 .adm-panel button.big{width:auto;min-width:160px;padding:9px 22px;font-size:1rem}
-button.primary, button.info, button.success, button.danger.solid, button.warning, button.orange, button.violet, button.teal, button.slate, button.rojo{
+button.primary, button.info, button.success, button.danger, button.danger.solid, button.warning, button.orange, button.violet, button.teal, button.slate, button.rojo{
   --pc:var(--btn-green);border:0;border-radius:999px;color:var(--on-btn);font-weight:650;
   background:var(--gloss),var(--pc);
   box-shadow:0 4px 14px color-mix(in srgb,var(--pc) 38%,transparent);text-shadow:0 1px 1px rgba(0,0,0,.25)}
@@ -27,18 +27,16 @@ button.primary, button.info, button.success, button.danger.solid, button.warning
 button.primary{--pc:var(--btn-green)}
 button.info{--pc:var(--logo-blue)}
 button.success{--pc:var(--btn-green)}
-button.danger.solid, button.rojo{--pc:var(--rojo)}
+button.danger, button.danger.solid, button.rojo{--pc:var(--rojo)}
 button.warning{--pc:var(--btn-yellow);color:var(--on-warning);text-shadow:none}
 button.orange{--pc:var(--btn-orange);color:var(--on-orange);text-shadow:none}
 button.violet{--pc:var(--btn-violet)}
 button.teal{--pc:var(--btn-teal)}
 button.slate{--pc:var(--btn-slate)}
-button.primary:hover:not(:disabled), button.info:hover:not(:disabled), button.success:hover:not(:disabled), button.danger.solid:hover:not(:disabled), button.rojo:hover:not(:disabled), button.warning:hover:not(:disabled), button.orange:hover:not(:disabled), button.violet:hover:not(:disabled), button.teal:hover:not(:disabled), button.slate:hover:not(:disabled){
+button.primary:hover:not(:disabled), button.info:hover:not(:disabled), button.success:hover:not(:disabled), button.danger:hover:not(:disabled), button.danger.solid:hover:not(:disabled), button.rojo:hover:not(:disabled), button.warning:hover:not(:disabled), button.orange:hover:not(:disabled), button.violet:hover:not(:disabled), button.teal:hover:not(:disabled), button.slate:hover:not(:disabled){
   filter:brightness(.94);transform:translateY(-1px);background:var(--gloss),var(--pc)}
 button.primary:active:not(:disabled), button.success:active:not(:disabled), button.orange:active:not(:disabled){transform:translateY(0) scale(.98)}
-button.danger{--pc:var(--rojo);color:var(--rojo-txt);border-color:var(--rojo-bd);background:var(--rojo-bg);font-weight:650}
-button.danger:hover:not(:disabled){background:var(--rojo-hover);border-color:color-mix(in srgb,var(--rojo) 45%,var(--rojo-bd))}
-button.danger.solid{color:var(--rojo-on)}
+button.danger, button.danger.solid{color:var(--rojo-on)}
 button[aria-label="−"], button[aria-label="-"], button[aria-label="–"]{--pc:var(--rojo);border:0;color:var(--rojo-on);background:var(--gloss),var(--pc);box-shadow:var(--sh-btn) color-mix(in srgb,var(--pc) 38%,transparent);font-weight:700}
 button[aria-label="+"], button[aria-label="＋"]{--pc:var(--verde);border:0;color:var(--rojo-on);background:var(--gloss),var(--pc);box-shadow:var(--sh-btn) color-mix(in srgb,var(--pc) 38%,transparent);font-weight:700}
 button[aria-label="−"]:hover:not(:disabled), button[aria-label="+"]:hover:not(:disabled),

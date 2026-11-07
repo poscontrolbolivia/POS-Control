@@ -128,7 +128,9 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   // descoloca el foco; con id siempre apuntamos al input correcto.
   const avisar = msg => { setAviso(msg); clearTimeout(avisoTimer.current); avisoTimer.current = setTimeout(() => setAviso(''), 6000) }
   useEffect(() => () => clearTimeout(avisoTimer.current), [])
-  useEffect(() => { setCuentaSelId(null); setModo(null); setMenu(false); setPrevia(null) }, [mesa?.id])
+  // Al cambiar de mesa se vuelve a la primera cuenta, salvo que Caja haya abierto una subcuenta concreta (2b): antes este reinicio corría
+  // justo después del de arriba y siempre la borraba, así que tocar «2b» abría «2a».
+  useEffect(() => { setCuentaSelId(cuentaInicial ?? null); setModo(null); setMenu(false); setPrevia(null) }, [mesa?.id])
   // Para llevar: el panel se abre con la prop `cuenta` (mesa es undefined), así que el
   // prerrecargado del cliente mira `cuenta?.id`, no `mesa?.id`.
   useEffect(() => { setCliente({ nombre: cuenta?.clienteNombre || '', tel: cuenta?.clienteTel || '' }) }, [cuenta?.id])
@@ -347,6 +349,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   // El menú de cobro es el mismo de Venta directa. Con platos marcados se cobra solo esa parte (abono).
   const baseCobro = marcados.length ? Math.min(saldo, totalSeleccion) : saldo
   const iniciarCobro = () => {
+    // Nunca se cobra un producto que no se comandó: lo pendiente se envía primero (el botón principal lo pide).
+    if (c.items.some(i => i.estado === 'pendiente')) return
     if (!s.caja?.turno) { setSinTurno({ fondo: '' }); return }
     setMarcados([])
     setPagos(cobroNuevo({ comanda: false, fiscal: fiscalDe(c) }))
@@ -523,7 +527,8 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const accionPrincipal = (() => {
     if (sinTurno || confirmar || salirAviso) return null
     if (pagos) return { texto: t('pedido.confirmarCobro'), fn: confirmarCobro }
-    if (c.estado === 'abierta' && hayPendientes) return { texto: tOr('pedido.enviarDespacho', 'Enviar a despacho'), fn: enviarCocina }
+    // También con la cuenta ya sacada: si le entraron platos nuevos (p. ej. movidos desde otra mesa) hay que enviarlos antes de cobrar.
+    if ((c.estado === 'abierta' || c.estado === 'precuenta') && hayPendientes) return { texto: tOr('pedido.enviarDespacho', 'Enviar a despacho'), fn: enviarCocina }
     if (c.estado === 'abierta' && vivos.length > 0) return { texto: tOr('pedido.sacarCuenta', 'Sacar cuenta'), fn: sacarCuenta }
     if (c.estado === 'precuenta' && puede(rol, 'cobrar')) return { texto: t('pedido.cobrar'), fn: iniciarCobro }
     return null
@@ -950,7 +955,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
                   {/* 1 · cuenta en blanco */}
                   {cuentaVacia && <button className="danger solid" onClick={cerrarVacia}>✕ {c.tipo === 'mesa' ? tOr('pedido.cerrarVacia', 'Cerrar mesa vacía') : tOr('pedido.cerrarPedidoVacio', 'Cerrar pedido vacío')}</button>}
                   {/* 2 · con productos sin enviar (el botón principal «Enviar a despacho» va flotando arriba) */}
-                  {c.estado === 'abierta' && hayPendientes && <button className="danger" onClick={() => setConfirmar('quitar')}>✕ {tOr('pedido.quitarSinEnviar', 'Quitar productos sin enviar')}</button>}
+                  {(c.estado === 'abierta' || c.estado === 'precuenta') && hayPendientes && <button className="danger" onClick={() => setConfirmar('quitar')}>✕ {tOr('pedido.quitarSinEnviar', 'Quitar productos sin enviar')}</button>}
                   {/* 3 · todo enviado a despacho */}
                   {c.estado === 'abierta' && !hayPendientes && c.items.some(i => i.estado === 'enviado') && <button className="ghost" onClick={() => setConfirmar('reenviar')}>{tOr('pedido.reenviarComanda', 'Reenviar comanda a despacho')}</button>}
                   {/* 4 · cuenta ya sacada */}

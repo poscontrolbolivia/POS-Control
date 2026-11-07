@@ -43,7 +43,7 @@
 .qty button:first-child{--pc:var(--rojo)}
 .qty button:last-child{--pc:var(--verde)}
 .qty button:hover:not(:disabled){background:var(--gloss),var(--pc);filter:brightness(.94);transform:translateY(-1px)}
-.pm-caja .barra .x{width:34px;height:34px;min-width:34px;min-height:34px;padding:0;border:1.5px solid var(--rojo-bd);border-radius:50%;background:var(--rojo-bg);color:var(--rojo-txt);font-weight:700}
+.pm-caja .barra .x{width:34px;height:34px;min-width:34px;min-height:34px;padding:0;border:0;border-radius:50%;background:var(--gloss),var(--rojo);color:var(--rojo-on);font-weight:700}
 .pm-caja .barra .x:hover:not(:disabled){background:var(--rojo-hover);border-color:color-mix(in srgb,var(--rojo) 45%,var(--rojo-bd))}
 .pm-pax b{font-size:1.15rem}
 .pm-abrio{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;min-height:44px;border-radius:999px;border:1px solid var(--line-fuerte);background:var(--bg);color:var(--ink);font-weight:600;font-size:.9rem}

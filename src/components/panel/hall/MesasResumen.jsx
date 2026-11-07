@@ -6,7 +6,7 @@ import { useMoneda } from '../../../services/money.js'
 import { useIdioma } from '../../../i18n/index.jsx'
 import './HallPage.css'
 import './MesasResumen.css'
-import { W, H, ASP_BASE, leerZoom, estiloMesa } from './mapaMesas.js'
+import { W, H, ASP_BASE, leerZoom, estiloMesa, leerZonaCaja, guardarZonaCaja } from './mapaMesas.js'
 import LienzoMapa, { MesaDatos } from './LienzoMapa.jsx'
 
 // Lectura de solo lectura del mapa/listado de mesas para la pantalla de Caja.
@@ -57,7 +57,9 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
   const { money } = useMoneda()
   const { t, tOr } = useIdioma()
   const [vista, setVista] = useState(iniciaVista)
-  const [zona, setZona] = useState(TODAS)
+  // Abre en el salón donde se dejó la última vez (o el primero), no en «Todos».
+  const [zona, setZonaEstado] = useState(leerZonaCaja)
+  const setZona = id => { setZonaEstado(id); guardarZonaCaja(id) }
   // Mismo mapa que el Salón: LienzoMapa pone la misma proporción y el zoom que se dejó allí.
   const { s } = useStore()
   const zoom = leerZoom(s._empresaId ?? 'demo')

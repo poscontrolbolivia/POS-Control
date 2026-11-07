@@ -25,7 +25,8 @@ Una sola idea para toda la app: **qué tocar se ve de un vistazo**. Los colores 
 1. **Principal = verde sólido** (`success` o `primary`). **Uno solo por paso, pantalla o diálogo**: la siguiente acción lógica.
 2. **Secundario = `ghost`**: **azul sólido** (`--btn-sec`, = `--logo-blue`) con texto blanco. Todo lo demás. El nombre se
    conserva por compatibilidad: no tiene nada de transparente.
-3. **Destructivo = `danger`** (rojo suave). `danger solid` solo para confirmar algo irreversible.
+3. **Destructivo = `danger`**: rojo SÓLIDO con el mismo brillo y sombra que el verde y el azul. Ya no hay rosa pastel en ningún botón
+   (`danger` y `danger solid` se ven igual). Los botones miden 44 px de alto como mínimo, igual que el resto de la guía.
 4. `violet`, `teal`, `slate` = azul oscuro sólido, solo para una acción de apoyo importante. `orange` y `warning` solo marcan estado o atención; no son acciones normales.
 5. Si hay más de 3 botones a la vista, lo menos frecuente va en **«Más…»** (`<MasMenu>`).
 6. **Menús desplegables de Configuración** (bloques e Impresoras): píldoras sólidas. Nivel 1: azul oscuro cerrada y verde
@@ -162,6 +163,8 @@ sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos e
 - **Lo que lleva cada mesa es UNA pieza: `MesaDatos`** (número, nombre del cliente, importe, salón, ↩ heredada, ✂ dividida, 🔗 unida).
   Salón y Caja la usan igual; si se añade un dato, se añade ahí y aparece en los dos.
 - La leyenda de colores y de 👥 / 🔗 es la misma en Salón y Caja.
+- Caja, Venta directa y el mapa de Reportes abren en el salón donde se dejó la última vez (o el primero si no hay ninguno): se recuerda
+  mientras la pestaña siga abierta (`leerZonaCaja` / `guardarZonaCaja`). Ya no abren en «Todos».
 - Reportes pinta las mesas con el mismo marco, pero con el color de calor de ventas y la cifra compacta en lugar del importe por cobrar.
 - Un mapa nuevo **no** va dentro de una tarjeta con relleno: va directo sobre la página (con sus marcos `nav-n2` / `nav-n1` encima).
   `npm run estilo` avisa si una pantalla dibuja `className="lienzo-area"` por su cuenta.

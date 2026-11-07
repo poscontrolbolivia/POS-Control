@@ -44,7 +44,7 @@
 
 .ala-acciones{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .ala-acciones button{min-height:44px;padding:6px 13px;font-size:.85rem}
-.ala-acciones button.peligro{border:1.5px solid var(--rojo-bd);background:var(--rojo-bg);color:var(--rojo-txt)}
+.ala-acciones button.peligro{border:0;background:var(--gloss),var(--rojo);color:var(--rojo-on)}
 .ala-acciones button.peligro:hover:not(:disabled){background:var(--rojo-hover);border-color:color-mix(in srgb,var(--rojo) 45%,var(--rojo-bd))}
 
 .ala-auto{display:flex;flex-direction:column;gap:10px;background:var(--warn-bg);border:1px solid var(--warn-bd);

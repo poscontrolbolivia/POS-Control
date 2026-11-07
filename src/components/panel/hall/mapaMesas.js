@@ -38,3 +38,10 @@ export const estiloMesa = (p, asp) => ({
   width: `${(p.w / W) * 100 * (ASP_BASE / asp)}%`,
   height: `${(p.h / H) * 100}%`,
 })
+
+// El salón que se estaba mirando en Caja, Venta directa y el mapa de Reportes: se recuerda al cambiar de menú y volver.
+// Si no hay ninguno guardado (o ese salón ya no existe) se abre el primero.
+const KEY_ZONA_CAJA = 'pos-zona-caja'
+export const leerZonaCaja = () => { try { return sessionStorage.getItem(KEY_ZONA_CAJA) } catch { return null } }
+export const guardarZonaCaja = id => { try { sessionStorage.setItem(KEY_ZONA_CAJA, id) } catch { /* sin almacenamiento: no se recuerda */ } }
+
