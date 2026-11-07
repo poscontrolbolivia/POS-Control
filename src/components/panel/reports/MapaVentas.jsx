@@ -33,8 +33,8 @@ export default function MapaVentas({ mesas = [], zonas = [], ventas = {}, fuera 
   const { s } = useStore()
   const zoom = leerZoom(s._empresaId ?? 'demo')
   const [vista, setVista] = useState(iniciaVista)
-  const [zona, setZonaEstado] = useState(leerZonaCaja)
-  const setZona = id => { setZonaEstado(id); guardarZonaCaja(id) }
+  const [zona, setZonaEstado] = useState(() => leerZonaCaja('reportes'))
+  const setZona = id => { setZonaEstado(id); guardarZonaCaja(id, 'reportes') }
 
   const cambiarVista = v => { setVista(v); try { localStorage.setItem('pos-reportes-mesas-vista', v) } catch { /* noop */ } }
   const zonasOrden = useMemo(() => ordenarZonas(zonas), [zonas])

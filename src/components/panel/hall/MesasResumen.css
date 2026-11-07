@@ -27,7 +27,6 @@
 .mr-item .abonado{display:inline-block;margin-left:5px;font-style:normal;font-weight:750;font-size:.85em;color:var(--ok)}
 .mr-leyenda{gap:8px 14px;font-size:.8rem}
 /* Los dos puntos extra de la leyenda (👥 y 🔗) son los mismos que en el Salón. */
-.mr-leyenda .pt.pax{background:var(--ac)}
 .mr-leyenda .pt.unida{background:var(--ac);border-radius:4px}
 @media (max-width:768px){.mr-leyenda{font-size:.78rem}}
 @media (max-width:480px){.mr-leyenda{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}}

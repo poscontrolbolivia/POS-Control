@@ -235,7 +235,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
         </div>
 
         {pantalla === 'mesas' ? (
-          <MesasResumen mesas={s.mesas} zonas={s.zonas} cuentas={s.cuentas} onOpen={irSalon} despuesDe="n1" />
+          <MesasResumen mesas={s.mesas} zonas={s.zonas} cuentas={s.cuentas} onOpen={irSalon} despuesDe="n1" claveZona="venta" />
         ) : (
           <>
         <p className="vd-ayuda">{tOr('venta.ayuda', 'Mostrador: el cliente pide, paga y se va, sin mesa ni cuenta abierta. Las mesas se cobran en Caja.')}</p>

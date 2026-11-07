@@ -238,9 +238,40 @@ function sembrarVentas(s) {
       estado: 'cerrada', comensales, items, pagos: [{ id: uid(), metodo, monto: total, en: cerradaEn, por: usuario }],
       propina, descuento: 0, detalle: '', abiertaPor: usuario, abiertaEn, cerradaPor: usuario, cerradaEn,
       ...(esLlevar ? { clienteNombre: 'Pedido por teléfono', clienteTel: '' } : {}),
+      _semilla: true,
     }
   }).filter(Boolean)
-  return { ...s, _ventasSembrada: true, cuentas: [...(s.cuentas || []), ...cuentas] }
+  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime()
+  return { ...s, _ventasSembrada: true, _ventasAncla: inicioHoy, cuentas: [...(s.cuentas || []), ...cuentas] }
+}
+
+// La demo envejece: la siembra entra una sola vez por navegador y a los pocos días «Hoy», «Últimos 7 días» y «Este mes» salían en cero.
+// Al abrir, si pasaron días desde que se sembró, las ventas sembradas se corren esos mismos días hacia adelante (misma hora del día),
+// sin tocar las ventas que la persona haya hecho a mano. Un navegador viejo, sin marca, se corre entero solo si lleva 3 días o más parado.
+function refrescarVentasDemo(s) {
+  if (!s._ventasSembrada) return s
+  const DIA = 86400000
+  const ahora = Date.now()
+  const hoy = new Date(ahora)
+  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime()
+  const cerradas = (s.cuentas || []).filter(c => c.estado === 'cerrada' && c.cerradaEn)
+  const marcadas = cerradas.some(c => c._semilla)
+  const ancla = s._ventasAncla
+    ?? (cerradas.length ? (d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime())(new Date(Math.max(...cerradas.map(c => c.cerradaEn)))) : null)
+  if (ancla === null || ancla === undefined) return s
+  const dias = Math.round((inicioHoy - ancla) / DIA)
+  if (dias < (s._ventasAncla ? 1 : 3)) return s
+  const desp = dias * DIA
+  const mueve = c => {
+    const directa = c.tipo === 'directa'
+    const abierta = Math.min((c.abiertaEn || c.cerradaEn) + desp, ahora - (directa ? 30 : 120) * 60000)
+    const cerrada = Math.max(abierta, Math.min(c.cerradaEn + desp, ahora - 4 * 60000))
+    const t = v => (v ? Math.min(v + desp, cerrada) : v)
+    return { ...c, _semilla: true, abiertaEn: abierta, cerradaEn: cerrada,
+      pagos: (c.pagos || []).map(p => (p.en ? { ...p, en: t(p.en) } : p)),
+      items: (c.items || []).map(i => (i.enviadoEn ? { ...i, enviadoEn: t(i.enviadoEn), ...(i.listoEn ? { listoEn: t(i.listoEn) } : {}) } : i)) }
+  }
+  return { ...s, _ventasAncla: inicioHoy, cuentas: s.cuentas.map(c => (c.estado === 'cerrada' && c.cerradaEn && (c._semilla || (!marcadas && !s._ventasAncla)) ? mueve(c) : c)) }
 }
 
 const inicial = {
@@ -290,7 +321,7 @@ const migrar = e => {
   if (!Array.isArray(base.recetas)) base.recetas = recetasDeDemo(base.productos || productos, base.insumos)
   if (!Array.isArray(base.movimientos)) base.movimientos = movimientosDeDemo(base.insumos)
   if (!Array.isArray(base.bitacora)) base.bitacora = []
-  return sembrarVentas(sembrar(base))
+  return refrescarVentasDemo(sembrarVentas(sembrar(base)))
 }
 
 const nuevaCuenta = (a) => ({ id: uid(), tipo: 'mesa', canal: 'mesa', estado: 'abierta', items: [], pagos: [], propina: 0, descuento: 0, detalle: '', comensales: 1, abiertaEn: Date.now(), ...a })

@@ -709,7 +709,6 @@ export default function HallPage({ rol, sesion, foco, onVolverCaja }) {
           {[['libre', t('salon.libre')], ['ocupada', t('salon.ocupada')], ['enviada', t('salon.enviada')], ['porcobrar', t('salon.porcobrar')]].map(([k, l]) => (
             <span key={k}><i className={'pt ' + k} />{l}</span>
           ))}
-          <span><i className="pt pax" />{t('salon.leyendaPax')}</span>
           <span><i className="pt unida" />{t('salon.leyendaUnidas')}</span>
         </div>}
       </section>

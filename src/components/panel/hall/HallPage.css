@@ -390,3 +390,13 @@ button.ico:disabled{ opacity: .35; cursor: not-allowed; }
    del Salón (si no, quedaba más chico y con un hueco de 110 px debajo). */
 .salon.salon.mapa-solo{padding:0;gap:0;width:100%}
 
+/* Teléfono: el mapa nunca se dibuja más chico que --mapa-ancho-min (a 360 px las mesas medían 35 px y el importe 4,6 px, ilegible e intocable).
+   Si no cabe en la pantalla se desplaza de lado dentro de su marco, igual en Salón, Caja, Venta directa y Reportes. En «Editar mapa» se
+   queda ajustado al ancho: ahí el lienzo no deja desplazar de lado mientras se arrastra una mesa. */
+.salon{--mapa-ancho-min:600px}
+@media (max-width:640px){
+  .salon .lienzo-area{aspect-ratio:auto;height:calc(var(--mapa-ancho-min) / var(--asp, 1.6667));max-height:none}
+  .salon .lienzo{width:max(calc(100% * var(--z, 1)), var(--mapa-ancho-min));height:max(calc(100% * var(--z, 1)), calc(var(--mapa-ancho-min) / var(--asp, 1.6667)))}
+  .salon .mapa-col.editando .lienzo-area{aspect-ratio:var(--asp, 1.6667);height:auto;max-height:max(200px,calc(100dvh - var(--lienzo-descuento)))}
+  .salon .mapa-col.editando .lienzo{width:calc(100% * var(--z, 1));height:calc(100% * var(--z, 1))}
+}

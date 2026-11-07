@@ -6,3 +6,4 @@
 .caja-hub-tabs .tab{flex:1 1 140px}
 /* Cierres y Reportes tienen el mismo ancho que Caja y que el Salón: al cambiar de submenú el marco no salta. */
 .adm-panel.caja-ancho,.adm-panel.rp{max-width:var(--ancho-mapas)}
+.adm-panel.caja-ancho .sheet,.adm-panel.rp .sheet,.adm-panel.rp .rp-tarjetas{max-width:var(--ancho-lectura);margin-inline:auto;width:100%}

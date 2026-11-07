@@ -41,7 +41,8 @@ export const estiloMesa = (p, asp) => ({
 
 // El salón que se estaba mirando en Caja, Venta directa y el mapa de Reportes: se recuerda al cambiar de menú y volver.
 // Si no hay ninguno guardado (o ese salón ya no existe) se abre el primero.
-const KEY_ZONA_CAJA = 'pos-zona-caja'
-export const leerZonaCaja = () => { try { return sessionStorage.getItem(KEY_ZONA_CAJA) } catch { return null } }
-export const guardarZonaCaja = id => { try { sessionStorage.setItem(KEY_ZONA_CAJA, id) } catch { /* sin almacenamiento: no se recuerda */ } }
+// Cada pantalla recuerda el suyo (clave = «caja», «venta», «reportes»): elegir Terraza en Reportes no cambia Caja.
+const claveZona = clave => 'pos-zona-' + clave
+export const leerZonaCaja = (clave = 'caja') => { try { return sessionStorage.getItem(claveZona(clave)) } catch { return null } }
+export const guardarZonaCaja = (id, clave = 'caja') => { try { sessionStorage.setItem(claveZona(clave), id) } catch { /* sin almacenamiento: no se recuerda */ } }
 

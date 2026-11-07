@@ -162,7 +162,9 @@ sitio que le toca según la tabla de arriba? ¿hay un solo verde? ¿los textos e
   `.lienzo`. Así el tamaño, la proporción y el zoom son idénticos en todas partes (el zoom y el tamaño solo se cambian en Salón → Editar mapa).
 - **Lo que lleva cada mesa es UNA pieza: `MesaDatos`** (número, nombre del cliente, importe, salón, ↩ heredada, ✂ dividida, 🔗 unida).
   Salón y Caja la usan igual; si se añade un dato, se añade ahí y aparece en los dos.
-- La leyenda de colores y de 👥 / 🔗 es la misma en Salón y Caja.
+- La leyenda de colores y de 🔗 es la misma en Salón y Caja.
+- **Teléfono (≤ 640 px): el mapa mide como mínimo 600 px de ancho** (`--mapa-ancho-min`, HallPage.css) y, si no cabe, se desplaza de lado dentro
+  de su marco. Vale para Salón, Caja, Venta directa y Reportes por igual; en «Editar mapa» se queda ajustado al ancho.
 - Caja, Venta directa y el mapa de Reportes abren en el salón donde se dejó la última vez (o el primero si no hay ninguno): se recuerda
   mientras la pestaña siga abierta (`leerZonaCaja` / `guardarZonaCaja`). Ya no abren en «Todos».
 - Reportes pinta las mesas con el mismo marco, pero con el color de calor de ventas y la cifra compacta en lugar del importe por cobrar.

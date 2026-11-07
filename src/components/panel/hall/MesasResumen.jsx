@@ -36,13 +36,14 @@ const ordenarZonas = zonas => zonas
 const estiloChips = (m, asp) => {
   const izq = (m.x / W) * 100
   const ancho = (m.w / W) * 100 * (ASP_BASE / asp)
-  const abajoLibre = m.y + m.h < H - 90
+  const abajoLibre = m.y + m.h < H - 150 // sitio para hasta dos renglones de chips debajo
   const enDerecha = m.x + m.w / 2 > W / 2
   return {
     ...(enDerecha ? { right: `${100 - izq - ancho}%`, justifyContent: 'flex-end' } : { left: `${izq}%` }),
     ...(abajoLibre ? { top: `${((m.y + m.h) / H) * 100}%` } : { top: `${(m.y / H) * 100}%`, transform: 'translateY(-100%)' }),
+    // Caben dentro del lienzo: en pantallas chicas envuelven en varios renglones en vez de salirse (y quedar cortados e imposibles de tocar).
     width: 'max-content',
-    flexWrap: 'nowrap',
+    maxWidth: `${enDerecha ? izq + ancho : 100 - izq}%`,
   }
 }
 
@@ -53,13 +54,13 @@ const iniciaVista = () => {
 
 // `despuesDe`: nivel del marco que va justo encima ('n1' o 'n2'); los marcos se alternan blanco/tinte, así que el primero
 // de aquí es el contrario.
-export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onOpen = () => {}, despuesDe = 'n2' }) {
+export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onOpen = () => {}, despuesDe = 'n2', claveZona = 'caja' }) {
   const { money } = useMoneda()
   const { t, tOr } = useIdioma()
   const [vista, setVista] = useState(iniciaVista)
   // Abre en el salón donde se dejó la última vez (o el primero), no en «Todos».
-  const [zona, setZonaEstado] = useState(leerZonaCaja)
-  const setZona = id => { setZonaEstado(id); guardarZonaCaja(id) }
+  const [zona, setZonaEstado] = useState(() => leerZonaCaja(claveZona))
+  const setZona = id => { setZonaEstado(id); guardarZonaCaja(id, claveZona) }
   // Mismo mapa que el Salón: LienzoMapa pone la misma proporción y el zoom que se dejó allí.
   const { s } = useStore()
   const zoom = leerZoom(s._empresaId ?? 'demo')
@@ -157,7 +158,6 @@ export default function MesasResumen({ mesas = [], zonas = [], cuentas = [], onO
 
       <div className="leyenda mr-leyenda">
         {leyenda.map(([k, l]) => <span key={k}><i className={'pt ' + k} />{l}</span>)}
-        <span><i className="pt pax" />{t('salon.leyendaPax')}</span>
         <span><i className="pt unida" />{t('salon.leyendaUnidas')}</span>
       </div>
     </section>
