@@ -185,3 +185,13 @@ Nunca se muestran números internos, ids ni «pre-cuenta pedida o impresa»: el 
 - **Total (Despacho):** el interruptor existe en todas las vistas. En las áreas suma lo que **falta sacar**; en **Sacadas** suma lo que
   **ya salió**. Siempre por producto y separado por indicación (término, salsa…).
 
+## Sin internet (no hay modo sin conexión, a propósito)
+- Sin conexión se avisa y se **bloquea todo lo que escribe en el servidor** hasta que vuelva. No hay cola ni reintentos: reenviar
+  acciones podría duplicar un cobro o un pedido, y dos dispositivos podrían pisarse la misma mesa.
+- El estado vive en `services/conexion.js` (se prueba en `tests/conexion.mjs`); la pantalla lo lee con `useConexion()` y la franja
+  roja sale sola arriba (`AvisoConexion`, dentro de la barra superior).
+- `d(accion)` devuelve **false** si no se hizo. Todo lo que haga algo DESPUÉS de una acción (cerrar la ventana de cobro, imprimir,
+  mostrar «guardado») debe comprobar `enLinea` antes de empezar, o el resultado de `d`.
+- **Datos móviles:** la comprobación de conexión casi no gasta. Cualquier respuesta real del servidor (`rpc`, aviso de tiempo real)
+  cuenta como «hay conexión» (`conexion.vivo()`); solo si pasan 30 s sin ningún tráfico se hace una comprobación mínima (HEAD, sin
+  cuerpo). Nueva función que llame al servidor por otra vía que no sea `rpc`: llamar a `conexion.vivo()` al recibir la respuesta.

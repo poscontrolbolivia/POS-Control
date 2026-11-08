@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore, cuentaActiva, cuentasDeMesa, totalCuenta, totalFinal, pagadoCuenta, saldoCuenta, ordenDelDia, pasoPedido } from '../../../context/StoreContext.jsx'
+import { useConexion } from '../../ui/AvisoConexion.jsx'
 import { puede } from '../../../services/permissions'
 import { useMoneda } from '../../../services/money.js'
 import { LADO_VISUAL_PX, urlImagenProducto } from '../../../services/imageUpload.js'
@@ -79,6 +80,7 @@ function Ventana({ titulo, onClose, accion, children }) {
 // que apaga ese modo y devuelve la vista completa de mesero.
 export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, onClose, bloqueado, cobro, onEdicion }) {
   const { s, d } = useStore()
+  const { enLinea } = useConexion()
   const { money } = useMoneda()
   const { t, tOr } = useIdioma()
   const enCobro = Boolean(cobro)
@@ -236,6 +238,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   const soloPagos = (c.tipo === 'mesa' || c.tipo === 'directa' || c.canal === 'llevar') && (c.estado === 'abierta' || c.estado === 'precuenta') && !vivos.length && pagado > 0.009
   const puedeDevolver = soloPagos && puede(rol, 'cobrar')
   const confirmarDevolucion = () => {
+    if (!enLinea) return avisar(t('conexion.bloqueado'))
     if (!devol?.metodo) return avisar(tOr('pedido.devolMetodoFalta', 'Elige cómo se devuelve el dinero.'))
     if (!String(devol.motivo || '').trim()) return avisar(tOr('pedido.devolMotivoFalta', 'Escribe el motivo de la devolución.'))
     if (devol.metodo === 'efectivo' && !s.caja?.turno) return avisar(tOr('pedido.devolSinTurno', 'Abre el turno de caja para devolver en efectivo.'))
@@ -356,6 +359,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
     setPagos(cobroNuevo({ comanda: false, fiscal: fiscalDe(c) }))
   }
   const abrirTurnoYCobrar = () => {
+    if (!enLinea) return avisar(t('conexion.bloqueado'))
     const f = numMonto(sinTurno.fondo)
     d({ t: 'turno+', fondo: round2(f), usuario })
     setSinTurno(null)
@@ -368,6 +372,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
     return ls.length === 1 && !numMonto(ls[0].monto) ? [{ ...ls[0], monto: String(base.toFixed(2)) }] : ls
   }
   const confirmarCobro = () => {
+    if (!enLinea) return avisar(t('conexion.bloqueado'))
     if (pagos.lineas.some(l => l.subiendo)) return avisar(t('comp.subiendo'))
     const fis = pagos.fiscal
     if (!correoValido(fis?.correo)) return avisar(t('fiscal.correoInvalido'))
@@ -399,6 +404,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   }
   // Abono libre: se recibió menos que el saldo y no hay platos marcados.
   const abonoLibre = () => {
+    if (!enLinea) return avisar(t('conexion.bloqueado'))
     if (pagos.lineas.some(l => l.subiendo)) return avisar(t('comp.subiendo'))
     const invalido = cobroInvalido(pagos.lineas, t, round2(saldo))
     if (invalido) return avisar(invalido)
@@ -440,6 +446,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
   )).join(' · ')
 
   const enviarCocina = async () => {
+    if (!enLinea) return avisar(t('conexion.bloqueado'))
     const pend = c.items.filter(i => i.estado === 'pendiente')
     if (!pend.length) return
     d({ t: 'enviar', cuentaId: c.id })
@@ -455,7 +462,7 @@ export default function OrderPanel({ rol, sesion, mesa, cuenta, cuentaInicial, o
 
   const chico = { minHeight: 32, padding: '2px 10px' }
   const abrirModo = m => { setModo(m); setMenu(false); setMarcados([]); setDestino(''); setCanje(''); setPartes({}); setBorrando(null) }
-  const dividir = () => { setMenu(false); d({ t: 'dividir', cuentaId: c.id, usuario }); setModo('mover'); avisar(t('pedido.divididaOk')) }
+  const dividir = () => { setMenu(false); if (!enLinea) return avisar(t('conexion.bloqueado')); d({ t: 'dividir', cuentaId: c.id, usuario }); setModo('mover'); avisar(t('pedido.divididaOk')) }
   // 2A y 2B comparten la misma mesa, así que unir_mesas (que trabaja por mesa) no las ve: se unen por cuenta.
   const hermanasOtras = s.cuentas.filter(x => x.id !== c.id && x.estado !== 'cerrada' && x.mesaIds.some(m => c.mesaIds.includes(m)))
   const cerrarUnir = () => { setUniendo(false); setAUnir([]); setAUnirCtas([]) }

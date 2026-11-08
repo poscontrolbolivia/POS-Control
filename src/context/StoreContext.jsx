@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import { USAR_SUPABASE } from '../services/config.js'
 import { fijarEmpresa, sb } from '../services/supabaseClient.js'
+import { conexion, esErrorDeRed } from '../services/conexionApp.js'
 import { cargarEstadoInicial, despacharSupabase, refrescarCuentas, refrescarCuentasIds } from '../services/db.js'
 import { round2 } from '../services/format.js'
 import { round4, resolverCantidad, aplicarEntrada, MOTIVOS_MERMA } from '../services/inventario.js'
@@ -1143,6 +1144,7 @@ function useSupabaseStore(empresaId) {
     // Qué cuentas toca cada aviso. Si un ítem o pago se movió de cuenta, también se vuelve a pedir la cuenta
     // donde estaba (se busca en memoria), para que no quede el ítem duplicado en las dos.
     const alAviso = tabla => p => {
+      conexion.vivo() // un aviso de tiempo real prueba que hay conexión
       const n = p?.new || {}, o = p?.old || {}
       const ids = []
       if (tabla === 'cuentas') ids.push(n.id || o.id)
@@ -1182,9 +1184,13 @@ function useSupabaseStore(empresaId) {
     }
   }, [empresaId])
 
+  // Devuelve true si la acción se aceptó y false si NO se hizo (sin conexión o aún cargando). Quien hace algo después de
+  // la acción (cerrar la ventana de cobro, imprimir…) debe comprobarlo: sin conexión no se guarda NADA, ni se muestra
+  // como guardado algo que el servidor no recibió (no hay cola ni reintentos: ver services/conexion.js).
   const d = useCallback(a => {
-    if (!empresaId) return
-    if (!estadoRef.current) { setError('Cargando datos de la empresa…'); return }
+    if (!empresaId) return false
+    if (!estadoRef.current) { setError('Cargando datos de la empresa…'); return false }
+    if (!conexion.get().enLinea) return false
     versionRef.current += 1
     const prev = estadoRef.current
     const nuevo = reducer(prev, a)
@@ -1217,13 +1223,18 @@ function useSupabaseStore(empresaId) {
       } catch (err) {
         pendRef.current = pendRef.current.filter(p => p !== accion)
         avisa(err)
+        if (esErrorDeRed(err)) conexion.fallo()
         try {
           const fresco = await cargarEstadoInicial(empresaId)
           estadoRef.current = { ...fresco, _empresaId: empresaId }
           setS(estadoRef.current)
-        } catch {  }
+        } catch (e2) {
+          // Sin red tampoco se pudo releer: lo que se ve puede no estar guardado. Al volver la conexión se lee todo de nuevo.
+          if (esErrorDeRed(e2)) conexion.fallo()
+        }
       }
     })
+    return true
   }, [empresaId])
 
   return { s: s || SUP_VACIO, d, error, cargando: !s }

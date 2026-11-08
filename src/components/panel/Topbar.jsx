@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import BrandMark from '../login/BrandMark.jsx'
 import '../../styles/auth.css'
 
+import AvisoConexion from '../ui/AvisoConexion.jsx'
+
 export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir, aviso }) {
   const { t, tOr } = useIdioma()
 
@@ -82,6 +84,7 @@ export default function Topbar({ sesion, modulo, modulos = [], onModulo, onSalir
           </button>
         ))}
       </nav>
+      <AvisoConexion />
       {aviso && (
         <div className="auth-error" role="alert" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, margin: 0, padding: '6px 16px' }}>
           {t('topbar.avisoBase', { aviso })}

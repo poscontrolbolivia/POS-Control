@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { SUPABASE_URL, SUPABASE_ANON_KEY, USAR_SUPABASE } from './config.js'
+import { conexion, esErrorDeRed } from './conexionApp.js'
 
 const KEY_SESION = 'pos-sesion-id'
 const sessionId = (() => {
@@ -46,6 +47,9 @@ export async function rpc(nombre, params = {}, { conEmpresa = true } = {}) {
   const cuerpo = conEmpresa ? { p_empresa_id: empresaActivaId, ...params } : { ...params }
   if (conEmpresa && !cuerpo.p_empresa_id) throw new Error('No hay empresa activa seleccionada')
   const { data, error } = await sb.rpc(nombre, cuerpo)
+  // Cualquier respuesta del servidor (aunque sea un error de la base) prueba que hay conexión: así la comprobación
+  // periódica no gasta datos mientras la app se usa.
+  if (!error || !esErrorDeRed(error)) conexion.vivo()
   if (error) throw new Error(error.message || `Error en ${nombre}`)
   return data
 }

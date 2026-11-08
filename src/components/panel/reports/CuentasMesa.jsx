@@ -42,7 +42,7 @@ export default function CuentasMesa({ etiqueta, rango, s, modo, d, rol, usuario,
   const cuando = c => new Date(aMs(c.cerradaEn)).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
   const confirmar = (c, { motivo, mesaIds }) => {
-    d({ t: 'reabrir-cobrada', cuentaId: c.id, motivo, mesaIds, usuario })
+    if (d({ t: 'reabrir-cobrada', cuentaId: c.id, motivo, mesaIds, usuario }) === false) { setReabriendo(null); setHecho(t('conexion.bloqueado')); return }
     setReabriendo(null)
     setOcultas(prev => new Set(prev).add(c.id))
     setHecho(t('caja.reabrirHecho', { nombre: nombreDe(c) }))

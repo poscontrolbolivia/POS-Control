@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, totalFinal, pagadoCuenta, saldoCuenta } from '../../../context/StoreContext.jsx'
+import { useConexion } from '../../ui/AvisoConexion.jsx'
 import { puede } from '../../../services/permissions'
 import { MONEDA } from '../../../services/config'
 import { useIdioma } from '../../../i18n/index.jsx'
@@ -19,6 +20,7 @@ import { formatearMonto } from '../../../services/money.js'
 
 export default function CashPage({ rol, sesion, onAbrirMesa }) {
   const { s, d, modo } = useStore()
+  const { enLinea } = useConexion()
   const { t, tOr } = useIdioma()
   const usuario = sesion?.usuario || sesion?.nombre || rol || '—'
   const moneda = s.config?.moneda || MONEDA
@@ -145,6 +147,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
   }
 
   const reabrirCobrada = (c, { motivo, mesaIds }) => {
+    if (!enLinea) return avisar(t('conexion.bloqueado'))
     d({ t: 'reabrir-cobrada', cuentaId: c.id, motivo, mesaIds, usuario })
     setReabriendo(null)
     avisar(t('caja.reabrirHecho', { nombre: nombreCorto(c) }))
@@ -152,12 +155,14 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
 
   const abrirTurno = e => {
     e.preventDefault()
+    if (!enLinea) return avisar(t('conexion.bloqueado'))
     d({ t: 'turno+', fondo: round2(numMonto(fondo)), usuario })
     setFondo('')
   }
 
   const agregarMov = e => {
     e.preventDefault()
+    if (!enLinea) return avisar(t('conexion.bloqueado'))
     const monto = numMonto(mov.monto)
     if (!(monto > 0)) return avisar(t('caja.montoPositivo'))
     if (!mov.motivo.trim()) return avisar(t('caja.motivoObligatorio'))
@@ -172,6 +177,7 @@ export default function CashPage({ rol, sesion, onAbrirMesa }) {
   const tiemposDelTurno = () => (modo === 'supabase' ? cargarTiempos(turno.abiertoEn, Date.now()).catch(() => null) : Promise.resolve(null))
   const cerrarTurno = async e => {
     e.preventDefault()
+    if (!enLinea) return avisar(t('conexion.bloqueado'))
     const contado = numMonto(cierre.contado)
 
     if (!cierre.pedirConf) return setCierre({ ...cierre, pedirConf: true })

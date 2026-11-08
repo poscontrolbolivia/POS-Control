@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, nuevoId } from '../../../context/StoreContext.jsx'
+import { useConexion } from '../../ui/AvisoConexion.jsx'
 import { puede } from '../../../services/permissions'
 import { MONEDA } from '../../../services/config'
 import { LADO_VISUAL_PX, urlImagenProducto } from '../../../services/imageUpload.js'
@@ -41,6 +42,7 @@ const TODOS = '__todos'
 
 export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
   const { s, d } = useStore()
+  const { enLinea } = useConexion()
   const { t, tOr } = useIdioma()
   const usuario = sesion?.usuario || sesion?.nombre || rol || '—'
   const moneda = s.config?.moneda || MONEDA
@@ -128,6 +130,7 @@ export default function QuickSalePage({ rol, sesion, onAbrirMesa }) {
     setCobro(cobroNuevo())
   }
   const confirmarCobro = () => {
+    if (!enLinea) return setAviso(t('conexion.bloqueado'))
     if (cobro.lineas.some(l => l.subiendo)) return setAviso(t('comp.subiendo'))
     if (!correoValido(cobro.fiscal?.correo)) return setAviso(t('fiscal.correoInvalido'))
     const invalido = cobroInvalido(cobro.lineas, t, total)

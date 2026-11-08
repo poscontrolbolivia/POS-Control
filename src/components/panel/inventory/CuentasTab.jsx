@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../../../context/StoreContext.jsx'
+import { useConexion } from '../../ui/AvisoConexion.jsx'
 import { useIdioma } from '../../../i18n/index.jsx'
 import { useMoneda } from '../../../services/money.js'
 import { limpiarMonto, numMonto, round2 } from '../../../services/format.js'
@@ -19,6 +20,7 @@ const RANGO_ESTADO = { vencida: 0, pendiente: 1, pagada: 2 }
 
 export default function CuentasTab({ filtroProveedor, onFiltro, alta = false, onAltaDone }) {
   const { s, d } = useStore()
+  const { enLinea } = useConexion()
   const { tOr } = useIdioma()
   const { money } = useMoneda()
 
@@ -105,6 +107,7 @@ export default function CuentasTab({ filtroProveedor, onFiltro, alta = false, on
   const confirmarAbono = e => {
     e.preventDefault()
     if (!abono) return
+    if (!enLinea) { setAbonoErr(tOr('conexion.bloqueado', 'Sin conexión: no se puede hacer esto ahora.')); return }
     const de = deudas.find(x => x.id === abono.id)
     const saldo = num(de?.saldo)
     const monto = numMonto(abono.monto)

@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { lazyRetry } from '../services/lazyRetry.js'
 import ChunkBoundary from '../components/ChunkBoundary.jsx'
 import { useStore } from '../context/StoreContext.jsx'
+import { iniciarConexion } from '../services/conexionApp.js'
 import { puede, fijarPermisosExtra } from '../services/permissions.js'
 import { rpc } from '../services/supabaseClient.js'
 import { suscribirVista } from '../services/notifications.js'
@@ -47,6 +48,7 @@ const EN_PANTALLA = ['cocina', 'barra']
 
 export default function PanelPage({ sesion, onSalir, onVolver, aviso = '' }) {
   const { s, error } = useStore()
+  useEffect(() => { iniciarConexion() }, [])
   const { t, tOr } = useIdioma()
   const enPantalla = EN_PANTALLA.includes(sesion.rol)
 
